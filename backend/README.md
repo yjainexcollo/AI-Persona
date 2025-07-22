@@ -1,6 +1,6 @@
 # AI-Persona Backend
 
-A secure, scalable, and enterprise-grade multi-tenant backend for the AI-Persona SaaS platform.
+A secure, scalable, and enterprise-grade multi-tenant backend for the AI-Persona SaaS platform.  
 Supports modular authentication (local, OAuth, SSO-ready), strict workspace/user isolation, robust RBAC, and AI persona integration.
 
 ---

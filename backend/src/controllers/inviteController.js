@@ -4,8 +4,8 @@ const ApiError = require("../utils/apiError");
 
 const sendInvite = asyncHandler(async (req, res) => {
   const { email, role } = req.body;
-  const workspaceId = req.workspace && req.workspace.workspaceId;
-  const senderRole = req.workspace && req.workspace.role;
+  const workspaceId = req.user && req.user.workspaceId;
+  const senderRole = req.user && req.user.role;
   const createdById = req.user && req.user.id;
   if (!createdById) throw new ApiError(401, "Authentication required");
   if (!workspaceId) throw new ApiError(400, "Workspace context required");

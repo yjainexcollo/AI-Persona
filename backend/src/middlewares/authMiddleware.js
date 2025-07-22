@@ -28,38 +28,21 @@ async function authMiddleware(req, res, next) {
 
     const user = await prisma.user.findUnique({
       where: { id: payload.userId },
-      include: { memberships: true },
     });
     if (!user || !user.isActive) {
       throw new ApiError(401, "User not found or inactive");
     }
-    
-    let workspace = null;
-    if (payload.workspaceId) {
-      workspace = await prisma.workspace.findUnique({
-        where: { id: payload.workspaceId },
-      });
-      if (!workspace) {
-        throw new ApiError(403, "Workspace not found");
-      }
-      // Check membership
-      const membership = user.memberships.find(
-        (m) => m.workspaceId === workspace.id && m.isActive
-      );
-      if (!membership) {
-        throw new ApiError(403, "User is not a member of this workspace");
-      }
-      req.membership = membership; // Attach membership context
+    if (!user.workspaceId) {
+      throw new ApiError(403, "User is not assigned to any workspace");
     }
     // Attach user and workspace context to request
     req.user = {
       id: user.id,
       email: user.email,
       name: user.name,
-      role: payload.role,
-      memberships: user.memberships,
+      role: user.role,
+      workspaceId: user.workspaceId,
     };
-    req.workspace = workspace;
     next();
   } catch (err) {
     next(err);

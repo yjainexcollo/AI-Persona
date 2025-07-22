@@ -3,7 +3,7 @@ const apiError = require("../utils/apiError");
 /**
  * Middleware to attach workspace context to the request.
  * - Extracts workspaceId from the 'x-workspace-id' header.
- * - Validates that the authenticated user is a member of the workspace.
+ * - Validates that the authenticated user's workspaceId matches.
  * - Attaches { workspaceId, role } to req.workspace.
  * - Returns 403 if not a member or invalid workspaceId.
  * - No-op for unauthenticated/public routes.
@@ -19,12 +19,8 @@ function attachWorkspace(req, res, next) {
       .json(apiError("Workspace ID header (x-workspace-id) is required."));
   }
 
-  // Check if user is a member of the workspace
-  const membership = Array.isArray(req.user.memberships)
-    ? req.user.memberships.find((m) => m.workspaceId === workspaceId)
-    : null;
-
-  if (!membership) {
+  // Check if user's workspaceId matches
+  if (req.user.workspaceId !== workspaceId) {
     return res
       .status(403)
       .json(apiError("You do not have access to this workspace."));
@@ -33,7 +29,7 @@ function attachWorkspace(req, res, next) {
   // Attach workspace context
   req.workspace = {
     workspaceId,
-    role: membership.role,
+    role: req.user.role,
   };
 
   next();

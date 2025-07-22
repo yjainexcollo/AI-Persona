@@ -32,7 +32,6 @@ async function handleOAuthLogin(provider, profile) {
   // Find or create user (single workspace only)
   let user = await prisma.user.findUnique({
     where: { email },
-    include: { memberships: true },
   });
   let isNewUser = false;
   let workspace;
@@ -45,51 +44,48 @@ async function handleOAuthLogin(provider, profile) {
         data: { name: domain, domain },
       });
     }
+    // Check if this is the first user in the workspace
+    const userCount = await prisma.user.count({
+      where: { workspaceId: workspace.id },
+    });
+    const role = userCount === 0 ? "ADMIN" : "MEMBER";
     user = await prisma.user.create({
       data: {
         email,
         name,
         emailVerified: true,
         isActive: true,
-        memberships: {
-          create: {
-            workspaceId: workspace.id,
-            role: "MEMBER",
-            isActive: true,
-          },
-        },
+        workspaceId: workspace.id,
+        role,
       },
-      include: { memberships: true },
     });
     isNewUser = true;
     logger.info(
-      `OAuth user created: ${user.id} (${user.email}) in workspace ${workspace.id} via ${provider}`
+      `OAuth user created: ${user.id} (${user.email}) in workspace ${workspace.id} as ${role} via ${provider}`
     );
   } else {
-    // Always use the first (and only) membership
     workspace = await prisma.workspace.findUnique({
-      where: { id: user.memberships[0].workspaceId },
+      where: { id: user.workspaceId },
     });
     logger.info(
       `OAuth user login: ${user.id} (${user.email}) in workspace ${workspace.id} via ${provider}`
     );
   }
 
-  // Defensive check for single membership
-  const membership = user.memberships[0];
-  if (!membership)
+  // Defensive check for workspace
+  if (!user.workspaceId)
     throw new ApiError(403, "User is not a member of any workspace");
 
   // Generate tokens
   const accessToken = signToken({
     userId: user.id,
-    workspaceId: membership.workspaceId,
-    role: membership.role,
+    workspaceId: user.workspaceId,
+    role: user.role,
   });
   const refreshToken = signRefreshToken({
     userId: user.id,
-    workspaceId: membership.workspaceId,
-    role: membership.role,
+    workspaceId: user.workspaceId,
+    role: user.role,
   });
 
   return apiResponse({
@@ -98,9 +94,10 @@ async function handleOAuthLogin(provider, profile) {
         id: user.id,
         email: user.email,
         name: user.name,
-        memberships: user.memberships, // will always be one
+        role: user.role,
+        workspaceId: user.workspaceId,
       },
-      workspaceId: membership.workspaceId,
+      workspaceId: user.workspaceId,
       accessToken,
       refreshToken,
       isNewUser,

@@ -9,15 +9,10 @@ const logger = require("../utils/logger");
 // Request a password reset: generate token, store, and send email
 async function requestPasswordReset(email, workspaceId) {
   if (!workspaceId) throw new ApiError(400, "Workspace context required");
-  const user = await prisma.user.findUnique({
-    where: { email },
-    include: {
-      memberships: {
-        where: { workspaceId },
-      },
-    },
+  const user = await prisma.user.findFirst({
+    where: { email, workspaceId },
   });
-  if (!user || !user.memberships || user.memberships.length === 0) {
+  if (!user) {
     logger.warn(
       `Password reset requested for non-existent or non-member email: ${email} in workspace ${workspaceId}`
     );
@@ -57,13 +52,8 @@ async function resetPassword(token, newPassword, workspaceId) {
   const record = await validateResetToken(token);
   const user = await prisma.user.findUnique({
     where: { id: record.userId },
-    include: {
-      memberships: {
-        where: { workspaceId },
-      },
-    },
   });
-  if (!user || !user.memberships || user.memberships.length === 0) {
+  if (!user || user.workspaceId !== workspaceId) {
     throw new ApiError(403, "User is not a member of this workspace");
   }
   const passwordHash = await hashPassword(newPassword);

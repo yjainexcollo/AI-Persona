@@ -14,19 +14,10 @@ async function sendInvite({
 }) {
   if (!workspaceId) throw new ApiError(400, "Workspace context required");
   // Check if user is already a member of this workspace
-  const existingUser = await prisma.user.findUnique({
-    where: { email },
-    include: {
-      memberships: {
-        where: { workspaceId },
-      },
-    },
+  const existingUser = await prisma.user.findFirst({
+    where: { email, workspaceId },
   });
-  if (
-    existingUser &&
-    existingUser.memberships &&
-    existingUser.memberships.length > 0
-  ) {
+  if (existingUser) {
     throw new ApiError(409, "User is already a member of this workspace");
   }
   // Invalidate old invites for this email/workspace
@@ -65,24 +56,18 @@ async function validateInviteToken(token) {
 async function acceptInvite(token, userId) {
   const invite = await validateInviteToken(token);
   // Check if user is already a member
-  const membership = await prisma.membership.findUnique({
-    where: {
-      userId_workspaceId: {
-        userId,
-        workspaceId: invite.workspaceId,
-      },
-    },
+  const user = await prisma.user.findFirst({
+    where: { id: userId, workspaceId: invite.workspaceId },
   });
-  if (membership) {
+  if (user) {
     throw new ApiError(409, "User is already a member of this workspace");
   }
-  // Assign user to workspace
-  await prisma.membership.create({
+  // Assign user to workspace (update if exists, or create if new)
+  await prisma.user.update({
+    where: { id: userId },
     data: {
-      userId,
       workspaceId: invite.workspaceId,
-      role: "MEMBER", // Or use invite.role if you add it to the model
-      isActive: true,
+      role: "MEMBER",
     },
   });
   // Mark invite as used

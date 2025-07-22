@@ -5,7 +5,7 @@ const ApiError = require("../utils/apiError");
 // GET /api/users/me
 const getProfile = asyncHandler(async (req, res) => {
   const userId = req.user && req.user.id;
-  const workspaceId = req.workspace && req.workspace.workspaceId;
+  const workspaceId = req.user && req.user.workspaceId;
   if (!userId) throw new ApiError(401, "Authentication required");
   if (!workspaceId) throw new ApiError(400, "Workspace context required");
   const profile = await userService.getProfile(userId, workspaceId);
@@ -15,7 +15,7 @@ const getProfile = asyncHandler(async (req, res) => {
 // PUT /api/users/me
 const updateProfile = asyncHandler(async (req, res) => {
   const userId = req.user && req.user.id;
-  const workspaceId = req.workspace && req.workspace.workspaceId;
+  const workspaceId = req.user && req.user.workspaceId;
   if (!userId) throw new ApiError(401, "Authentication required");
   if (!workspaceId) throw new ApiError(400, "Workspace context required");
   const { name, email } = req.body;
@@ -31,7 +31,7 @@ const updateProfile = asyncHandler(async (req, res) => {
 // PUT /api/users/me/password
 const changePassword = asyncHandler(async (req, res) => {
   const userId = req.user && req.user.id;
-  const workspaceId = req.workspace && req.workspace.workspaceId;
+  const workspaceId = req.user && req.user.workspaceId;
   if (!userId) throw new ApiError(401, "Authentication required");
   if (!workspaceId) throw new ApiError(400, "Workspace context required");
   const { currentPassword, newPassword } = req.body;
@@ -51,7 +51,7 @@ const changePassword = asyncHandler(async (req, res) => {
 // POST /api/users/me/deactivate
 const deactivateAccount = asyncHandler(async (req, res) => {
   const userId = req.user && req.user.id;
-  const workspaceId = req.workspace && req.workspace.workspaceId;
+  const workspaceId = req.user && req.user.workspaceId;
   if (!userId) throw new ApiError(401, "Authentication required");
   if (!workspaceId) throw new ApiError(400, "Workspace context required");
   await userService.deactivateAccount(userId, workspaceId);

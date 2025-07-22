@@ -78,9 +78,8 @@ paths:
                     id: cluser_abc123
                     email: newuser@company.com
                     name: Alice Smith
-                    memberships:
-                      - workspaceId: clworkspace_123xyz
-                        role: MEMBER
+                    role: ADMIN
+                    workspaceId: clworkspace_123xyz
                   workspace:
                     id: clworkspace_123xyz
                     domain: company.com
@@ -140,9 +139,8 @@ paths:
                     id: cluser_abc123
                     email: alice@company.com
                     name: Alice Smith
-                    memberships:
-                      - workspaceId: clworkspace_123xyz
-                        role: MEMBER
+                    role: ADMIN
+                    workspaceId: clworkspace_123xyz
                   workspaceId: clworkspace_123xyz
                   accessToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...abc123
                   refreshToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...xyz789
@@ -287,9 +285,8 @@ paths:
                     id: cluser_abc123
                     email: alice@company.com
                     name: Alice Smith
-                    memberships:
-                      - workspaceId: clworkspace_123xyz
-                        role: MEMBER
+                    role: ADMIN
+                    workspaceId: clworkspace_123xyz
         "400":
           description: Invalid or expired verification token
           content:
@@ -702,7 +699,7 @@ paths:
       tags: [User]
       description: |
         **RBAC:** Any authenticated user can access this endpoint.
-        Returns the current user's profile, including memberships.
+        Returns the current user's profile, including workspace and role.
       security:
         - bearerAuth: []
       parameters:
@@ -739,25 +736,12 @@ paths:
                           isActive:
                             type: boolean
                             example: true
-                          memberships:
-                            type: array
-                            items:
-                              type: object
-                              properties:
-                                workspaceId:
-                                  type: string
-                                  example: clworkspace_123xyz
-                                role:
-                                  type: string
-                                  example: MEMBER
-                          createdAt:
+                          role:
                             type: string
-                            format: date-time
-                            example: "2025-07-21T18:00:00.000Z"
-                          updatedAt:
+                            example: ADMIN
+                          workspaceId:
                             type: string
-                            format: date-time
-                            example: "2025-07-21T18:00:00.000Z"
+                            example: clworkspace_123xyz
               example:
                 status: success
                 data:
@@ -767,17 +751,8 @@ paths:
                     name: Alice Smith
                     emailVerified: true
                     isActive: true
-                    memberships:
-                      - workspaceId: clworkspace_123xyz
-                        role: MEMBER
-                    createdAt: "2025-07-21T18:00:00.000Z"
-                    updatedAt: "2025-07-21T18:00:00.000Z"
-        "401":
-          description: Authentication required
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                    role: ADMIN
+                    workspaceId: clworkspace_123xyz
 
   /api/users/me/password:
     put:
@@ -1189,17 +1164,6 @@ paths:
                       isActive:
                         type: boolean
                         example: true
-                      memberships:
-                        type: array
-                        items:
-                          type: object
-                          properties:
-                            userId:
-                              type: string
-                              example: cluser_abc123
-                            role:
-                              type: string
-                              example: ADMIN
               example:
                 status: success
                 workspace:
@@ -1207,21 +1171,6 @@ paths:
                   name: Acme Inc
                   domain: acme.com
                   isActive: true
-                  memberships:
-                    - userId: cluser_abc123
-                      role: ADMIN
-        "401":
-          description: Authentication required or insufficient permissions
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Workspace not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
 
   /api/admin/stats:
     get:
@@ -1303,17 +1252,12 @@ components:
                 name:
                   type: string
                   example: John Doe
-                memberships:
-                  type: array
-                  items:
-                    type: object
-                    properties:
-                      workspaceId:
-                        type: string
-                        example: clxyzworkspace123
-                      role:
-                        type: string
-                        example: MEMBER
+                role:
+                  type: string
+                  example: ADMIN
+                workspaceId:
+                  type: string
+                  example: clxyzworkspace123
             workspace:
               type: object
               properties:

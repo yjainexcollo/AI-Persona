@@ -13,7 +13,7 @@ datasource db {
 }
 
 // ===================================
-// USER MODEL
+// USER MODEL (single-workspace membership)
 // ===================================
 model User {
     id            String   @id @default(cuid())
@@ -22,9 +22,11 @@ model User {
     passwordHash  String?  // Nullable for OAuth-only users
     emailVerified Boolean  @default(false)
     isActive      Boolean  @default(true)
+    role          MemberRole @default(MEMBER)
     createdAt     DateTime @default(now())
     updatedAt     DateTime @updatedAt
-    memberships   Membership[]
+    workspaceId   String
+    workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
     invitesCreated Invite[]     @relation("InviteCreator")
     sessions      Session[]
     emailVerifications EmailVerification[]
@@ -34,6 +36,7 @@ model User {
     @@index([email])
     @@index([emailVerified])
     @@index([isActive])
+    @@index([workspaceId])
 }
 
 // ===================================
@@ -47,30 +50,10 @@ model Workspace {
     maxMembers  Int      @default(1000)
     createdAt   DateTime @default(now())
     updatedAt   DateTime @updatedAt
-    memberships Membership[]
+    users       User[]
     invites     Invite[]
     @@map("workspaces")
     @@index([domain])
-    @@index([isActive])
-}
-
-// ===================================
-// MEMBERSHIP MODEL
-// ===================================
-model Membership {
-    id          String     @id @default(cuid())
-    role        MemberRole @default(MEMBER)
-    isActive    Boolean    @default(true)
-    createdAt   DateTime   @default(now())
-    updatedAt   DateTime   @updatedAt
-    userId      String
-    workspaceId String
-    user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-    workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-    @@unique([userId, workspaceId])
-    @@map("memberships")
-    @@index([workspaceId])
-    @@index([role])
     @@index([isActive])
 }
 
