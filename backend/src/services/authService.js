@@ -81,7 +81,6 @@ async function register({ email, password, name }) {
 async function login({ email, password }) {
   const user = await prisma.user.findUnique({
     where: { email },
-    include: { memberships: true },
   });
   if (!user || !user.passwordHash) {
     logger.warn(
@@ -109,8 +108,7 @@ async function login({ email, password }) {
     );
     throw new ApiError(401, "Invalid email or password");
   }
-  const membership = user.memberships[0];
-  if (!membership) {
+  if (!user.workspaceId) {
     logger.warn(
       `Login attempt for user with no workspace: ${user.id} (${user.email})`
     );
@@ -118,16 +116,16 @@ async function login({ email, password }) {
   }
   const accessToken = signToken({
     userId: user.id,
-    workspaceId: membership.workspaceId,
-    role: membership.role,
+    workspaceId: user.workspaceId,
+    role: user.role,
   });
   const refreshToken = signRefreshToken({
     userId: user.id,
-    workspaceId: membership.workspaceId,
-    role: membership.role,
+    workspaceId: user.workspaceId,
+    role: user.role,
   });
   logger.info(
-    `User logged in: ${user.id} (${user.email}) in workspace ${membership.workspaceId}`
+    `User logged in: ${user.id} (${user.email}) in workspace ${user.workspaceId}`
   );
   return apiResponse({
     data: {
@@ -135,9 +133,10 @@ async function login({ email, password }) {
         id: user.id,
         email: user.email,
         name: user.name,
-        memberships: user.memberships,
+        role: user.role,
+        workspaceId: user.workspaceId,
       },
-      workspaceId: membership.workspaceId,
+      workspaceId: user.workspaceId,
       accessToken,
       refreshToken,
     },

@@ -17,7 +17,7 @@ function initializePassport() {
         },
         async (accessToken, refreshToken, profile, done) => {
           try {
-            // Find or create user in DB, always include memberships
+            // Find or create user in DB
             let user = await prisma.user.findUnique({
               where: {
                 email:
@@ -25,7 +25,6 @@ function initializePassport() {
                   profile.emails[0] &&
                   profile.emails[0].value,
               },
-              include: { memberships: true },
             });
             if (!user) {
               // Optionally, assign to a workspace or create one
@@ -39,18 +38,10 @@ function initializePassport() {
                   name: profile.displayName,
                   emailVerified: true,
                   isActive: true,
-                  memberships: workspace
-                    ? {
-                        create: {
-                          workspaceId: workspace.id,
-                          role: "MEMBER",
-                          isActive: true,
-                        },
-                      }
-                    : undefined,
+                  workspaceId: workspace ? workspace.id : undefined,
+                  role: workspace ? "MEMBER" : "MEMBER",
                   // No passwordHash for OAuth users
                 },
-                include: { memberships: true },
               });
             }
             // Pass both user and profile to downstream

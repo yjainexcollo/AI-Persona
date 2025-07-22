@@ -7,15 +7,12 @@ const ApiError = require("../utils/apiError");
 const logger = require("../utils/logger");
 
 // Request a password reset: generate token, store, and send email
-async function requestPasswordReset(email, workspaceId) {
-  if (!workspaceId) throw new ApiError(400, "Workspace context required");
+async function requestPasswordReset(email) {
   const user = await prisma.user.findFirst({
-    where: { email, workspaceId },
+    where: { email },
   });
   if (!user) {
-    logger.warn(
-      `Password reset requested for non-existent or non-member email: ${email} in workspace ${workspaceId}`
-    );
+    logger.warn(`Password reset requested for non-existent email: ${email}`);
     // For security, do not reveal if user exists
     return;
   }
@@ -27,9 +24,7 @@ async function requestPasswordReset(email, workspaceId) {
   await prisma.passwordResetToken.create({
     data: { userId: user.id, token, expiresAt },
   });
-  logger.info(
-    `Password reset token created for user ${user.id} in workspace ${workspaceId}`
-  );
+  logger.info(`Password reset token created for user ${user.id}`);
   // Send email
   await emailService.sendPasswordResetEmail(user, token);
 }
@@ -47,14 +42,13 @@ async function validateResetToken(token) {
 }
 
 // Reset the user's password
-async function resetPassword(token, newPassword, workspaceId) {
-  if (!workspaceId) throw new ApiError(400, "Workspace context required");
+async function resetPassword(token, newPassword) {
   const record = await validateResetToken(token);
   const user = await prisma.user.findUnique({
     where: { id: record.userId },
   });
-  if (!user || user.workspaceId !== workspaceId) {
-    throw new ApiError(403, "User is not a member of this workspace");
+  if (!user) {
+    throw new ApiError(403, "User not found");
   }
   const passwordHash = await hashPassword(newPassword);
   await prisma.user.update({
@@ -65,7 +59,7 @@ async function resetPassword(token, newPassword, workspaceId) {
     where: { token },
     data: { used: true, usedAt: new Date() },
   });
-  logger.info(`Password reset for user ${user.id} in workspace ${workspaceId}`);
+  logger.info(`Password reset for user ${user.id}`);
 }
 
 module.exports = {

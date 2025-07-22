@@ -15,17 +15,12 @@ const verifyEmail = asyncHandler(async (req, res) => {
 
 const resendVerification = asyncHandler(async (req, res) => {
   const { email } = req.body;
-  const workspaceId = req.user && req.user.workspaceId;
   if (!email) throw new ApiError(400, "Email is required");
-  if (!workspaceId) throw new ApiError(400, "Workspace context required");
-  // Only allow resending for users in the current workspace
+  // Find user by email only
   const user = await prisma.user.findFirst({
-    where: {
-      email,
-      workspaceId,
-    },
+    where: { email },
   });
-  if (!user) throw new ApiError(404, "User not found in this workspace");
+  if (!user) throw new ApiError(404, "User not found");
   if (user.emailVerified) throw new ApiError(400, "Email already verified");
   await emailService.resendVerificationEmail(user);
   res

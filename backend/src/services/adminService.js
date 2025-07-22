@@ -12,9 +12,7 @@ async function listUsers({
 } = {}) {
   if (!workspaceId) throw new ApiError(400, "Workspace context required");
   const where = {
-    memberships: {
-      some: { workspaceId },
-    },
+    workspaceId,
   };
   if (search) {
     where.OR = [
@@ -27,7 +25,6 @@ async function listUsers({
     skip,
     take,
     orderBy: { createdAt: "desc" },
-    include: { memberships: true },
   });
   const total = await prisma.user.count({ where });
   return { users, total };
@@ -39,9 +36,8 @@ async function getUser(userId, workspaceId) {
   const user = await prisma.user.findFirst({
     where: {
       id: userId,
-      memberships: { some: { workspaceId } },
+      workspaceId,
     },
-    include: { memberships: true },
   });
   if (!user) throw new ApiError(404, "User not found in this workspace");
   return user;
@@ -50,42 +46,37 @@ async function getUser(userId, workspaceId) {
 // Activate user in a workspace
 async function activateUser(userId, workspaceId) {
   if (!workspaceId) throw new ApiError(400, "Workspace context required");
-  // Ensure user is a member of the workspace
-  const membership = await prisma.membership.findUnique({
-    where: { userId_workspaceId: { userId, workspaceId } },
+  const user = await prisma.user.findFirst({
+    where: { id: userId, workspaceId },
   });
-  if (!membership)
-    throw new ApiError(404, "User is not a member of this workspace");
-  const user = await prisma.user.update({
+  if (!user) throw new ApiError(404, "User is not a member of this workspace");
+  const updatedUser = await prisma.user.update({
     where: { id: userId },
     data: { isActive: true },
   });
   logger.info(`Admin activated user ${userId} in workspace ${workspaceId}`);
-  return user;
+  return updatedUser;
 }
 
 // Deactivate user in a workspace
 async function deactivateUser(userId, workspaceId) {
   if (!workspaceId) throw new ApiError(400, "Workspace context required");
-  // Ensure user is a member of the workspace
-  const membership = await prisma.membership.findUnique({
-    where: { userId_workspaceId: { userId, workspaceId } },
+  const user = await prisma.user.findFirst({
+    where: { id: userId, workspaceId },
   });
-  if (!membership)
-    throw new ApiError(404, "User is not a member of this workspace");
-  const user = await prisma.user.update({
+  if (!user) throw new ApiError(404, "User is not a member of this workspace");
+  const updatedUser = await prisma.user.update({
     where: { id: userId },
     data: { isActive: false },
   });
   logger.info(`Admin deactivated user ${userId} in workspace ${workspaceId}`);
-  return user;
+  return updatedUser;
 }
 
 // Get current workspace details
 async function getWorkspace(workspaceId) {
   const workspace = await prisma.workspace.findUnique({
     where: { id: workspaceId },
-    include: { memberships: true },
   });
   if (!workspace) throw new ApiError(404, "Workspace not found");
   return workspace;
