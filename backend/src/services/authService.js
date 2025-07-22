@@ -31,6 +31,11 @@ async function register({ email, password, name }) {
   }
   const passwordHash = await hashPassword(password);
   const workspace = await getOrCreateDefaultWorkspace(email);
+  // Check if this is the first user in the workspace
+  const memberCount = await prisma.membership.count({
+    where: { workspaceId: workspace.id },
+  });
+  const role = memberCount === 0 ? "ADMIN" : "MEMBER";
   const user = await prisma.user.create({
     data: {
       email,
@@ -41,7 +46,7 @@ async function register({ email, password, name }) {
       memberships: {
         create: {
           workspaceId: workspace.id,
-          role: "MEMBER",
+          role,
           isActive: true,
         },
       },
@@ -51,7 +56,7 @@ async function register({ email, password, name }) {
     },
   });
   logger.info(
-    `User registered: ${user.id} (${user.email}) in workspace ${workspace.id}`
+    `User registered: ${user.id} (${user.email}) in workspace ${workspace.id} as ${role}`
   );
   // Email verification logic
   try {

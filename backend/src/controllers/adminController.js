@@ -5,7 +5,12 @@ const ApiError = require("../utils/apiError");
 // GET /api/admin/users
 const listUsers = asyncHandler(async (req, res) => {
   const { skip, take, search } = req.query;
+  const workspaceId = req.workspace && req.workspace.workspaceId;
+  const role = req.workspace && req.workspace.role;
+  if (!workspaceId) throw new ApiError(400, "Workspace context required");
+  if (role !== "ADMIN") throw new ApiError(403, "Admin role required");
   const result = await adminService.listUsers({
+    workspaceId,
     skip: skip ? parseInt(skip) : 0,
     take: take ? parseInt(take) : 20,
     search: search || "",
@@ -16,21 +21,33 @@ const listUsers = asyncHandler(async (req, res) => {
 // GET /api/admin/users/:id
 const getUser = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const user = await adminService.getUser(id);
+  const workspaceId = req.workspace && req.workspace.workspaceId;
+  const role = req.workspace && req.workspace.role;
+  if (!workspaceId) throw new ApiError(400, "Workspace context required");
+  if (role !== "ADMIN") throw new ApiError(403, "Admin role required");
+  const user = await adminService.getUser(id, workspaceId);
   res.status(200).json({ status: "success", user });
 });
 
 // POST /api/admin/users/:id/activate
 const activateUser = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const user = await adminService.activateUser(id);
+  const workspaceId = req.workspace && req.workspace.workspaceId;
+  const role = req.workspace && req.workspace.role;
+  if (!workspaceId) throw new ApiError(400, "Workspace context required");
+  if (role !== "ADMIN") throw new ApiError(403, "Admin role required");
+  const user = await adminService.activateUser(id, workspaceId);
   res.status(200).json({ status: "success", message: "User activated", user });
 });
 
 // POST /api/admin/users/:id/deactivate
 const deactivateUser = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const user = await adminService.deactivateUser(id);
+  const workspaceId = req.workspace && req.workspace.workspaceId;
+  const role = req.workspace && req.workspace.role;
+  if (!workspaceId) throw new ApiError(400, "Workspace context required");
+  if (role !== "ADMIN") throw new ApiError(403, "Admin role required");
+  const user = await adminService.deactivateUser(id, workspaceId);
   res
     .status(200)
     .json({ status: "success", message: "User deactivated", user });
@@ -38,6 +55,8 @@ const deactivateUser = asyncHandler(async (req, res) => {
 
 // GET /api/admin/workspaces
 const listWorkspaces = asyncHandler(async (req, res) => {
+  const role = req.workspace && req.workspace.role;
+  if (role !== "ADMIN") throw new ApiError(403, "Admin role required");
   const { skip, take, search } = req.query;
   const result = await adminService.listWorkspaces({
     skip: skip ? parseInt(skip) : 0,
@@ -49,6 +68,8 @@ const listWorkspaces = asyncHandler(async (req, res) => {
 
 // GET /api/admin/workspaces/:id
 const getWorkspace = asyncHandler(async (req, res) => {
+  const role = req.workspace && req.workspace.role;
+  if (role !== "ADMIN") throw new ApiError(403, "Admin role required");
   const { id } = req.params;
   const workspace = await adminService.getWorkspace(id);
   res.status(200).json({ status: "success", workspace });
@@ -56,6 +77,8 @@ const getWorkspace = asyncHandler(async (req, res) => {
 
 // POST /api/admin/workspaces/:id/activate
 const activateWorkspace = asyncHandler(async (req, res) => {
+  const role = req.workspace && req.workspace.role;
+  if (role !== "ADMIN") throw new ApiError(403, "Admin role required");
   const { id } = req.params;
   const workspace = await adminService.activateWorkspace(id);
   res
@@ -65,6 +88,8 @@ const activateWorkspace = asyncHandler(async (req, res) => {
 
 // POST /api/admin/workspaces/:id/deactivate
 const deactivateWorkspace = asyncHandler(async (req, res) => {
+  const role = req.workspace && req.workspace.role;
+  if (role !== "ADMIN") throw new ApiError(403, "Admin role required");
   const { id } = req.params;
   const workspace = await adminService.deactivateWorkspace(id);
   res
@@ -74,6 +99,8 @@ const deactivateWorkspace = asyncHandler(async (req, res) => {
 
 // GET /api/admin/stats
 const getStats = asyncHandler(async (req, res) => {
+  const role = req.workspace && req.workspace.role;
+  if (role !== "ADMIN") throw new ApiError(403, "Admin role required");
   const stats = await adminService.getStats();
   res.status(200).json({ status: "success", stats });
 });

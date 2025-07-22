@@ -4,11 +4,27 @@ const ApiError = require("../utils/apiError");
 const { hashPassword, verifyPassword } = require("../utils/password");
 const logger = require("../utils/logger");
 
-// Get current user's profile
-async function getProfile(userId) {
+// Helper: Ensure user is a member of the workspace
+async function assertMembership(userId, workspaceId) {
+  const membership = await prisma.membership.findUnique({
+    where: { userId_workspaceId: { userId, workspaceId } },
+  });
+  if (!membership || !membership.isActive) {
+    throw new ApiError(403, "User is not a member of this workspace");
+  }
+  return membership;
+}
+
+// Get current user's profile (scoped to workspace)
+async function getProfile(userId, workspaceId) {
+  await assertMembership(userId, workspaceId);
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    include: { memberships: true },
+    include: {
+      memberships: {
+        where: { workspaceId },
+      },
+    },
   });
   if (!user) throw new ApiError(404, "User not found");
   return {
@@ -23,8 +39,9 @@ async function getProfile(userId) {
   };
 }
 
-// Update profile (name, optionally email)
-async function updateProfile(userId, { name, email }) {
+// Update profile (name, optionally email) - scoped to workspace
+async function updateProfile(userId, workspaceId, { name, email }) {
+  await assertMembership(userId, workspaceId);
   const data = {};
   if (name) data.name = name;
   if (email) data.email = email; // Optionally, trigger email verification flow here
@@ -34,12 +51,18 @@ async function updateProfile(userId, { name, email }) {
     where: { id: userId },
     data,
   });
-  logger.info(`User ${userId} updated profile`);
+  logger.info(`User ${userId} updated profile in workspace ${workspaceId}`);
   return user;
 }
 
-// Change password
-async function changePassword(userId, currentPassword, newPassword) {
+// Change password - scoped to workspace
+async function changePassword(
+  userId,
+  workspaceId,
+  currentPassword,
+  newPassword
+) {
+  await assertMembership(userId, workspaceId);
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user || !user.passwordHash)
     throw new ApiError(404, "User not found or password not set");
@@ -50,16 +73,19 @@ async function changePassword(userId, currentPassword, newPassword) {
     where: { id: userId },
     data: { passwordHash: newHash },
   });
-  logger.info(`User ${userId} changed password`);
+  logger.info(`User ${userId} changed password in workspace ${workspaceId}`);
 }
 
-// Deactivate (soft delete) account
-async function deactivateAccount(userId) {
+// Deactivate (soft delete) account - scoped to workspace
+async function deactivateAccount(userId, workspaceId) {
+  await assertMembership(userId, workspaceId);
   await prisma.user.update({
     where: { id: userId },
     data: { isActive: false },
   });
-  logger.info(`User ${userId} deactivated their account`);
+  logger.info(
+    `User ${userId} deactivated their account in workspace ${workspaceId}`
+  );
 }
 
 module.exports = {

@@ -7,6 +7,8 @@ info:
 
     This API provides robust, secure, and multi-tenant authentication, workspace invite, and password reset flows for the AI-Persona SaaS platform.
 
+    **Note:** All authenticated, workspace-scoped endpoints require the `x-workspace-id` header to enforce strict multi-tenancy. This header must be set to the workspace ID the user is acting within.
+
     ## **Workflow Summary**
     - **New User Registration:**
       1. User registers via `/api/auth/register`.
@@ -703,6 +705,8 @@ paths:
         Returns the current user's profile, including memberships.
       security:
         - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/WorkspaceIdHeader"
       responses:
         "200":
           description: User profile retrieved successfully
@@ -1474,6 +1478,15 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
 
 components:
+  parameters:
+    WorkspaceIdHeader:
+      name: x-workspace-id
+      in: header
+      description: Workspace ID for multi-tenancy. Required for all authenticated, workspace-scoped endpoints.
+      required: true
+      schema:
+        type: string
+        example: clworkspace_123xyz
   schemas:
     AuthSuccessResponse:
       type: object

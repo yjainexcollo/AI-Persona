@@ -12,14 +12,20 @@ async function sendInvite({
   role = "MEMBER",
   createdById,
 }) {
-  // Check if user is already a member
+  if (!workspaceId) throw new ApiError(400, "Workspace context required");
+  // Check if user is already a member of this workspace
   const existingUser = await prisma.user.findUnique({
     where: { email },
-    include: { memberships: true },
+    include: {
+      memberships: {
+        where: { workspaceId },
+      },
+    },
   });
   if (
     existingUser &&
-    existingUser.memberships.some((m) => m.workspaceId === workspaceId)
+    existingUser.memberships &&
+    existingUser.memberships.length > 0
   ) {
     throw new ApiError(409, "User is already a member of this workspace");
   }

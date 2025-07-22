@@ -3,12 +3,15 @@ const asyncHandler = require("../utils/asyncHandler");
 const ApiError = require("../utils/apiError");
 
 const sendInvite = asyncHandler(async (req, res) => {
-  const { email, workspaceId, role } = req.body;
-  // Require authentication and workspace context (e.g., from authMiddleware)
+  const { email, role } = req.body;
+  const workspaceId = req.workspace && req.workspace.workspaceId;
+  const senderRole = req.workspace && req.workspace.role;
   const createdById = req.user && req.user.id;
   if (!createdById) throw new ApiError(401, "Authentication required");
-  if (!email || !workspaceId)
-    throw new ApiError(400, "Email and workspaceId are required");
+  if (!workspaceId) throw new ApiError(400, "Workspace context required");
+  if (senderRole !== "ADMIN")
+    throw new ApiError(403, "Admin role required to send invites");
+  if (!email) throw new ApiError(400, "Email is required");
   const invite = await inviteService.sendInvite({
     email,
     workspaceId,

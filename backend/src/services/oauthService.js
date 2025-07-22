@@ -29,18 +29,20 @@ async function handleOAuthLogin(provider, profile) {
     throw new ApiError(400, "OAuth profile missing email");
   }
 
-  // Find or create user
+  // Find or create user (single workspace only)
   let user = await prisma.user.findUnique({
     where: { email },
     include: { memberships: true },
   });
   let isNewUser = false;
+  let workspace;
   if (!user) {
-    // Assign to a default or first workspace (customize as needed)
-    let workspace = await prisma.workspace.findFirst();
+    // Assign to a default workspace by domain, or fallback
+    const domain = email.split("@")[1] || "default.local";
+    workspace = await prisma.workspace.findUnique({ where: { domain } });
     if (!workspace) {
       workspace = await prisma.workspace.create({
-        data: { name: "Default Workspace", domain: "default.local" },
+        data: { name: domain, domain },
       });
     }
     user = await prisma.user.create({
@@ -56,22 +58,25 @@ async function handleOAuthLogin(provider, profile) {
             isActive: true,
           },
         },
-        // No passwordHash for OAuth users
       },
       include: { memberships: true },
     });
     isNewUser = true;
     logger.info(
-      `OAuth user created: ${user.id} (${user.email}) via ${provider}`
+      `OAuth user created: ${user.id} (${user.email}) in workspace ${workspace.id} via ${provider}`
     );
   } else {
-    logger.info(`OAuth user login: ${user.id} (${user.email}) via ${provider}`);
+    // Always use the first (and only) membership
+    workspace = await prisma.workspace.findUnique({
+      where: { id: user.memberships[0].workspaceId },
+    });
+    logger.info(
+      `OAuth user login: ${user.id} (${user.email}) in workspace ${workspace.id} via ${provider}`
+    );
   }
 
-  // Defensive check for memberships
-  const membership = Array.isArray(user.memberships)
-    ? user.memberships[0]
-    : null;
+  // Defensive check for single membership
+  const membership = user.memberships[0];
   if (!membership)
     throw new ApiError(403, "User is not a member of any workspace");
 
@@ -93,7 +98,7 @@ async function handleOAuthLogin(provider, profile) {
         id: user.id,
         email: user.email,
         name: user.name,
-        memberships: user.memberships,
+        memberships: user.memberships, // will always be one
       },
       workspaceId: membership.workspaceId,
       accessToken,
