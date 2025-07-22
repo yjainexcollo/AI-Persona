@@ -81,54 +81,13 @@ async function deactivateUser(userId, workspaceId) {
   return user;
 }
 
-// List all workspaces (system-wide)
-async function listWorkspaces({ skip = 0, take = 20, search = "" } = {}) {
-  const where = search
-    ? {
-        OR: [
-          { name: { contains: search, mode: "insensitive" } },
-          { domain: { contains: search, mode: "insensitive" } },
-        ],
-      }
-    : {};
-  const workspaces = await prisma.workspace.findMany({
-    where,
-    skip,
-    take,
-    orderBy: { createdAt: "desc" },
-    include: { memberships: true },
-  });
-  const total = await prisma.workspace.count({ where });
-  return { workspaces, total };
-}
-
-// Get workspace details (system-wide)
+// Get current workspace details
 async function getWorkspace(workspaceId) {
   const workspace = await prisma.workspace.findUnique({
     where: { id: workspaceId },
     include: { memberships: true },
   });
   if (!workspace) throw new ApiError(404, "Workspace not found");
-  return workspace;
-}
-
-// Activate workspace (system-wide)
-async function activateWorkspace(workspaceId) {
-  const workspace = await prisma.workspace.update({
-    where: { id: workspaceId },
-    data: { isActive: true },
-  });
-  logger.info(`Admin activated workspace ${workspaceId}`);
-  return workspace;
-}
-
-// Deactivate workspace (system-wide)
-async function deactivateWorkspace(workspaceId) {
-  const workspace = await prisma.workspace.update({
-    where: { id: workspaceId },
-    data: { isActive: false },
-  });
-  logger.info(`Admin deactivated workspace ${workspaceId}`);
   return workspace;
 }
 
@@ -151,9 +110,6 @@ module.exports = {
   getUser,
   activateUser,
   deactivateUser,
-  listWorkspaces,
   getWorkspace,
-  activateWorkspace,
-  deactivateWorkspace,
   getStats,
 };

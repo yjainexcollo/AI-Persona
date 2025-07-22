@@ -53,48 +53,14 @@ const deactivateUser = asyncHandler(async (req, res) => {
     .json({ status: "success", message: "User deactivated", user });
 });
 
-// GET /api/admin/workspaces
-const listWorkspaces = asyncHandler(async (req, res) => {
+// GET /api/admin/workspace (current workspace only)
+const getCurrentWorkspace = asyncHandler(async (req, res) => {
+  const workspaceId = req.workspace && req.workspace.workspaceId;
   const role = req.workspace && req.workspace.role;
+  if (!workspaceId) throw new ApiError(400, "Workspace context required");
   if (role !== "ADMIN") throw new ApiError(403, "Admin role required");
-  const { skip, take, search } = req.query;
-  const result = await adminService.listWorkspaces({
-    skip: skip ? parseInt(skip) : 0,
-    take: take ? parseInt(take) : 20,
-    search: search || "",
-  });
-  res.status(200).json({ status: "success", ...result });
-});
-
-// GET /api/admin/workspaces/:id
-const getWorkspace = asyncHandler(async (req, res) => {
-  const role = req.workspace && req.workspace.role;
-  if (role !== "ADMIN") throw new ApiError(403, "Admin role required");
-  const { id } = req.params;
-  const workspace = await adminService.getWorkspace(id);
+  const workspace = await adminService.getWorkspace(workspaceId);
   res.status(200).json({ status: "success", workspace });
-});
-
-// POST /api/admin/workspaces/:id/activate
-const activateWorkspace = asyncHandler(async (req, res) => {
-  const role = req.workspace && req.workspace.role;
-  if (role !== "ADMIN") throw new ApiError(403, "Admin role required");
-  const { id } = req.params;
-  const workspace = await adminService.activateWorkspace(id);
-  res
-    .status(200)
-    .json({ status: "success", message: "Workspace activated", workspace });
-});
-
-// POST /api/admin/workspaces/:id/deactivate
-const deactivateWorkspace = asyncHandler(async (req, res) => {
-  const role = req.workspace && req.workspace.role;
-  if (role !== "ADMIN") throw new ApiError(403, "Admin role required");
-  const { id } = req.params;
-  const workspace = await adminService.deactivateWorkspace(id);
-  res
-    .status(200)
-    .json({ status: "success", message: "Workspace deactivated", workspace });
 });
 
 // GET /api/admin/stats
@@ -110,9 +76,6 @@ module.exports = {
   getUser,
   activateUser,
   deactivateUser,
-  listWorkspaces,
-  getWorkspace,
-  activateWorkspace,
-  deactivateWorkspace,
+  getCurrentWorkspace,
   getStats,
 };
