@@ -1,7 +1,7 @@
 # AI-Persona Backend
 
-A secure, scalable, and enterprise-grade multi-tenant backend for the AI-Persona SaaS platform.  
-Supports modular authentication (local, OAuth, SSO-ready), workspace/user isolation, and AI persona integration.
+A secure, scalable, and enterprise-grade multi-tenant backend for the AI-Persona SaaS platform.
+Supports modular authentication (local, OAuth, SSO-ready), strict workspace/user isolation, robust RBAC, and AI persona integration.
 
 ---
 
@@ -12,14 +12,14 @@ backend/
   docs/                # API documentation (Swagger/OpenAPI)
   prisma/              # Prisma schema and migrations
   src/                 # Application source code
-    auth/              # Authentication logic (local, OAuth, SSO)
     config/            # App and third-party configuration (env, passport, etc.)
-    controllers/       # Route controllers
-    middlewares/       # Express middlewares (auth, error handling, etc.)
+    controllers/       # Route controllers (REST & GraphQL)
+    middlewares/       # Express middlewares (auth, RBAC, error handling, etc.)
     routes/            # API route definitions
-    services/          # Business logic
-    utils/             # Utility functions
+    services/          # Business logic (multi-tenancy, auth, invites, etc.)
+    utils/             # Utility functions (JWT, logging, password, etc.)
     validations/       # Input validation schemas
+    graphql/           # GraphQL schema, resolvers, and context
     app.js             # Express app setup
     index.js           # App entry point
   package.json         # Project dependencies and scripts
@@ -28,6 +28,14 @@ backend/
   .env.template        # Example environment variables
   README.md            # Project documentation
 ```
+
+---
+
+## 🏢 Multi-Tenancy & AI Persona
+
+- **Multi-Tenancy:** Each company/tenant has its own isolated workspace. Users are assigned to workspaces by email domain. All data access is strictly scoped to the current workspace.
+- **Workspace Isolation:** No cross-workspace data access is possible. All business logic enforces tenant boundaries.
+- **AI Personas:** Each workspace can have one or more AI personas (assistants/chatbots), fully isolated per workspace.
 
 ---
 
@@ -86,6 +94,8 @@ Key variables include:
 - `SESSION_SECRET`: Secret for session encryption
 - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`: For Google OAuth
 - `OAUTH_CALLBACK_URL`: OAuth callback endpoint
+- `EMAIL_API_KEY` / `EMAIL_FROM`: For transactional email
+- `CORS_ORIGIN`: Allowed CORS origins
 
 ---
 
@@ -94,6 +104,7 @@ Key variables include:
 - The `docker-compose.yml` file sets up both the backend and a PostgreSQL database.
 - Data is persisted in a Docker volume (`db_data`).
 - The backend service uses the `.env` file for configuration.
+- For production, remove code/node_modules volume mounts and use a secrets manager for sensitive values.
 
 ---
 
@@ -113,15 +124,21 @@ Key variables include:
 
 ## 📚 API Documentation
 
-- API docs are maintained in `docs/swagger.yaml`.
-- You can view or edit the OpenAPI spec for up-to-date API documentation.
+- API docs are maintained in `docs/swagger.yaml` (OpenAPI 3.0.3).
+- View interactive docs at `/docs` when the backend is running.
+- Both REST and GraphQL APIs are documented.
 
 ---
 
-## 📦 Authentication & Configuration Modules
+## 🔐 Authentication, RBAC & Security
 
-- `src/auth/`: Contains all authentication logic, including local, OAuth, and SSO strategies, token management, and related helpers.
-- `src/config/`: Centralizes configuration loading (environment variables, passport strategies, third-party integrations, etc.) for maintainability and security.
+- **Authentication:** Local (email/password), OAuth (Google, Microsoft), and SSO-ready via Passport.js.
+- **RBAC:** Role-based access control (admin, member, guest, etc.) enforced via middleware and services.
+- **Workspace Context:** All requests are scoped to a workspace for strict tenant isolation.
+- **Security:**
+  - Uses helmet, CORS, and rate limiting.
+  - All sensitive data is loaded from environment variables.
+  - Centralized error handling and logging.
 
 ---
 
@@ -129,6 +146,7 @@ Key variables include:
 
 - **GraphQL:** [http://localhost:3000/graphql](http://localhost:3000/graphql)
 - **REST Health Check:** [http://localhost:3000/health](http://localhost:3000/health)
+- **Swagger Docs:** [http://localhost:3000/docs](http://localhost:3000/docs)
 
 ---
 
@@ -162,9 +180,10 @@ This project is licensed under the MIT License.
 - Never commit your real `.env` file or secrets.
 - Use strong, unique secrets for JWT and session management.
 - Keep dependencies up to date.
-- Write tests for all business logic and authentication flows.
+- Write tests for all business logic, authentication, and multi-tenancy flows.
 - Document any architectural or security decisions in the `docs/` folder.
-- Centralized, robust logging and error handling using Winston and Express middleware.
+- Centralized, robust logging and error handling using the logger utility and Express middleware.
+- Enforce DRY, modularity, and separation of concerns throughout the codebase.
 
 ---
 

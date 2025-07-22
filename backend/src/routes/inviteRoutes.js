@@ -1,18 +1,20 @@
 const express = require("express");
 const router = express.Router();
-const inviteController = require("../controllers/inviteController");
 const authMiddleware = require("../middlewares/authMiddleware");
-const permissionMiddleware = require("../middlewares/permissionMiddleware");
+const attachWorkspace = require("../middlewares/attachWorkspace");
+const inviteController = require("../controllers/inviteController");
+const roleMiddleware = require("../middlewares/roleMiddleware");
 
-// Send invite (protected, only users with 'invite_user' permission)
+// Send invite (authenticated, workspace-scoped)
 router.post(
   "/send",
   authMiddleware,
-  permissionMiddleware("invite_user"),
+  attachWorkspace,
+  roleMiddleware("admin"),
   inviteController.sendInvite
 );
 
-// Accept invite (public)
+// Accept invite (public, no workspace context needed)
 router.post("/accept", inviteController.acceptInvite);
 
 module.exports = router;

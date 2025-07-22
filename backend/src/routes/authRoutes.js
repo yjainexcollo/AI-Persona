@@ -5,7 +5,6 @@ const emailController = require("../controllers/emailController");
 const oauthController = require("../controllers/oauthController");
 const { resendVerificationLimiter } = require("../middlewares/rateLimiter");
 const passwordResetController = require("../controllers/passwordResetController");
-const authMiddleware = require("../middlewares/authMiddleware");
 
 // Registration, login, refresh
 router.post("/register", authController.register);
