@@ -1,4 +1,4 @@
-const apiError = require("../utils/apiError");
+const ApiError = require("../utils/apiError");
 
 /**
  * Middleware to attach workspace context to the request.
@@ -14,16 +14,14 @@ function attachWorkspace(req, res, next) {
 
   const workspaceId = req.headers["x-workspace-id"];
   if (!workspaceId) {
-    return res
-      .status(400)
-      .json(apiError("Workspace ID header (x-workspace-id) is required."));
+    return next(
+      new ApiError(400, "Workspace ID header (x-workspace-id) is required.")
+    );
   }
 
   // Check if user's workspaceId matches
   if (req.user.workspaceId !== workspaceId) {
-    return res
-      .status(403)
-      .json(apiError("You do not have access to this workspace."));
+    return next(new ApiError(403, "You do not have access to this workspace."));
   }
 
   // Attach workspace context

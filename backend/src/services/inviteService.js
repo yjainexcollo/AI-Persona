@@ -13,6 +13,19 @@ async function sendInvite({
   createdById,
 }) {
   if (!workspaceId) throw new ApiError(400, "Workspace context required");
+  // Get the inviter's workspace
+  const workspace = await prisma.workspace.findUnique({
+    where: { id: workspaceId },
+  });
+  if (!workspace) throw new ApiError(404, "Workspace not found");
+  // Check if invited email's domain matches the workspace domain
+  const invitedDomain = email.split("@")[1]?.toLowerCase();
+  if (invitedDomain !== workspace.domain.toLowerCase()) {
+    throw new ApiError(
+      400,
+      "You can only invite users with the same email domain as your workspace."
+    );
+  }
   // Check if user is already a member of this workspace
   const existingUser = await prisma.user.findFirst({
     where: { email, workspaceId },
@@ -55,29 +68,25 @@ async function validateInviteToken(token) {
 // Accept an invite (assign user to workspace)
 async function acceptInvite(token, userId) {
   const invite = await validateInviteToken(token);
-  // Check if user is already a member
-  const user = await prisma.user.findFirst({
-    where: { id: userId, workspaceId: invite.workspaceId },
+  // Check if a user with the invited email already exists
+  const existingUser = await prisma.user.findUnique({
+    where: { email: invite.email },
   });
-  if (user) {
-    throw new ApiError(409, "User is already a member of this workspace");
+  if (existingUser) {
+    // If the user exists, deny joining the inviter's workspace
+    throw new ApiError(
+      409,
+      "This email is already registered. You cannot join another company’s workspace with this email."
+    );
   }
-  // Assign user to workspace (update if exists, or create if new)
-  await prisma.user.update({
-    where: { id: userId },
-    data: {
-      workspaceId: invite.workspaceId,
-      role: "MEMBER",
-    },
-  });
-  // Mark invite as used
+  // If user does not exist, proceed (user should have just registered)
+  // After registration, assign to a new workspace based on domain (handled in registration logic)
+  // Mark invite as used (so it can't be reused)
   await prisma.invite.update({
     where: { token },
     data: { used: true },
   });
-  logger.info(
-    `User ${userId} accepted invite to workspace ${invite.workspaceId}`
-  );
+  logger.info(`Invite for ${invite.email} marked as used after registration.`);
   return invite;
 }
 

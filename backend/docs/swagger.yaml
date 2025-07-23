@@ -357,10 +357,7 @@ paths:
       summary: Request password reset
       tags: [Auth]
       description: |
-        Authenticated users can request a password reset link to be sent to their email address.
-        Requires a valid JWT access token in the Authorization header.
-      security:
-        - bearerAuth: []
+        Allows a user who forgot their password to request a password reset link to be sent to their email address. This endpoint is public and does not require authentication.
       requestBody:
         required: true
         content:
@@ -399,22 +396,13 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "401":
-          description: Authentication required
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
 
   /api/auth/reset-password:
     post:
       summary: Reset password
       tags: [Auth]
       description: |
-        Authenticated users can reset their password using a valid reset token and a new password.
-        Requires a valid JWT access token in the Authorization header.
-      security:
-        - bearerAuth: []
+        Allows a user to reset their password using a valid reset token and a new password. This endpoint is public and does not require authentication.
       requestBody:
         required: true
         content:
@@ -458,12 +446,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "401":
-          description: Authentication required
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
         "404":
           description: User not found
           content:
@@ -480,8 +462,18 @@ paths:
 
         Authenticated users (admins/members) can invite others to join a workspace by email.
         Requires a valid JWT access token in the Authorization header.
+
+        **Business Logic:**
+        - You can only invite users whose email domain matches your workspace domain. If the invited email's domain does not match, the backend will return an error.
       security:
         - bearerAuth: []
+      parameters:
+        - in: header
+          name: x-workspace-id
+          required: true
+          schema:
+            type: string
+          description: Workspace ID for multi-tenancy. Must match the user's workspace.
       requestBody:
         required: true
         content:
@@ -490,21 +482,17 @@ paths:
               type: object
               required:
                 - email
-                - workspaceId
+                - role
               properties:
                 email:
                   type: string
                   format: email
                   example: invitee@company.com
-                workspaceId:
-                  type: string
-                  example: clworkspace_123xyz
                 role:
                   type: string
                   example: MEMBER
             example:
               email: invitee@company.com
-              workspaceId: clworkspace_123xyz
               role: MEMBER
       responses:
         "200":
@@ -545,25 +533,14 @@ paths:
                           createdById:
                             type: string
                             example: cluser_456def
-              example:
-                status: success
-                message: Invite sent
-                data:
-                  invite:
-                    id: clinvite_abc123
-                    email: invitee@company.com
-                    token: d8f3e2c1b4a5f6d7e8c9b0a1d2e3f4c5
-                    expiresAt: "2025-07-22T18:00:00.000Z"
-                    workspaceId: clworkspace_123xyz
-                    createdById: cluser_456def
         "400":
-          description: Email and workspaceId are required, or user already a member
+          description: Invited email's domain does not match workspace domain, or other invalid input
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "401":
-          description: Authentication required or insufficient permissions
+        "409":
+          description: User is already a member of this workspace
           content:
             application/json:
               schema:
@@ -574,9 +551,12 @@ paths:
       summary: Accept workspace invite
       tags: [Invite]
       description: |
-        **RBAC:** This endpoint is public. Any user (new or existing) can accept an invite using a valid invite token.
+        Accept a workspace invite using a valid invite token. 
 
-        Accept a workspace invite using a valid invite token. Can be used by new or existing users.
+        **Business Logic:**
+        - If the invited email already exists in the system, the backend will deny joining the inviter's workspace and return an error: "This email is already registered. You cannot join another company’s workspace with this email."
+        - If the invited email does not exist, the user should register (with the invited email), and after registration, will be assigned to a new workspace based on their domain (not the inviter's workspace).
+        - The invite will be marked as used after registration.
       requestBody:
         required: true
         content:
@@ -598,7 +578,7 @@ paths:
               userId: cluser_abc123
       responses:
         "200":
-          description: Invite accepted successfully
+          description: Invite accepted successfully (for new users only; user is assigned to a new workspace based on their domain)
           content:
             application/json:
               schema:
@@ -628,17 +608,14 @@ paths:
                           used:
                             type: boolean
                             example: true
-              example:
-                status: success
-                message: Invite accepted
-                data:
-                  invite:
-                    id: clinvite_abc123
-                    email: invitee@company.com
-                    workspaceId: clworkspace_123xyz
-                    used: true
+        "409":
+          description: The invited email is already registered. User cannot join another company’s workspace with this email.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "400":
-          description: Token and userId are required, or invalid/expired invite, or user already a member
+          description: Token and userId are required, or invalid/expired invite
           content:
             application/json:
               schema:
