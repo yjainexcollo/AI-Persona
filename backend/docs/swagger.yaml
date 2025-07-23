@@ -208,19 +208,19 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
 
   # --- OAuth Routes ---
-  /api/oauth/google:
+  /api/auth/google:
     get:
       summary: Initiate Google OAuth login
       tags: [OAuth]
       description: |
         Redirects the user to Google for authentication. This is a public endpoint.
 
-        On success, Google will redirect the user to `/api/oauth/google/callback`.
+        On success, Google will redirect the user to `/api/auth/google/callback`.
       responses:
         "302":
           description: Redirects to Google OAuth login page
 
-  /api/oauth/google/callback:
+  /api/auth/google/callback:
     get:
       summary: Google OAuth callback
       tags: [OAuth]
