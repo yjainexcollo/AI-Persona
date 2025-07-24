@@ -3,6 +3,15 @@ const prisma = new PrismaClient();
 const ApiError = require("../utils/apiError");
 const logger = require("../utils/logger");
 
+// Helper: Delete workspace if it has no users
+async function deleteWorkspaceIfEmpty(workspaceId) {
+  const userCount = await prisma.user.count({ where: { workspaceId } });
+  if (userCount === 0) {
+    await prisma.workspace.delete({ where: { id: workspaceId } });
+    logger.info(`Workspace ${workspaceId} deleted because it has no users.`);
+  }
+}
+
 // List all users in a workspace (with optional filters/pagination)
 async function listUsers({
   workspaceId,
@@ -70,6 +79,8 @@ async function deactivateUser(userId, workspaceId) {
     data: { isActive: false },
   });
   logger.info(`Admin deactivated user ${userId} in workspace ${workspaceId}`);
+  // Check and delete workspace if empty
+  await deleteWorkspaceIfEmpty(workspaceId);
   return updatedUser;
 }
 
@@ -80,6 +91,20 @@ async function getWorkspace(workspaceId) {
   });
   if (!workspace) throw new ApiError(404, "Workspace not found");
   return workspace;
+}
+
+// Delete a workspace by id (admin only)
+async function deleteWorkspace(workspaceId) {
+  const workspace = await prisma.workspace.findUnique({
+    where: { id: workspaceId },
+  });
+  if (!workspace) throw new ApiError(404, "Workspace not found");
+  // Delete all users in the workspace (or handle as needed)
+  await prisma.user.deleteMany({ where: { workspaceId } });
+  // Delete the workspace
+  await prisma.workspace.delete({ where: { id: workspaceId } });
+  logger.info(`Workspace ${workspaceId} and all its users deleted by admin.`);
+  return { id: workspaceId };
 }
 
 // Get system stats (system-wide)
@@ -103,4 +128,5 @@ module.exports = {
   deactivateUser,
   getWorkspace,
   getStats,
+  deleteWorkspace, // add this export
 };

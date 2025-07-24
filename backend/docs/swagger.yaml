@@ -1194,6 +1194,49 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /api/admin/workspace/{id}:
+    delete:
+      summary: Delete a workspace (admin only)
+      tags: [Admin]
+      description: |
+        **RBAC:** Only users with the ADMIN role can access this endpoint.
+        Deletes the specified workspace and all its users.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: The workspace ID
+      responses:
+        "200":
+          description: Workspace deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Workspace deleted
+        "403":
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Workspace not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
   parameters:
     WorkspaceIdHeader:

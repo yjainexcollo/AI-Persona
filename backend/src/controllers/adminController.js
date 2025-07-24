@@ -71,6 +71,15 @@ const getStats = asyncHandler(async (req, res) => {
   res.status(200).json({ status: "success", stats });
 });
 
+// DELETE /api/admin/workspace/:id
+const deleteWorkspace = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const role = req.user && req.user.role;
+  if (role !== "ADMIN") throw new ApiError(403, "Admin role required");
+  await adminService.deleteWorkspace(id);
+  res.status(200).json({ status: "success", message: "Workspace deleted" });
+});
+
 module.exports = {
   listUsers,
   getUser,
@@ -78,4 +87,5 @@ module.exports = {
   deactivateUser,
   getCurrentWorkspace,
   getStats,
+  deleteWorkspace, // add this export
 };

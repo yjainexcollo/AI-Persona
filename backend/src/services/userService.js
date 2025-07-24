@@ -4,6 +4,15 @@ const ApiError = require("../utils/apiError");
 const { hashPassword, verifyPassword } = require("../utils/password");
 const logger = require("../utils/logger");
 
+// Helper: Delete workspace if it has no users
+async function deleteWorkspaceIfEmpty(workspaceId) {
+  const userCount = await prisma.user.count({ where: { workspaceId } });
+  if (userCount === 0) {
+    await prisma.workspace.delete({ where: { id: workspaceId } });
+    logger.info(`Workspace ${workspaceId} deleted because it has no users.`);
+  }
+}
+
 // Get current user's profile (scoped to workspace)
 async function getProfile(userId, workspaceId) {
   const user = await prisma.user.findUnique({
@@ -79,6 +88,8 @@ async function deactivateAccount(userId, workspaceId) {
   logger.info(
     `User ${userId} deactivated their account in workspace ${workspaceId}`
   );
+  // Check and delete workspace if empty
+  await deleteWorkspaceIfEmpty(workspaceId);
 }
 
 module.exports = {
