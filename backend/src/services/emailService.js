@@ -109,30 +109,6 @@ async function sendPasswordResetEmail(user, token) {
   }
 }
 
-// Send workspace invite email
-async function sendInviteEmail(email, token, workspaceId) {
-  const inviteUrl = `${config.appBaseUrl}/accept-invite?token=${token}`;
-  const mailOptions = {
-    from: config.smtpFrom,
-    to: email,
-    subject: "You're invited to join a workspace on AI-Persona!",
-    html: `<p>Hello,</p>
-           <p>You have been invited to join a workspace on AI-Persona.</p>
-           <p>Click the link below to accept the invite and join the workspace:</p>
-           <a href="${inviteUrl}">${inviteUrl}</a>
-           <p>This link will expire in 48 hours. If you did not expect this invite, you can ignore this email.</p>`,
-  };
-  try {
-    await transporter.sendMail(mailOptions);
-    logger.info(`Sent workspace invite email to ${email}`);
-  } catch (err) {
-    logger.error(
-      `Failed to send workspace invite email to ${email}: ${err.message}`
-    );
-    throw new ApiError(500, "Failed to send workspace invite email");
-  }
-}
-
 module.exports = {
   createEmailVerification,
   sendVerificationEmail,
@@ -140,5 +116,4 @@ module.exports = {
   resendVerificationEmail,
   cleanupExpiredVerifications,
   sendPasswordResetEmail,
-  sendInviteEmail,
 };

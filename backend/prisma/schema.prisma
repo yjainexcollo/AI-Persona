@@ -27,7 +27,7 @@ model User {
     updatedAt     DateTime @updatedAt
     workspaceId   String
     workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-    invitesCreated Invite[]     @relation("InviteCreator")
+
     sessions      Session[]
     emailVerifications EmailVerification[]
     passwordResetTokens PasswordResetToken[]
@@ -51,34 +51,13 @@ model Workspace {
     createdAt   DateTime @default(now())
     updatedAt   DateTime @updatedAt
     users       User[]
-    invites     Invite[]
+
     @@map("workspaces")
     @@index([domain])
     @@index([isActive])
 }
 
-// ===================================
-// INVITE MODEL
-// ===================================
-model Invite {
-    id          String    @id @default(cuid())
-    email       String
-    token       String    @unique
-    expiresAt   DateTime
-    used        Boolean    @default(false)
-    createdAt   DateTime  @default(now())
-    updatedAt   DateTime  @updatedAt
-    workspaceId String
-    createdById String
-    workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-    createdBy   User      @relation("InviteCreator", fields: [createdById], references: [id])
-    @@map("invites")
-    @@index([email])
-    @@index([token])
-    @@index([workspaceId])
-    @@index([expiresAt])
-    @@index([used])
-}
+
 
 // ===================================
 // SESSION MODEL

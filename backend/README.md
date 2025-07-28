@@ -16,7 +16,7 @@ backend/
     controllers/       # Route controllers (REST & GraphQL)
     middlewares/       # Express middlewares (auth, RBAC, error handling, etc.)
     routes/            # API route definitions
-    services/          # Business logic (multi-tenancy, auth, invites, etc.)
+    services/          # Business logic (multi-tenancy, auth, etc.)
     utils/             # Utility functions (JWT, logging, password, etc.)
     validations/       # Input validation schemas
     graphql/           # GraphQL schema, resolvers, and context

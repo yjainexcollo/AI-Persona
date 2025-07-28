@@ -10,9 +10,9 @@ const passportSetup = require("./middlewares/passportSetup");
 passportSetup();
 
 const authRoutes = require("./routes/authRoutes");
-const inviteRoutes = require("./routes/inviteRoutes");
 const userRoute = require("./routes/userRoute");
 const adminRoutes = require("./routes/adminRoutes");
+const workspaceRoutes = require("./routes/workspaceRoutes");
 
 const swaggerUi = require("swagger-ui-express");
 const YAML = require("yamljs");
@@ -47,9 +47,9 @@ app.get("/health", (req, res) => {
 });
 
 app.use("/api/auth", authRoutes);
-app.use("/api/invites", inviteRoutes);
 app.use("/api/users", userRoute);
 app.use("/api/admin", adminRoutes);
+app.use("/api/workspaces", workspaceRoutes);
 
 // Load the swagger.yaml file
 const swaggerDocument = YAML.load(path.join(__dirname, "../docs/swagger.yaml"));

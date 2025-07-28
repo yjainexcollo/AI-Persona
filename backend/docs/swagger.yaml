@@ -5,7 +5,7 @@ info:
   description: |
     # AI-Persona SaaS Backend API
 
-    This API provides robust, secure, and multi-tenant authentication, workspace invite, and password reset flows for the AI-Persona SaaS platform.
+    This API provides robust, secure, and multi-tenant authentication and password reset flows for the AI-Persona SaaS platform.
 
     **Note:** All authenticated, workspace-scoped endpoints require the `x-workspace-id` header to enforce strict multi-tenancy. This header must be set to the workspace ID the user is acting within.
 
@@ -14,17 +14,12 @@ info:
       1. User registers via `/api/auth/register`.
       2. Receives a verification email. Must verify before logging in.
       3. After verification, can log in and access their workspace.
-    - **Invite Flow:**
-      1. Workspace admin/member sends an invite via `/api/invites/send` (requires JWT).
-      2. Invitee receives an email with a secure invite link.
-      3. Invitee accepts via `/api/invites/accept` (public endpoint). If new, they sign up; if existing, they join the workspace.
-      4. Only valid, unused, and unexpired invites can be accepted.
     - **Password Reset:**
-      1. Authenticated user requests a reset via `/api/auth/request-password-reset` (requires JWT).
+      1. User requests a reset via `/api/auth/request-password-reset` (public endpoint).
       2. Receives a reset email with a secure link.
-      3. Resets password via `/api/auth/reset-password` (requires JWT and valid token).
+      3. Resets password via `/api/auth/reset-password` (public endpoint with valid token).
 
-    **Base URLs:** `/api/auth`, `/api/invites`, `/api/oauth`
+    **Base URLs:** `/api/auth`, `/api/oauth`
 
 servers:
   - url: http://localhost:3000
@@ -453,18 +448,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  /api/invites/send:
-    post:
-      summary: Send workspace invite
-      tags: [Invite]
+  /api/workspaces/{id}:
+    delete:
+      summary: Delete a workspace
+      tags: [Workspace]
       description: |
-        **RBAC:** Only users with the `invite_user` permission (typically `ADMIN` role) can access this endpoint.
-
-        Authenticated users (admins/members) can invite others to join a workspace by email.
-        Requires a valid JWT access token in the Authorization header.
-
-        **Business Logic:**
-        - You can only invite users whose email domain matches your workspace domain. If the invited email's domain does not match, the backend will return an error.
+        **RBAC:** Only users with the `ADMIN` role can access this endpoint.
+        Deletes the specified workspace and all its users.
       security:
         - bearerAuth: []
       parameters:
@@ -474,175 +464,12 @@ paths:
           schema:
             type: string
           description: Workspace ID for multi-tenancy. Must match the user's workspace.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - email
-                - role
-              properties:
-                email:
-                  type: string
-                  format: email
-                  example: invitee@company.com
-                role:
-                  type: string
-                  example: MEMBER
-            example:
-              email: invitee@company.com
-              role: MEMBER
-      responses:
-        "200":
-          description: Invite sent successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  message:
-                    type: string
-                    example: Invite sent
-                  data:
-                    type: object
-                    properties:
-                      invite:
-                        type: object
-                        properties:
-                          id:
-                            type: string
-                            example: clinvite_abc123
-                          email:
-                            type: string
-                            example: invitee@company.com
-                          token:
-                            type: string
-                            example: d8f3e2c1b4a5f6d7e8c9b0a1d2e3f4c5
-                          expiresAt:
-                            type: string
-                            format: date-time
-                            example: "2025-07-22T18:00:00.000Z"
-                          workspaceId:
-                            type: string
-                            example: clworkspace_123xyz
-                          createdById:
-                            type: string
-                            example: cluser_456def
-        "400":
-          description: Invited email's domain does not match workspace domain, or other invalid input
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: User is already a member of this workspace
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  /api/invites/accept:
-    post:
-      summary: Accept workspace invite
-      tags: [Invite]
-      description: |
-        Accept a workspace invite using a valid invite token. 
-
-        **Business Logic:**
-        - If the invited email already exists in the system, the backend will deny joining the inviter's workspace and return an error: "This email is already registered. You cannot join another company’s workspace with this email."
-        - If the invited email does not exist, the user should register (with the invited email), and after registration, will be assigned to a new workspace based on their domain (not the inviter's workspace).
-        - The invite will be marked as used after registration.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - token
-                - userId
-              properties:
-                token:
-                  type: string
-                  example: d8f3e2c1b4a5f6d7e8c9b0a1d2e3f4c5
-                userId:
-                  type: string
-                  example: cluser_abc123
-            example:
-              token: d8f3e2c1b4a5f6d7e8c9b0a1d2e3f4c5
-              userId: cluser_abc123
-      responses:
-        "200":
-          description: Invite accepted successfully (for new users only; user is assigned to a new workspace based on their domain)
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  message:
-                    type: string
-                    example: Invite accepted
-                  data:
-                    type: object
-                    properties:
-                      invite:
-                        type: object
-                        properties:
-                          id:
-                            type: string
-                            example: clinvite_abc123
-                          email:
-                            type: string
-                            example: invitee@company.com
-                          workspaceId:
-                            type: string
-                            example: clworkspace_123xyz
-                          used:
-                            type: boolean
-                            example: true
-        "409":
-          description: The invited email is already registered. User cannot join another company’s workspace with this email.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "400":
-          description: Token and userId are required, or invalid/expired invite
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Invite or user not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  /api/workspaces/{id}:
-    delete:
-      summary: Delete a workspace
-      tags: [Workspace]
-      description: |
-        **RBAC:** Only users with the `delete_workspace` permission (ADMIN role) can access this endpoint.
-        Deletes the specified workspace.
-      security:
-        - bearerAuth: []
-      parameters:
         - in: path
           name: id
           required: true
           schema:
             type: string
-          description: The workspace ID
+          description: The workspace ID to delete
       responses:
         "200":
           description: Workspace deleted successfully
@@ -658,7 +485,13 @@ paths:
                     type: string
                     example: Workspace deleted
         "401":
-          description: Authentication required or insufficient permissions
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Admin role required or insufficient permissions
           content:
             application/json:
               schema:

@@ -109,15 +109,13 @@ async function deleteWorkspace(workspaceId) {
 
 // Get system stats (system-wide)
 async function getStats() {
-  const [userCount, workspaceCount, inviteCount] = await Promise.all([
+  const [userCount, workspaceCount] = await Promise.all([
     prisma.user.count(),
     prisma.workspace.count(),
-    prisma.invite.count(),
   ]);
   return {
     users: userCount,
     workspaces: workspaceCount,
-    invites: inviteCount,
   };
 }
 

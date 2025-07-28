@@ -3,7 +3,6 @@
 
 const roles = {
   ADMIN: [
-    "invite_user",
     "remove_user",
     "manage_members",
     "view_workspace",
