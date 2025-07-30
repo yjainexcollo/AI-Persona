@@ -8,8 +8,30 @@ const {
   signRefreshToken,
   verifyRefreshToken,
 } = require("../utils/jwt");
+const emailService = require("./emailService");
 
 const prisma = new PrismaClient();
+
+// Helper function to get or create default workspace
+async function getOrCreateDefaultWorkspace(email) {
+  const domain = email.split("@")[1] || "default.local";
+
+  let workspace = await prisma.workspace.findUnique({
+    where: { domain },
+  });
+
+  if (!workspace) {
+    workspace = await prisma.workspace.create({
+      data: {
+        name: domain,
+        domain,
+      },
+    });
+    logger.info(`Created new workspace: ${workspace.id} (${workspace.domain})`);
+  }
+
+  return workspace;
+}
 
 // Register a new user
 async function register({ email, password, name }) {
@@ -25,12 +47,23 @@ async function register({ email, password, name }) {
   // Hash password
   const hashedPassword = await bcrypt.hash(password, 12);
 
+  // Get or create workspace
+  const workspace = await getOrCreateDefaultWorkspace(email);
+
+  // Check if this is the first user in the workspace
+  const userCount = await prisma.user.count({
+    where: { workspaceId: workspace.id },
+  });
+  const role = userCount === 0 ? "ADMIN" : "MEMBER";
+
   // Create user
   const user = await prisma.user.create({
     data: {
       email,
       passwordHash: hashedPassword,
       name,
+      workspaceId: workspace.id,
+      role,
     },
     select: {
       id: true,
@@ -38,18 +71,38 @@ async function register({ email, password, name }) {
       name: true,
       emailVerified: true,
       isActive: true,
+      role: true,
+      workspaceId: true,
       createdAt: true,
       updatedAt: true,
     },
   });
 
-  logger.info(`User registered: ${user.id} (${user.email})`);
+  logger.info(
+    `User registered: ${user.id} (${user.email}) in workspace ${workspace.id} as ${role}`
+  );
+
+  // Send verification email
+  try {
+    const token = await emailService.createEmailVerification(user.id);
+    await emailService.sendVerificationEmail(user, token);
+    logger.info(`Verification email sent to ${user.email}`);
+  } catch (err) {
+    logger.error(
+      `Failed to send verification email to ${user.email}: ${err.message}`
+    );
+    // Don't throw error here - user is created successfully, just email failed
+  }
 
   return {
     status: "success",
     message: "Registration successful. Verification email sent.",
     data: {
       user,
+      workspace: {
+        id: workspace.id,
+        domain: workspace.domain,
+      },
     },
   };
 }
@@ -59,6 +112,9 @@ async function login({ email, password }) {
   // Find user
   const user = await prisma.user.findUnique({
     where: { email },
+    include: {
+      workspace: true,
+    },
   });
 
   if (!user) {
@@ -82,8 +138,16 @@ async function login({ email, password }) {
   }
 
   // Generate tokens
-  const accessToken = signToken({ userId: user.id });
-  const refreshToken = signRefreshToken({ userId: user.id });
+  const accessToken = signToken({
+    userId: user.id,
+    workspaceId: user.workspaceId,
+    role: user.role,
+  });
+  const refreshToken = signRefreshToken({
+    userId: user.id,
+    workspaceId: user.workspaceId,
+    role: user.role,
+  });
 
   // Create session
   await prisma.session.create({
@@ -94,7 +158,9 @@ async function login({ email, password }) {
     },
   });
 
-  logger.info(`User logged in: ${user.id} (${user.email})`);
+  logger.info(
+    `User logged in: ${user.id} (${user.email}) in workspace ${user.workspaceId}`
+  );
 
   return {
     status: "success",
@@ -106,7 +172,11 @@ async function login({ email, password }) {
         name: user.name,
         emailVerified: user.emailVerified,
         isActive: user.isActive,
+        role: user.role,
+        workspaceId: user.workspaceId,
       },
+      workspaceId: user.workspaceId,
+      workspaceName: user.workspace?.name || "Unknown Workspace",
       accessToken,
       refreshToken,
     },
@@ -117,7 +187,7 @@ async function login({ email, password }) {
 async function refreshTokens({ refreshToken }) {
   try {
     const payload = verifyRefreshToken(refreshToken);
-    const { userId } = payload;
+    const { userId, workspaceId, role } = payload;
 
     // Find session
     const session = await prisma.session.findUnique({
@@ -134,8 +204,8 @@ async function refreshTokens({ refreshToken }) {
     }
 
     // Generate new tokens
-    const newAccessToken = signToken({ userId });
-    const newRefreshToken = signRefreshToken({ userId });
+    const newAccessToken = signToken({ userId, workspaceId, role });
+    const newRefreshToken = signRefreshToken({ userId, workspaceId, role });
 
     // Update session
     await prisma.session.update({
@@ -146,7 +216,9 @@ async function refreshTokens({ refreshToken }) {
       },
     });
 
-    logger.info(`Refresh token used for user: ${userId}`);
+    logger.info(
+      `Refresh token used for user: ${userId} in workspace ${workspaceId}`
+    );
 
     return {
       status: "success",

@@ -15,6 +15,8 @@ async function getProfile(userId) {
       name: true,
       emailVerified: true,
       isActive: true,
+      role: true,
+      workspaceId: true,
       createdAt: true,
       updatedAt: true,
     },
@@ -45,6 +47,8 @@ async function updateProfile(userId, { name, email }) {
       name: true,
       emailVerified: true,
       isActive: true,
+      role: true,
+      workspaceId: true,
     },
   });
 

@@ -17,6 +17,24 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+// Test email configuration
+async function testEmailConfig() {
+  try {
+    logger.info(
+      `Testing email configuration: ${config.smtpHost}:${config.smtpPort}`
+    );
+    logger.info(`SMTP User: ${config.smtpUser}`);
+    logger.info(`SMTP From: ${config.smtpFrom}`);
+
+    await transporter.verify();
+    logger.info("Email configuration is valid");
+    return true;
+  } catch (error) {
+    logger.error(`Email configuration error: ${error.message}`);
+    return false;
+  }
+}
+
 // Generate and store a verification token
 async function createEmailVerification(userId, expiresInMinutes = 60) {
   const token = generateToken(32);
@@ -41,13 +59,18 @@ async function sendVerificationEmail(user, token) {
            <a href="${verifyUrl}">${verifyUrl}</a>
            <p>This link will expire in 60 minutes.</p>`,
   };
+
+  logger.info(`Attempting to send verification email to ${user.email}`);
+  logger.debug(`Email configuration: ${config.smtpHost}:${config.smtpPort}`);
+
   try {
     await transporter.sendMail(mailOptions);
-    logger.info(`Sent verification email to ${user.email}`);
+    logger.info(`Successfully sent verification email to ${user.email}`);
   } catch (err) {
     logger.error(
       `Failed to send verification email to ${user.email}: ${err.message}`
     );
+    logger.error(`SMTP Error details: ${JSON.stringify(err)}`);
     throw new ApiError(500, "Failed to send verification email");
   }
 }
@@ -137,6 +160,7 @@ async function sendInviteEmail(email, token, workspaceId) {
 }
 
 module.exports = {
+  testEmailConfig,
   createEmailVerification,
   sendVerificationEmail,
   verifyEmailToken,

@@ -5,6 +5,27 @@ const { signToken, signRefreshToken } = require("../utils/jwt");
 
 const prisma = new PrismaClient();
 
+// Helper function to get or create default workspace
+async function getOrCreateDefaultWorkspace(email) {
+  const domain = email.split("@")[1] || "default.local";
+
+  let workspace = await prisma.workspace.findUnique({
+    where: { domain },
+  });
+
+  if (!workspace) {
+    workspace = await prisma.workspace.create({
+      data: {
+        name: domain,
+        domain,
+      },
+    });
+    logger.info(`Created new workspace: ${workspace.id} (${workspace.domain})`);
+  }
+
+  return workspace;
+}
+
 // Handle OAuth login/registration
 async function handleOAuthLogin(provider, profile) {
   const { id, emails, displayName } = profile;
@@ -19,6 +40,9 @@ async function handleOAuthLogin(provider, profile) {
   // Find existing user
   let user = await prisma.user.findUnique({
     where: { email },
+    include: {
+      workspace: true,
+    },
   });
 
   if (user) {
@@ -27,11 +51,21 @@ async function handleOAuthLogin(provider, profile) {
       throw new ApiError(403, "Account is deactivated");
     }
 
-    logger.info(`OAuth user login: ${user.id} (${user.email}) via ${provider}`);
+    logger.info(
+      `OAuth user login: ${user.id} (${user.email}) in workspace ${user.workspaceId} via ${provider}`
+    );
 
     // Generate tokens
-    const accessToken = signToken({ userId: user.id });
-    const refreshToken = signRefreshToken({ userId: user.id });
+    const accessToken = signToken({
+      userId: user.id,
+      workspaceId: user.workspaceId,
+      role: user.role,
+    });
+    const refreshToken = signRefreshToken({
+      userId: user.id,
+      workspaceId: user.workspaceId,
+      role: user.role,
+    });
 
     // Create session
     await prisma.session.create({
@@ -52,7 +86,11 @@ async function handleOAuthLogin(provider, profile) {
           name: user.name,
           emailVerified: user.emailVerified,
           isActive: user.isActive,
+          role: user.role,
+          workspaceId: user.workspaceId,
         },
+        workspaceId: user.workspaceId,
+        workspaceName: user.workspace?.name || "Unknown Workspace",
         accessToken,
         refreshToken,
         isNewUser: false,
@@ -61,12 +99,22 @@ async function handleOAuthLogin(provider, profile) {
     };
   } else {
     // New user - create account
+    const workspace = await getOrCreateDefaultWorkspace(email);
+
+    // Check if this is the first user in the workspace
+    const userCount = await prisma.user.count({
+      where: { workspaceId: workspace.id },
+    });
+    const role = userCount === 0 ? "ADMIN" : "MEMBER";
+
     const user = await prisma.user.create({
       data: {
         email,
         name,
         emailVerified: true, // OAuth users are pre-verified
         isActive: true,
+        workspaceId: workspace.id,
+        role,
       },
       select: {
         id: true,
@@ -74,16 +122,26 @@ async function handleOAuthLogin(provider, profile) {
         name: true,
         emailVerified: true,
         isActive: true,
+        role: true,
+        workspaceId: true,
       },
     });
 
     logger.info(
-      `OAuth user created: ${user.id} (${user.email}) via ${provider}`
+      `OAuth user created: ${user.id} (${user.email}) in workspace ${workspace.id} as ${role} via ${provider}`
     );
 
     // Generate tokens
-    const accessToken = signToken({ userId: user.id });
-    const refreshToken = signRefreshToken({ userId: user.id });
+    const accessToken = signToken({
+      userId: user.id,
+      workspaceId: user.workspaceId,
+      role: user.role,
+    });
+    const refreshToken = signRefreshToken({
+      userId: user.id,
+      workspaceId: user.workspaceId,
+      role: user.role,
+    });
 
     // Create session
     await prisma.session.create({
@@ -99,6 +157,8 @@ async function handleOAuthLogin(provider, profile) {
       message: "OAuth registration successful",
       data: {
         user,
+        workspaceId: workspace.id,
+        workspaceName: workspace.name,
         accessToken,
         refreshToken,
         isNewUser: true,

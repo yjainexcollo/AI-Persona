@@ -23,6 +23,8 @@ async function listUsers({ skip, take, search }) {
         email: true,
         name: true,
         isActive: true,
+        role: true,
+        workspaceId: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -45,6 +47,8 @@ async function getUser(userId) {
       email: true,
       name: true,
       isActive: true,
+      role: true,
+      workspaceId: true,
       createdAt: true,
       updatedAt: true,
     },
@@ -88,14 +92,16 @@ async function deactivateUser(userId) {
 
 // Get system stats
 async function getStats() {
-  const [userCount, activeUserCount] = await Promise.all([
+  const [userCount, activeUserCount, workspaceCount] = await Promise.all([
     prisma.user.count(),
     prisma.user.count({ where: { isActive: true } }),
+    prisma.workspace.count(),
   ]);
 
   return {
     users: userCount,
     activeUsers: activeUserCount,
+    workspaces: workspaceCount,
   };
 }
 

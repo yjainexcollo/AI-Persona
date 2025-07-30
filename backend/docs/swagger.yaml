@@ -7,11 +7,13 @@ info:
 
     This API provides robust, secure, and multi-tenant authentication and user management for the AI-Persona SaaS platform.
 
+    **Note:** Most authenticated, workspace-scoped endpoints require the `x-workspace-id` header to enforce strict multi-tenancy. This header must be set to the workspace ID the user is acting within. However, some endpoints (like workspace deletion) get the workspace ID from the URL path and do not require this header.
+
     ## **Workflow Summary**
     - **New User Registration:**
       1. User registers via `/api/auth/register`.
       2. Receives a verification email. Must verify before logging in.
-      3. After verification, can log in and access their account.
+      3. After verification, can log in and access their workspace.
     - **Password Reset:**
       1. User requests a reset via `/api/auth/request-password-reset` (public endpoint).
       2. Receives a reset email with a secure link.
@@ -75,6 +77,11 @@ paths:
                     id: cluser_abc123
                     email: newuser@company.com
                     name: Alice Smith
+                    role: ADMIN
+                    workspaceId: clworkspace_123xyz
+                  workspace:
+                    id: clworkspace_123xyz
+                    domain: company.com
         "409":
           description: Email already registered
           content:
@@ -131,6 +138,10 @@ paths:
                     id: cluser_abc123
                     email: alice@company.com
                     name: Alice Smith
+                    role: ADMIN
+                    workspaceId: clworkspace_123xyz
+                  workspaceId: clworkspace_123xyz
+                  workspaceName: Company Workspace
                   accessToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...abc123
                   refreshToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...xyz789
         "401":
@@ -216,7 +227,7 @@ paths:
       description: |
         Handles the callback from Google after user authentication.
 
-        On success, redirects to frontend with token and user info.
+        On success, redirects to frontend with token and workspace info.
         On failure, redirects to `/login` or returns an error.
       responses:
         "302":
@@ -270,6 +281,8 @@ paths:
                     id: cluser_abc123
                     email: alice@company.com
                     name: Alice Smith
+                    role: ADMIN
+                    workspaceId: clworkspace_123xyz
         "400":
           description: Invalid or expired verification token
           content:
@@ -445,8 +458,10 @@ paths:
       summary: Get current user profile
       tags: [User]
       description: |
-        Any authenticated user can access this endpoint.
-        Returns the current user's profile.
+        **RBAC:** Any authenticated user can access this endpoint.
+        Returns the current user's profile, including workspace and role.
+
+        **Note:** This endpoint does not require the `x-workspace-id` header as users can access their own profile data.
       security:
         - bearerAuth: []
       responses:
@@ -481,6 +496,12 @@ paths:
                           isActive:
                             type: boolean
                             example: true
+                          role:
+                            type: string
+                            example: ADMIN
+                          workspaceId:
+                            type: string
+                            example: clworkspace_123xyz
               example:
                 status: success
                 data:
@@ -490,6 +511,8 @@ paths:
                     name: Alice Smith
                     emailVerified: true
                     isActive: true
+                    role: ADMIN
+                    workspaceId: clworkspace_123xyz
         "401":
           description: Authentication required
           content:
@@ -500,8 +523,10 @@ paths:
       summary: Update current user profile
       tags: [User]
       description: |
-        Any authenticated user can update their own profile.
+        **RBAC:** Any authenticated user can update their own profile.
         Updates the user's name and email.
+
+        **Note:** This endpoint does not require the `x-workspace-id` header as users can update their own profile.
       security:
         - bearerAuth: []
       requestBody:
@@ -548,6 +573,8 @@ paths:
                     id: cluser_abc123
                     email: alice.johnson@company.com
                     name: Alice Johnson
+                    role: ADMIN
+                    workspaceId: clworkspace_123xyz
         "400":
           description: Invalid input
           content:
@@ -566,8 +593,10 @@ paths:
       summary: Change password
       tags: [User]
       description: |
-        Any authenticated user can change their password.
+        **RBAC:** Any authenticated user can change their password.
         Requires the current password and a new password.
+
+        **Note:** This endpoint does not require the `x-workspace-id` header as users can change their own password.
       security:
         - bearerAuth: []
       requestBody:
@@ -626,8 +655,10 @@ paths:
       summary: Deactivate (soft delete) account
       tags: [User]
       description: |
-        Any authenticated user can deactivate their own account.
+        **RBAC:** Any authenticated user can deactivate their own account.
         This will set the user's account as inactive (soft delete).
+
+        **Note:** This endpoint does not require the `x-workspace-id` header as users can deactivate their own account.
       security:
         - bearerAuth: []
       responses:
@@ -663,7 +694,7 @@ paths:
       summary: List all users
       tags: [Admin]
       description: |
-        Only users with the `ADMIN` role can access this endpoint.
+        **RBAC:** Only users with the `ADMIN` role can access this endpoint.
         Returns a paginated list of all users. Supports optional search, skip, and take query parameters.
       security:
         - bearerAuth: []
@@ -714,6 +745,12 @@ paths:
                         isActive:
                           type: boolean
                           example: true
+                        role:
+                          type: string
+                          example: MEMBER
+                        workspaceId:
+                          type: string
+                          example: clworkspace_123xyz
                   total:
                     type: integer
                     example: 1
@@ -724,6 +761,8 @@ paths:
                     email: alice@company.com
                     name: Alice Smith
                     isActive: true
+                    role: MEMBER
+                    workspaceId: clworkspace_123xyz
                 total: 1
         "401":
           description: Authentication required or insufficient permissions
@@ -737,7 +776,7 @@ paths:
       summary: Get user details
       tags: [Admin]
       description: |
-        Only users with the `ADMIN` role can access this endpoint.
+        **RBAC:** Only users with the `ADMIN` role can access this endpoint.
         Returns details for a specific user.
       security:
         - bearerAuth: []
@@ -774,6 +813,12 @@ paths:
                       isActive:
                         type: boolean
                         example: true
+                      role:
+                        type: string
+                        example: MEMBER
+                      workspaceId:
+                        type: string
+                        example: clworkspace_123xyz
               example:
                 status: success
                 user:
@@ -781,6 +826,8 @@ paths:
                   email: alice@company.com
                   name: Alice Smith
                   isActive: true
+                  role: MEMBER
+                  workspaceId: clworkspace_123xyz
         "401":
           description: Authentication required or insufficient permissions
           content:
@@ -799,7 +846,7 @@ paths:
       summary: Activate user
       tags: [Admin]
       description: |
-        Only users with the `ADMIN` role can access this endpoint.
+        **RBAC:** Only users with the `ADMIN` role can access this endpoint.
         Activates the specified user.
       security:
         - bearerAuth: []
@@ -857,7 +904,7 @@ paths:
       summary: Deactivate user
       tags: [Admin]
       description: |
-        Only users with the `ADMIN` role can access this endpoint.
+        **RBAC:** Only users with the `ADMIN` role can access this endpoint.
         Deactivates the specified user.
       security:
         - bearerAuth: []
@@ -915,8 +962,8 @@ paths:
       summary: Get system stats
       tags: [Admin]
       description: |
-        Only users with the `ADMIN` role can access this endpoint.
-        Returns system usage statistics.
+        **RBAC:** Only users with the `ADMIN` role can access this endpoint.
+        Returns system usage statistics (user, workspace, invite counts).
       security:
         - bearerAuth: []
       responses:
@@ -936,10 +983,18 @@ paths:
                       users:
                         type: integer
                         example: 10
+                      activeUsers:
+                        type: integer
+                        example: 8
+                      workspaces:
+                        type: integer
+                        example: 3
               example:
                 status: success
                 data:
                   users: 10
+                  activeUsers: 8
+                  workspaces: 3
         "401":
           description: Authentication required or insufficient permissions
           content:
@@ -997,6 +1052,15 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
 
 components:
+  parameters:
+    WorkspaceIdHeader:
+      name: x-workspace-id
+      in: header
+      description: Workspace ID for multi-tenancy. Required for all authenticated, workspace-scoped endpoints.
+      required: true
+      schema:
+        type: string
+        example: clworkspace_123xyz
   schemas:
     AuthSuccessResponse:
       type: object
@@ -1022,6 +1086,21 @@ components:
                 name:
                   type: string
                   example: John Doe
+                role:
+                  type: string
+                  example: ADMIN
+                workspaceId:
+                  type: string
+                  example: clxyzworkspace123
+            workspace:
+              type: object
+              properties:
+                id:
+                  type: string
+                  example: clxyzworkspace123
+                domain:
+                  type: string
+                  example: example.com
             accessToken:
               type: string
               example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
