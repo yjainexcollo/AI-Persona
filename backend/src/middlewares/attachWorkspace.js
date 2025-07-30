@@ -19,16 +19,28 @@ function attachWorkspace(req, res, next) {
     );
   }
 
-  // Check if user's workspaceId matches
-  if (req.user.workspaceId !== workspaceId) {
-    return next(new ApiError(403, "You do not have access to this workspace."));
-  }
+  // For workspace deletion, allow admin to delete any workspace
+  // For other operations, check if user's workspaceId matches
+  if (req.method === "DELETE" && req.path.includes("/workspaces/")) {
+    // Allow workspace deletion for admins (workspace context will be from path param)
+    req.workspace = {
+      workspaceId: req.params.id || workspaceId,
+      role: req.user.role,
+    };
+  } else {
+    // Check if user's workspaceId matches for other operations
+    if (req.user.workspaceId !== workspaceId) {
+      return next(
+        new ApiError(403, "You do not have access to this workspace.")
+      );
+    }
 
-  // Attach workspace context
-  req.workspace = {
-    workspaceId,
-    role: req.user.role,
-  };
+    // Attach workspace context
+    req.workspace = {
+      workspaceId,
+      role: req.user.role,
+    };
+  }
 
   next();
 }

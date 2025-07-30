@@ -7,7 +7,7 @@ info:
 
     This API provides robust, secure, and multi-tenant authentication and password reset flows for the AI-Persona SaaS platform.
 
-    **Note:** All authenticated, workspace-scoped endpoints require the `x-workspace-id` header to enforce strict multi-tenancy. This header must be set to the workspace ID the user is acting within.
+    **Note:** Most authenticated, workspace-scoped endpoints require the `x-workspace-id` header to enforce strict multi-tenancy. This header must be set to the workspace ID the user is acting within. However, some endpoints (like workspace deletion) get the workspace ID from the URL path and do not require this header.
 
     ## **Workflow Summary**
     - **New User Registration:**
@@ -455,15 +455,11 @@ paths:
       description: |
         **RBAC:** Only users with the `ADMIN` role can access this endpoint.
         Deletes the specified workspace and all its users.
+
+        **Note:** This endpoint does not require the `x-workspace-id` header as the workspace ID is provided in the URL path.
       security:
         - bearerAuth: []
       parameters:
-        - in: header
-          name: x-workspace-id
-          required: true
-          schema:
-            type: string
-          description: Workspace ID for multi-tenancy. Must match the user's workspace.
         - in: path
           name: id
           required: true
@@ -510,10 +506,10 @@ paths:
       description: |
         **RBAC:** Any authenticated user can access this endpoint.
         Returns the current user's profile, including workspace and role.
+
+        **Note:** This endpoint does not require the `x-workspace-id` header as users can access their own profile data.
       security:
         - bearerAuth: []
-      parameters:
-        - $ref: "#/components/parameters/WorkspaceIdHeader"
       responses:
         "200":
           description: User profile retrieved successfully
@@ -571,6 +567,8 @@ paths:
       description: |
         **RBAC:** Any authenticated user can change their password.
         Requires the current password and a new password.
+
+        **Note:** This endpoint does not require the `x-workspace-id` header as users can change their own password.
       security:
         - bearerAuth: []
       requestBody:
@@ -631,6 +629,8 @@ paths:
       description: |
         **RBAC:** Any authenticated user can deactivate their own account.
         This will set the user's account as inactive (soft delete).
+
+        **Note:** This endpoint does not require the `x-workspace-id` header as users can deactivate their own account.
       security:
         - bearerAuth: []
       responses:
@@ -1034,6 +1034,8 @@ paths:
       description: |
         **RBAC:** Only users with the ADMIN role can access this endpoint.
         Deletes the specified workspace and all its users.
+
+        **Note:** This endpoint does not require the `x-workspace-id` header as the workspace ID is provided in the URL path.
       security:
         - bearerAuth: []
       parameters:
@@ -1042,7 +1044,7 @@ paths:
           required: true
           schema:
             type: string
-          description: The workspace ID
+          description: The workspace ID to delete
       responses:
         "200":
           description: Workspace deleted successfully
@@ -1057,8 +1059,14 @@ paths:
                   message:
                     type: string
                     example: Workspace deleted
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "403":
-          description: Admin role required
+          description: Admin role required or insufficient permissions
           content:
             application/json:
               schema:

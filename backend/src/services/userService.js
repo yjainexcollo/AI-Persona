@@ -13,14 +13,12 @@ async function deleteWorkspaceIfEmpty(workspaceId) {
   }
 }
 
-// Get current user's profile (scoped to workspace)
-async function getProfile(userId, workspaceId) {
+// Get current user's profile
+async function getProfile(userId) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
   });
   if (!user) throw new ApiError(404, "User not found");
-  if (user.workspaceId !== workspaceId)
-    throw new ApiError(403, "User is not a member of this workspace");
   return {
     id: user.id,
     email: user.email,
@@ -34,12 +32,10 @@ async function getProfile(userId, workspaceId) {
   };
 }
 
-// Update profile (name, optionally email) - scoped to workspace
-async function updateProfile(userId, workspaceId, { name, email }) {
+// Update profile (name, optionally email)
+async function updateProfile(userId, { name, email }) {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) throw new ApiError(404, "User not found");
-  if (user.workspaceId !== workspaceId)
-    throw new ApiError(403, "User is not a member of this workspace");
   const data = {};
   if (name) data.name = name;
   if (email) data.email = email; // Optionally, trigger email verification flow here
@@ -49,22 +45,15 @@ async function updateProfile(userId, workspaceId, { name, email }) {
     where: { id: userId },
     data,
   });
-  logger.info(`User ${userId} updated profile in workspace ${workspaceId}`);
+  logger.info(`User ${userId} updated profile`);
   return updatedUser;
 }
 
-// Change password - scoped to workspace
-async function changePassword(
-  userId,
-  workspaceId,
-  currentPassword,
-  newPassword
-) {
+// Change password
+async function changePassword(userId, currentPassword, newPassword) {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user || !user.passwordHash)
     throw new ApiError(404, "User not found or password not set");
-  if (user.workspaceId !== workspaceId)
-    throw new ApiError(403, "User is not a member of this workspace");
   const valid = await verifyPassword(currentPassword, user.passwordHash);
   if (!valid) throw new ApiError(401, "Current password is incorrect");
   const newHash = await hashPassword(newPassword);
@@ -72,24 +61,20 @@ async function changePassword(
     where: { id: userId },
     data: { passwordHash: newHash },
   });
-  logger.info(`User ${userId} changed password in workspace ${workspaceId}`);
+  logger.info(`User ${userId} changed password`);
 }
 
-// Deactivate (soft delete) account - scoped to workspace
-async function deactivateAccount(userId, workspaceId) {
+// Deactivate (soft delete) account
+async function deactivateAccount(userId) {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) throw new ApiError(404, "User not found");
-  if (user.workspaceId !== workspaceId)
-    throw new ApiError(403, "User is not a member of this workspace");
   await prisma.user.update({
     where: { id: userId },
     data: { isActive: false },
   });
-  logger.info(
-    `User ${userId} deactivated their account in workspace ${workspaceId}`
-  );
+  logger.info(`User ${userId} deactivated their account`);
   // Check and delete workspace if empty
-  await deleteWorkspaceIfEmpty(workspaceId);
+  await deleteWorkspaceIfEmpty(user.workspaceId);
 }
 
 module.exports = {
