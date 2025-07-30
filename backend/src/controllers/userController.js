@@ -10,6 +10,17 @@ const getProfile = asyncHandler(async (req, res) => {
   res.status(200).json({ status: "success", data: { user: profile } });
 });
 
+// GET /api/users/workspace
+const getWorkspaceUsers = asyncHandler(async (req, res) => {
+  const userId = req.user && req.user.id;
+  const workspaceId = req.user && req.user.workspaceId;
+  if (!userId) throw new ApiError(401, "Authentication required");
+  if (!workspaceId) throw new ApiError(400, "Workspace not found");
+
+  const users = await userService.getWorkspaceUsers(workspaceId);
+  res.status(200).json({ status: "success", data: { users } });
+});
+
 // PUT /api/users/me
 const updateProfile = asyncHandler(async (req, res) => {
   const userId = req.user && req.user.id;
@@ -47,6 +58,7 @@ const deactivateAccount = asyncHandler(async (req, res) => {
 
 module.exports = {
   getProfile,
+  getWorkspaceUsers,
   updateProfile,
   changePassword,
   deactivateAccount,

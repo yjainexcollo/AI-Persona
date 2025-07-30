@@ -38,9 +38,63 @@ async function register({ email, password, name }) {
   // Check if user already exists
   const existingUser = await prisma.user.findUnique({
     where: { email },
+    include: { workspace: true },
   });
 
   if (existingUser) {
+    // If user exists but is deactivated, reactivate them
+    if (!existingUser.isActive) {
+      logger.info(`Reactivating deactivated user: ${existingUser.email}`);
+
+      // Update the deactivated user with new password and name
+      const updatedUser = await prisma.user.update({
+        where: { id: existingUser.id },
+        data: {
+          passwordHash: await bcrypt.hash(password, 12),
+          name: name || existingUser.name,
+          isActive: true,
+          emailVerified: false, // Require re-verification
+        },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          emailVerified: true,
+          isActive: true,
+          role: true,
+          workspaceId: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+
+      // Send verification email
+      try {
+        const token = await emailService.createEmailVerification(
+          updatedUser.id
+        );
+        await emailService.sendVerificationEmail(updatedUser, token);
+        logger.info(`Verification email sent to ${updatedUser.email}`);
+      } catch (err) {
+        logger.error(
+          `Failed to send verification email to ${updatedUser.email}: ${err.message}`
+        );
+      }
+
+      return {
+        status: "success",
+        message: "Account reactivated. Verification email sent.",
+        data: {
+          user: updatedUser,
+          workspace: {
+            id: updatedUser.workspaceId,
+            domain: existingUser.workspace?.domain || "unknown",
+          },
+        },
+      };
+    }
+
+    // If user exists and is active, throw error
     throw new ApiError(409, "Email already registered");
   }
 

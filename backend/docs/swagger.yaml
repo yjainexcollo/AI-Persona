@@ -32,11 +32,14 @@ paths:
 
   /api/auth/register:
     post:
-      summary: Register a new user
+      summary: Register a new user or reactivate deactivated account
       tags: [Auth]
       description: |
-        Registers a new user. After registration, a verification email is sent to the provided email address.
+        Registers a new user or reactivates a deactivated account. After registration/reactivation, a verification email is sent to the provided email address.
+
         **Note:** The user must verify their email before they can log in.
+
+        **Reactivation:** If a user with the provided email exists but is deactivated, the account will be reactivated with the new password and name. The user will need to verify their email again.
       requestBody:
         required: true
         content:
@@ -82,8 +85,27 @@ paths:
                   workspace:
                     id: clworkspace_123xyz
                     domain: company.com
+        "200":
+          description: Account reactivated. Verification email sent.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSuccessResponse"
+              example:
+                status: success
+                message: Account reactivated. Verification email sent.
+                data:
+                  user:
+                    id: cluser_abc123
+                    email: reactivated@company.com
+                    name: John Doe
+                    role: MEMBER
+                    workspaceId: clworkspace_123xyz
+                  workspace:
+                    id: clworkspace_123xyz
+                    domain: company.com
         "409":
-          description: Email already registered
+          description: Email already registered (active account)
           content:
             application/json:
               schema:
@@ -678,6 +700,94 @@ paths:
               example:
                 status: success
                 message: Account deactivated
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/users/workspace:
+    get:
+      summary: Get workspace users
+      tags: [User]
+      description: |
+        **RBAC:** Any authenticated user can access this endpoint.
+        Returns a list of all active users in the current user's workspace.
+
+        **Note:** This endpoint does not require the `x-workspace-id` header as users can access their own workspace data.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Workspace users retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  data:
+                    type: object
+                    properties:
+                      users:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              example: cluser_abc123
+                            email:
+                              type: string
+                              example: alice@company.com
+                            name:
+                              type: string
+                              example: Alice Smith
+                            emailVerified:
+                              type: boolean
+                              example: true
+                            isActive:
+                              type: boolean
+                              example: true
+                            role:
+                              type: string
+                              example: MEMBER
+                            workspaceId:
+                              type: string
+                              example: clworkspace_123xyz
+                            createdAt:
+                              type: string
+                              format: date-time
+                              example: "2025-01-15T10:30:00Z"
+              example:
+                status: success
+                data:
+                  users:
+                    - id: cluser_abc123
+                      email: alice@company.com
+                      name: Alice Smith
+                      emailVerified: true
+                      isActive: true
+                      role: MEMBER
+                      workspaceId: clworkspace_123xyz
+                      createdAt: "2025-01-15T10:30:00Z"
+                    - id: cluser_def456
+                      email: bob@company.com
+                      name: Bob Johnson
+                      emailVerified: true
+                      isActive: true
+                      role: ADMIN
+                      workspaceId: clworkspace_123xyz
+                      createdAt: "2025-01-10T09:15:00Z"
+        "400":
+          description: Workspace not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "401":
           description: Authentication required
           content:

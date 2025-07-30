@@ -26,6 +26,30 @@ async function getProfile(userId) {
   return user;
 }
 
+// Get workspace users (users in the same workspace)
+async function getWorkspaceUsers(workspaceId) {
+  const users = await prisma.user.findMany({
+    where: {
+      workspaceId: workspaceId,
+      isActive: true,
+    },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      emailVerified: true,
+      isActive: true,
+      role: true,
+      workspaceId: true,
+      createdAt: true,
+    },
+    orderBy: { createdAt: "asc" },
+  });
+
+  logger.info(`Retrieved ${users.length} users for workspace ${workspaceId}`);
+  return users;
+}
+
 // Update profile (name, optionally email)
 async function updateProfile(userId, { name, email }) {
   const user = await prisma.user.findUnique({
@@ -103,6 +127,7 @@ async function deactivateAccount(userId) {
 
 module.exports = {
   getProfile,
+  getWorkspaceUsers,
   updateProfile,
   changePassword,
   deactivateAccount,
