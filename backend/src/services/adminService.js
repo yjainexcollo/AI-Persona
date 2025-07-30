@@ -1,187 +1,102 @@
 const { PrismaClient } = require("@prisma/client");
-const prisma = new PrismaClient();
-const ApiError = require("../utils/apiError");
 const logger = require("../utils/logger");
+const ApiError = require("../utils/apiError");
 
-// Helper: Delete workspace if it has no users
-async function deleteWorkspaceIfEmpty(workspaceId) {
-  const userCount = await prisma.user.count({ where: { workspaceId } });
-  if (userCount === 0) {
-    await prisma.workspace.delete({ where: { id: workspaceId } });
-    logger.info(`Workspace ${workspaceId} deleted because it has no users.`);
-  }
-}
+const prisma = new PrismaClient();
 
-// List all users in a workspace (with optional filters/pagination)
-async function listUsers({
-  workspaceId,
-  skip = 0,
-  take = 20,
-  search = "",
-} = {}) {
-  if (!workspaceId) throw new ApiError(400, "Workspace context required");
-  const where = {
-    workspaceId,
-  };
+// List all users (with optional filters/pagination)
+async function listUsers({ skip, take, search }) {
+  const where = {};
+
   if (search) {
     where.OR = [
       { email: { contains: search, mode: "insensitive" } },
       { name: { contains: search, mode: "insensitive" } },
     ];
   }
-  const users = await prisma.user.findMany({
-    where,
-    skip,
-    take,
-    orderBy: { createdAt: "desc" },
-  });
-  const total = await prisma.user.count({ where });
+
+  const [users, total] = await Promise.all([
+    prisma.user.findMany({
+      where,
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+      skip,
+      take,
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.user.count({ where }),
+  ]);
+
   return { users, total };
 }
 
-// Get user details in a workspace
-async function getUser(userId, workspaceId) {
-  if (!workspaceId) throw new ApiError(400, "Workspace context required");
-  const user = await prisma.user.findFirst({
-    where: {
-      id: userId,
-      workspaceId,
+// Get user details
+async function getUser(userId) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      isActive: true,
+      createdAt: true,
+      updatedAt: true,
     },
   });
-  if (!user) throw new ApiError(404, "User not found in this workspace");
+
+  if (!user) throw new ApiError(404, "User not found");
   return user;
 }
 
-// Activate user in a workspace
-async function activateUser(userId, workspaceId) {
-  if (!workspaceId) throw new ApiError(400, "Workspace context required");
-  const user = await prisma.user.findFirst({
-    where: { id: userId, workspaceId },
-  });
-  if (!user) throw new ApiError(404, "User is not a member of this workspace");
-  const updatedUser = await prisma.user.update({
+// Activate user
+async function activateUser(userId) {
+  const user = await prisma.user.update({
     where: { id: userId },
     data: { isActive: true },
+    select: {
+      id: true,
+      isActive: true,
+    },
   });
-  logger.info(`Admin activated user ${userId} in workspace ${workspaceId}`);
-  return updatedUser;
+
+  if (!user) throw new ApiError(404, "User not found");
+  logger.info(`Admin activated user ${userId}`);
+  return user;
 }
 
-// Deactivate user in a workspace
-async function deactivateUser(userId, workspaceId) {
-  if (!workspaceId) throw new ApiError(400, "Workspace context required");
-  const user = await prisma.user.findFirst({
-    where: { id: userId, workspaceId },
-  });
-  if (!user) throw new ApiError(404, "User is not a member of this workspace");
-  const updatedUser = await prisma.user.update({
+// Deactivate user
+async function deactivateUser(userId) {
+  const user = await prisma.user.update({
     where: { id: userId },
     data: { isActive: false },
+    select: {
+      id: true,
+      isActive: true,
+    },
   });
-  logger.info(`Admin deactivated user ${userId} in workspace ${workspaceId}`);
-  // Check and delete workspace if empty
-  await deleteWorkspaceIfEmpty(workspaceId);
-  return updatedUser;
+
+  if (!user) throw new ApiError(404, "User not found");
+  logger.info(`Admin deactivated user ${userId}`);
+  return user;
 }
 
-// Get current workspace details
-async function getWorkspace(workspaceId) {
-  const workspace = await prisma.workspace.findUnique({
-    where: { id: workspaceId },
-  });
-  if (!workspace) throw new ApiError(404, "Workspace not found");
-  return workspace;
-}
+// Get system stats
+async function getStats() {
+  const [userCount, activeUserCount] = await Promise.all([
+    prisma.user.count(),
+    prisma.user.count({ where: { isActive: true } }),
+  ]);
 
-// Delete a workspace by id (admin only)
-async function deleteWorkspace(workspaceId) {
-  const workspace = await prisma.workspace.findUnique({
-    where: { id: workspaceId },
-  });
-  if (!workspace) throw new ApiError(404, "Workspace not found");
-  // Delete all users in the workspace (or handle as needed)
-  await prisma.user.deleteMany({ where: { workspaceId } });
-  // Delete the workspace
-  await prisma.workspace.delete({ where: { id: workspaceId } });
-  logger.info(`Workspace ${workspaceId} and all its users deleted by admin.`);
-  return { id: workspaceId };
-}
-
-// Get system stats (workspace-specific)
-async function getStats(workspaceId = null) {
-  try {
-    let userCount,
-      workspaceCount,
-      inviteCount,
-      activeUsers,
-      totalUsers,
-      members;
-
-    if (workspaceId) {
-      // Workspace-specific stats
-      [
-        userCount,
-        workspaceCount,
-        inviteCount,
-        activeUsers,
-        totalUsers,
-        members,
-      ] = await Promise.all([
-        prisma.user.count({ where: { workspaceId } }),
-        prisma.workspace.count({ where: { id: workspaceId } }),
-        prisma.invite.count({ where: { workspaceId } }),
-        prisma.user.count({ where: { workspaceId, isActive: true } }),
-        prisma.user.count({ where: { workspaceId } }),
-        prisma.user.count({ where: { workspaceId, role: "MEMBER" } }),
-      ]);
-    } else {
-      // System-wide stats (fallback)
-      [
-        userCount,
-        workspaceCount,
-        inviteCount,
-        activeUsers,
-        totalUsers,
-        members,
-      ] = await Promise.all([
-        prisma.user.count(),
-        prisma.workspace.count(),
-        prisma.invite.count(),
-        prisma.user.count({ where: { isActive: true } }),
-        prisma.user.count(),
-        prisma.user.count({ where: { role: "MEMBER" } }),
-      ]);
-    }
-
-    return {
-      users: userCount,
-      workspaces: workspaceCount,
-      invites: inviteCount,
-      activeUsers,
-      totalUsers,
-      members,
-      // Mock persona stats for now
-      activePersonas: 10,
-      inactivePersonas: 5,
-      created: 20,
-      pending: 2,
-    };
-  } catch (error) {
-    logger.error("Error fetching stats:", error);
-    // Return mock data if database is not available
-    return {
-      users: 0,
-      workspaces: 0,
-      invites: 0,
-      activeUsers: 0,
-      totalUsers: 0,
-      members: 0,
-      activePersonas: 10,
-      inactivePersonas: 5,
-      created: 20,
-      pending: 2,
-    };
-  }
+  return {
+    users: userCount,
+    activeUsers: activeUserCount,
+  };
 }
 
 module.exports = {
@@ -189,7 +104,5 @@ module.exports = {
   getUser,
   activateUser,
   deactivateUser,
-  getWorkspace,
   getStats,
-  deleteWorkspace, 
 };

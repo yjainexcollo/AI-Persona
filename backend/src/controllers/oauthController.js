@@ -20,18 +20,10 @@ const googleCallback = [
     );
     // Extract the JWT token from the response
     const jwtToken = response.data && response.data.accessToken;
-    const workspaceId = response.data && response.data.workspaceId;
-    const workspaceName = response.data && response.data.workspaceName;
 
     if (jwtToken) {
-      // Redirect to frontend with token and workspace info
-      const redirectUrl = `http://localhost:5173/oauth-callback?token=${jwtToken}${
-        workspaceId ? `&workspaceId=${workspaceId}` : ""
-      }${
-        workspaceName
-          ? `&workspaceName=${encodeURIComponent(workspaceName)}`
-          : ""
-      }`;
+      // Redirect to frontend with token
+      const redirectUrl = `http://localhost:5173/oauth-callback?token=${jwtToken}`;
       return res.redirect(redirectUrl);
     } else {
       // Fallback: return error if token is missing

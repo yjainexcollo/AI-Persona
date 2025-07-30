@@ -3,10 +3,9 @@ const router = express.Router();
 const adminController = require("../controllers/adminController");
 const authMiddleware = require("../middlewares/authMiddleware");
 const roleMiddleware = require("../middlewares/roleMiddleware");
-const attachWorkspace = require("../middlewares/attachWorkspace");
 
 // All routes require ADMIN role
-const adminOnly = [authMiddleware, attachWorkspace, roleMiddleware(["ADMIN"])];
+const adminOnly = [authMiddleware, roleMiddleware(["ADMIN"])];
 
 // User management
 router.get("/users", ...adminOnly, adminController.listUsers);
@@ -18,12 +17,7 @@ router.post(
   adminController.deactivateUser
 );
 
-// Workspace management (scoped to current workspace only)
-router.get("/workspace", ...adminOnly, adminController.getCurrentWorkspace);
-// Add workspace deletion
-router.delete("/workspace/:id", ...adminOnly, adminController.deleteWorkspace);
-
-// Stats endpoint - temporarily without auth for testing
+// Stats endpoint
 router.get("/stats", authMiddleware, adminController.getStats);
 
 module.exports = router;

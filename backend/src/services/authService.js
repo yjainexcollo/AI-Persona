@@ -1,179 +1,164 @@
 const { PrismaClient } = require("@prisma/client");
-const prisma = new PrismaClient();
-const { hashPassword, verifyPassword } = require("../utils/password");
-const { signToken, signRefreshToken } = require("../utils/jwt");
-const ApiError = require("../utils/apiError");
-const apiResponse = require("../utils/apiResponse");
+const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
 const logger = require("../utils/logger");
-const emailService = require("./emailService");
+const ApiError = require("../utils/apiError");
+const {
+  signToken,
+  signRefreshToken,
+  verifyRefreshToken,
+} = require("../utils/jwt");
 
-async function getOrCreateDefaultWorkspace(email) {
-  const domain = email.split("@")[1] || "default.local";
-  let workspace = await prisma.workspace.findUnique({ where: { domain } });
-  if (!workspace) {
-    workspace = await prisma.workspace.create({
-      data: {
-        name: domain,
-        domain,
-      },
-    });
-    logger.info(`Created new workspace: ${workspace.id} (${workspace.domain})`);
-  }
-  return workspace;
-}
+const prisma = new PrismaClient();
 
-// Registration logic
+// Register a new user
 async function register({ email, password, name }) {
-  const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing) {
-    logger.warn(`Registration attempt with existing email: ${email}`);
+  // Check if user already exists
+  const existingUser = await prisma.user.findUnique({
+    where: { email },
+  });
+
+  if (existingUser) {
     throw new ApiError(409, "Email already registered");
   }
-  const passwordHash = await hashPassword(password);
-  const workspace = await getOrCreateDefaultWorkspace(email);
-  // Check if this is the first user in the workspace
-  const userCount = await prisma.user.count({
-    where: { workspaceId: workspace.id },
-  });
-  const role = userCount === 0 ? "ADMIN" : "MEMBER";
+
+  // Hash password
+  const hashedPassword = await bcrypt.hash(password, 12);
+
+  // Create user
   const user = await prisma.user.create({
     data: {
       email,
+      passwordHash: hashedPassword,
       name,
-      passwordHash,
-      emailVerified: false,
+    },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      emailVerified: true,
       isActive: true,
-      workspaceId: workspace.id,
-      role,
+      createdAt: true,
+      updatedAt: true,
     },
   });
-  logger.info(
-    `User registered: ${user.id} (${user.email}) in workspace ${workspace.id} as ${role}`
-  );
-  // Email verification logic
-  try {
-    const token = await emailService.createEmailVerification(user.id);
-    await emailService.sendVerificationEmail(user, token);
-    logger.info(`Verification email sent to ${user.email}`);
-  } catch (err) {
-    logger.error(
-      `Failed to send verification email to ${user.email}: ${err.message}`
-    );
-    // Optionally, you can throw here or continue
-  }
-  return apiResponse({
+
+  logger.info(`User registered: ${user.id} (${user.email})`);
+
+  return {
+    status: "success",
+    message: "Registration successful. Verification email sent.",
     data: {
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        workspaceId: user.workspaceId,
-      },
-      workspace: { id: workspace.id, domain: workspace.domain },
+      user,
     },
-    message:
-      "Registration successful. Please check your email to verify your account before logging in.",
-  });
+  };
 }
 
-// Login logic
+// Login user
 async function login({ email, password }) {
+  // Find user
   const user = await prisma.user.findUnique({
     where: { email },
   });
-  if (!user || !user.passwordHash) {
-    logger.warn(
-      `Failed login attempt: user not found or no password (${email})`
-    );
+
+  if (!user) {
     throw new ApiError(401, "Invalid email or password");
   }
+
+  // Check if user is active
   if (!user.isActive) {
-    logger.warn(`Login attempt for inactive user: ${user.id} (${user.email})`);
-    throw new ApiError(403, "User account is inactive");
+    throw new ApiError(403, "Account is deactivated");
   }
+
+  // Check if email is verified
   if (!user.emailVerified) {
-    logger.warn(
-      `Login attempt for unverified email: ${user.id} (${user.email})`
-    );
-    throw new ApiError(
-      403,
-      "Email not verified. Please check your inbox or request a new verification email."
-    );
+    throw new ApiError(403, "Email not verified. Please check your inbox.");
   }
-  const valid = await verifyPassword(password, user.passwordHash);
-  if (!valid) {
-    logger.warn(
-      `Failed login attempt: invalid password for user ${user.id} (${user.email})`
-    );
+
+  // Verify password
+  const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+  if (!isPasswordValid) {
     throw new ApiError(401, "Invalid email or password");
   }
-  if (!user.workspaceId) {
-    logger.warn(
-      `Login attempt for user with no workspace: ${user.id} (${user.email})`
-    );
-    throw new ApiError(403, "User is not a member of any workspace");
-  }
 
-  // Fetch workspace details
-  const workspace = await prisma.workspace.findUnique({
-    where: { id: user.workspaceId },
-    select: { id: true, name: true },
+  // Generate tokens
+  const accessToken = signToken({ userId: user.id });
+  const refreshToken = signRefreshToken({ userId: user.id });
+
+  // Create session
+  await prisma.session.create({
+    data: {
+      userId: user.id,
+      refreshToken,
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
+    },
   });
 
-  const accessToken = signToken({
-    userId: user.id,
-    workspaceId: user.workspaceId,
-    role: user.role,
-  });
-  const refreshToken = signRefreshToken({
-    userId: user.id,
-    workspaceId: user.workspaceId,
-    role: user.role,
-  });
-  logger.info(
-    `User logged in: ${user.id} (${user.email}) in workspace ${user.workspaceId}`
-  );
-  return apiResponse({
+  logger.info(`User logged in: ${user.id} (${user.email})`);
+
+  return {
+    status: "success",
+    message: "Login successful",
     data: {
       user: {
         id: user.id,
         email: user.email,
         name: user.name,
-        role: user.role,
-        workspaceId: user.workspaceId,
+        emailVerified: user.emailVerified,
+        isActive: user.isActive,
       },
-      workspaceId: user.workspaceId,
-      workspaceName: workspace?.name || "Unknown Workspace",
       accessToken,
       refreshToken,
     },
-    message: "Login successful",
-  });
+  };
 }
 
-// Token refresh logic
+// Refresh tokens
 async function refreshTokens({ refreshToken }) {
-  let payload;
   try {
-    payload = require("../utils/jwt").verifyRefreshToken(refreshToken);
-  } catch (err) {
-    logger.warn("Invalid or expired refresh token used");
-    throw new ApiError(401, "Invalid or expired refresh token");
+    const payload = verifyRefreshToken(refreshToken);
+    const { userId } = payload;
+
+    // Find session
+    const session = await prisma.session.findUnique({
+      where: { refreshToken },
+      include: { user: true },
+    });
+
+    if (!session || !session.isActive) {
+      throw new ApiError(401, "Invalid refresh token");
+    }
+
+    if (session.expiresAt < new Date()) {
+      throw new ApiError(401, "Refresh token expired");
+    }
+
+    // Generate new tokens
+    const newAccessToken = signToken({ userId });
+    const newRefreshToken = signRefreshToken({ userId });
+
+    // Update session
+    await prisma.session.update({
+      where: { id: session.id },
+      data: {
+        refreshToken: newRefreshToken,
+        lastUsedAt: new Date(),
+      },
+    });
+
+    logger.info(`Refresh token used for user: ${userId}`);
+
+    return {
+      status: "success",
+      message: "Tokens refreshed",
+      data: {
+        accessToken: newAccessToken,
+        refreshToken: newRefreshToken,
+      },
+    };
+  } catch (error) {
+    throw new ApiError(401, "Invalid refresh token");
   }
-  const { userId, workspaceId, role } = payload;
-  const accessToken = signToken({ userId, workspaceId, role });
-  const newRefreshToken = signRefreshToken({ userId, workspaceId, role });
-  logger.info(
-    `Refresh token used for user: ${userId} in workspace ${workspaceId}`
-  );
-  return apiResponse({
-    data: {
-      accessToken,
-      refreshToken: newRefreshToken,
-    },
-    message: "Tokens refreshed",
-  });
 }
 
 module.exports = {

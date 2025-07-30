@@ -1,113 +1,111 @@
 const { PrismaClient } = require("@prisma/client");
-const prisma = new PrismaClient();
-const { signToken, signRefreshToken } = require("../utils/jwt");
-const apiResponse = require("../utils/apiResponse");
-const ApiError = require("../utils/apiError");
 const logger = require("../utils/logger");
+const ApiError = require("../utils/apiError");
+const { signToken, signRefreshToken } = require("../utils/jwt");
 
-function extractEmail(profile) {
-  if (
-    profile.emails &&
-    Array.isArray(profile.emails) &&
-    profile.emails.length > 0
-  ) {
-    for (const emailObj of profile.emails) {
-      if (emailObj && emailObj.value) return emailObj.value;
-    }
-  }
-  if (profile._json && profile._json.email) {
-    return profile._json.email;
-  }
-  return null;
-}
+const prisma = new PrismaClient();
 
+// Handle OAuth login/registration
 async function handleOAuthLogin(provider, profile) {
-  const email = extractEmail(profile);
-  const name =
-    profile.displayName || (profile._json && profile._json.name) || "";
-  if (!email) {
-    throw new ApiError(400, "OAuth profile missing email");
+  const { id, emails, displayName } = profile;
+
+  if (!emails || emails.length === 0) {
+    throw new ApiError(400, "Email is required for OAuth login");
   }
 
-  // Find or create user (single workspace only)
+  const email = emails[0].value;
+  const name = displayName || email.split("@")[0];
+
+  // Find existing user
   let user = await prisma.user.findUnique({
     where: { email },
   });
-  let isNewUser = false;
-  let workspace;
-  if (!user) {
-    // Assign to a default workspace by domain, or fallback
-    const domain = email.split("@")[1] || "default.local";
-    workspace = await prisma.workspace.findUnique({ where: { domain } });
-    if (!workspace) {
-      workspace = await prisma.workspace.create({
-        data: { name: domain, domain },
-      });
+
+  if (user) {
+    // Existing user - log them in
+    if (!user.isActive) {
+      throw new ApiError(403, "Account is deactivated");
     }
-    // Check if this is the first user in the workspace
-    const userCount = await prisma.user.count({
-      where: { workspaceId: workspace.id },
+
+    logger.info(`OAuth user login: ${user.id} (${user.email}) via ${provider}`);
+
+    // Generate tokens
+    const accessToken = signToken({ userId: user.id });
+    const refreshToken = signRefreshToken({ userId: user.id });
+
+    // Create session
+    await prisma.session.create({
+      data: {
+        userId: user.id,
+        refreshToken,
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
+      },
     });
-    const role = userCount === 0 ? "ADMIN" : "MEMBER";
-    user = await prisma.user.create({
+
+    return {
+      status: "success",
+      message: "OAuth login successful",
+      data: {
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          emailVerified: user.emailVerified,
+          isActive: user.isActive,
+        },
+        accessToken,
+        refreshToken,
+        isNewUser: false,
+        provider,
+      },
+    };
+  } else {
+    // New user - create account
+    const user = await prisma.user.create({
       data: {
         email,
         name,
+        emailVerified: true, // OAuth users are pre-verified
+        isActive: true,
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
         emailVerified: true,
         isActive: true,
-        workspaceId: workspace.id,
-        role,
       },
     });
-    isNewUser = true;
+
     logger.info(
-      `OAuth user created: ${user.id} (${user.email}) in workspace ${workspace.id} as ${role} via ${provider}`
+      `OAuth user created: ${user.id} (${user.email}) via ${provider}`
     );
-  } else {
-    workspace = await prisma.workspace.findUnique({
-      where: { id: user.workspaceId },
+
+    // Generate tokens
+    const accessToken = signToken({ userId: user.id });
+    const refreshToken = signRefreshToken({ userId: user.id });
+
+    // Create session
+    await prisma.session.create({
+      data: {
+        userId: user.id,
+        refreshToken,
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
+      },
     });
-    logger.info(
-      `OAuth user login: ${user.id} (${user.email}) in workspace ${workspace.id} via ${provider}`
-    );
+
+    return {
+      status: "success",
+      message: "OAuth registration successful",
+      data: {
+        user,
+        accessToken,
+        refreshToken,
+        isNewUser: true,
+        provider,
+      },
+    };
   }
-
-  // Defensive check for workspace
-  if (!user.workspaceId)
-    throw new ApiError(403, "User is not a member of any workspace");
-
-  // Generate tokens
-  const accessToken = signToken({
-    userId: user.id,
-    workspaceId: user.workspaceId,
-    role: user.role,
-  });
-  const refreshToken = signRefreshToken({
-    userId: user.id,
-    workspaceId: user.workspaceId,
-    role: user.role,
-  });
-
-  return apiResponse({
-    data: {
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        workspaceId: user.workspaceId,
-      },
-      workspaceId: user.workspaceId,
-      workspaceName: workspace?.name || "Unknown Workspace",
-      accessToken,
-      refreshToken,
-      isNewUser,
-      provider,
-    },
-    message: isNewUser
-      ? "OAuth registration successful"
-      : "OAuth login successful",
-  });
 }
 
 module.exports = {
