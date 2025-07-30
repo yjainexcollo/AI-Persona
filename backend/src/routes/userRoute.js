@@ -2,19 +2,32 @@ const express = require("express");
 const router = express.Router();
 const userController = require("../controllers/userController");
 const authMiddleware = require("../middlewares/authMiddleware");
-const userMiddleware = require("../middlewares/userMiddleware");
+const attachWorkspace = require("../middlewares/attachWorkspace");
 
 // Get current user's profile
-router.get("/me", authMiddleware, userMiddleware, userController.getProfile);
+router.get("/me", authMiddleware, attachWorkspace, userController.getProfile);
+
+// Get all users in the current workspace
+router.get(
+  "/workspace",
+  authMiddleware,
+  attachWorkspace,
+  userController.getWorkspaceUsers
+);
 
 // Update profile (name/email)
-router.put("/me", authMiddleware, userMiddleware, userController.updateProfile);
+router.put(
+  "/me",
+  authMiddleware,
+  attachWorkspace,
+  userController.updateProfile
+);
 
 // Change password
 router.put(
   "/me/password",
   authMiddleware,
-  userMiddleware,
+  attachWorkspace,
   userController.changePassword
 );
 
@@ -22,7 +35,7 @@ router.put(
 router.post(
   "/me/deactivate",
   authMiddleware,
-  userMiddleware,
+  attachWorkspace,
   userController.deactivateAccount
 );
 

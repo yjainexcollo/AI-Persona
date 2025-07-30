@@ -5,7 +5,7 @@ info:
   description: |
     # AI-Persona SaaS Backend API
 
-    This API provides robust, secure, and multi-tenant authentication and password reset flows for the AI-Persona SaaS platform.
+    This API provides robust, secure, and multi-tenant authentication and user management for the AI-Persona SaaS platform.
 
     **Note:** Most authenticated, workspace-scoped endpoints require the `x-workspace-id` header to enforce strict multi-tenancy. This header must be set to the workspace ID the user is acting within. However, some endpoints (like workspace deletion) get the workspace ID from the URL path and do not require this header.
 
@@ -19,13 +19,17 @@ info:
       2. Receives a reset email with a secure link.
       3. Resets password via `/api/auth/reset-password` (public endpoint with valid token).
 
-    **Base URLs:** `/api/auth`, `/api/oauth`
+    **Base URLs:** `/api/auth`, `/api/users`, `/api/admin`, `/api/workspaces`
 
 servers:
   - url: http://localhost:3000
     description: Local development server
 
 paths:
+  # ===================================
+  # AUTHENTICATION ENDPOINTS
+  # ===================================
+
   /api/auth/register:
     post:
       summary: Register a new user
@@ -222,17 +226,13 @@ paths:
       description: |
         Handles the callback from Google after user authentication.
 
-        On success, returns a standardized API response with user info and tokens.
+        On success, redirects to frontend with token and workspace info.
         On failure, redirects to `/login` or returns an error.
       responses:
-        "200":
-          description: OAuth login/registration successful
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuthSuccessResponse"
-        "401":
-          description: Invalid or expired OAuth session
+        "302":
+          description: Redirects to frontend with OAuth tokens
+        "500":
+          description: OAuth login failed
           content:
             application/json:
               schema:
@@ -448,56 +448,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  /api/workspaces/{id}:
-    delete:
-      summary: Delete a workspace
-      tags: [Workspace]
-      description: |
-        **RBAC:** Only users with the `ADMIN` role can access this endpoint.
-        Deletes the specified workspace and all its users.
-
-        **Note:** This endpoint does not require the `x-workspace-id` header as the workspace ID is provided in the URL path.
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-          description: The workspace ID to delete
-      responses:
-        "200":
-          description: Workspace deleted successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  message:
-                    type: string
-                    example: Workspace deleted
-        "401":
-          description: Authentication required
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "403":
-          description: Admin role required or insufficient permissions
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Workspace not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
+  # ===================================
+  # USER ENDPOINTS
+  # ===================================
 
   /api/users/me:
     get:
@@ -559,6 +512,80 @@ paths:
                     isActive: true
                     role: ADMIN
                     workspaceId: clworkspace_123xyz
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      summary: Update current user profile
+      tags: [User]
+      description: |
+        **RBAC:** Any authenticated user can update their own profile.
+        Updates the user's name and email.
+
+        **Note:** This endpoint does not require the `x-workspace-id` header as users can update their own profile.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  example: Alice Johnson
+                email:
+                  type: string
+                  format: email
+                  example: alice.johnson@company.com
+            example:
+              name: Alice Johnson
+              email: alice.johnson@company.com
+      responses:
+        "200":
+          description: Profile updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Profile updated
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        $ref: "#/components/schemas/AuthSuccessResponse/properties/data/properties/user"
+              example:
+                status: success
+                message: Profile updated
+                data:
+                  user:
+                    id: cluser_abc123
+                    email: alice.johnson@company.com
+                    name: Alice Johnson
+                    role: ADMIN
+                    workspaceId: clworkspace_123xyz
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /api/users/me/password:
     put:
@@ -657,6 +684,88 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /api/users/workspace:
+    get:
+      summary: Get all users in current workspace
+      tags: [User]
+      description: |
+        **RBAC:** Any authenticated user can access this endpoint.
+        Returns a paginated list of all users in the current workspace. Supports optional search, skip, and take query parameters.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: skip
+          schema:
+            type: integer
+            example: 0
+          description: Number of users to skip (for pagination)
+        - in: query
+          name: take
+          schema:
+            type: integer
+            example: 20
+          description: Number of users to return (for pagination)
+        - in: query
+          name: search
+          schema:
+            type: string
+            example: alice
+          description: Search by email or name
+      responses:
+        "200":
+          description: List of workspace users
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  users:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          example: cluser_abc123
+                        email:
+                          type: string
+                          example: alice@company.com
+                        name:
+                          type: string
+                          example: Alice Smith
+                        isActive:
+                          type: boolean
+                          example: true
+                        role:
+                          type: string
+                          example: MEMBER
+                  total:
+                    type: integer
+                    example: 1
+              example:
+                status: success
+                users:
+                  - id: cluser_abc123
+                    email: alice@company.com
+                    name: Alice Smith
+                    isActive: true
+                    role: MEMBER
+                total: 1
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ===================================
+  # ADMIN ENDPOINTS
+  # ===================================
+
   /api/admin/users:
     get:
       summary: List all users
@@ -713,17 +822,9 @@ paths:
                         isActive:
                           type: boolean
                           example: true
-                        memberships:
-                          type: array
-                          items:
-                            type: object
-                            properties:
-                              workspaceId:
-                                type: string
-                                example: clworkspace_123xyz
-                              role:
-                                type: string
-                                example: MEMBER
+                        role:
+                          type: string
+                          example: MEMBER
                   total:
                     type: integer
                     example: 1
@@ -734,9 +835,7 @@ paths:
                     email: alice@company.com
                     name: Alice Smith
                     isActive: true
-                    memberships:
-                      - workspaceId: clworkspace_123xyz
-                        role: MEMBER
+                    role: MEMBER
                 total: 1
         "401":
           description: Authentication required or insufficient permissions
@@ -787,17 +886,9 @@ paths:
                       isActive:
                         type: boolean
                         example: true
-                      memberships:
-                        type: array
-                        items:
-                          type: object
-                          properties:
-                            workspaceId:
-                              type: string
-                              example: clworkspace_123xyz
-                            role:
-                              type: string
-                              example: MEMBER
+                      role:
+                        type: string
+                        example: MEMBER
               example:
                 status: success
                 user:
@@ -805,9 +896,7 @@ paths:
                   email: alice@company.com
                   name: Alice Smith
                   isActive: true
-                  memberships:
-                    - workspaceId: clworkspace_123xyz
-                      role: MEMBER
+                  role: MEMBER
         "401":
           description: Authentication required or insufficient permissions
           content:
@@ -981,6 +1070,12 @@ paths:
                   name: Acme Inc
                   domain: acme.com
                   isActive: true
+        "401":
+          description: Authentication required or insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /api/admin/stats:
     get:
@@ -1002,7 +1097,7 @@ paths:
                   status:
                     type: string
                     example: success
-                  stats:
+                  data:
                     type: object
                     properties:
                       users:
@@ -1016,7 +1111,7 @@ paths:
                         example: 5
               example:
                 status: success
-                stats:
+                data:
                   users: 10
                   workspaces: 3
                   invites: 5
@@ -1067,6 +1162,187 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Admin role required or insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Workspace not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ===================================
+  # WORKSPACE ENDPOINTS
+  # ===================================
+
+  /api/workspaces/{id}:
+    get:
+      summary: Get workspace details
+      tags: [Workspace]
+      description: |
+        **RBAC:** Any authenticated user can access this endpoint.
+        Returns details for the specified workspace.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: The workspace ID
+      responses:
+        "200":
+          description: Workspace details retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Workspace retrieved successfully
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        example: clworkspace_123xyz
+                      name:
+                        type: string
+                        example: Acme Inc
+                      createdAt:
+                        type: string
+                        format: date-time
+                        example: "2024-01-15T10:30:00Z"
+                      updatedAt:
+                        type: string
+                        format: date-time
+                        example: "2024-01-15T10:30:00Z"
+              example:
+                status: success
+                message: Workspace retrieved successfully
+                data:
+                  id: clworkspace_123xyz
+                  name: Acme Inc
+                  createdAt: "2024-01-15T10:30:00Z"
+                  updatedAt: "2024-01-15T10:30:00Z"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Workspace not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      summary: Delete a workspace
+      tags: [Workspace]
+      description: |
+        **RBAC:** Only users with the `ADMIN` role can access this endpoint.
+        Deletes the specified workspace and all its users.
+
+        **Note:** This endpoint does not require the `x-workspace-id` header as the workspace ID is provided in the URL path.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: The workspace ID to delete
+      responses:
+        "200":
+          description: Workspace deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Workspace deleted
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Admin role required or insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Workspace not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/workspaces/{id}/stats:
+    get:
+      summary: Get workspace statistics
+      tags: [Workspace]
+      description: |
+        **RBAC:** Any authenticated user can access this endpoint.
+        Returns statistics for the specified workspace including member count and total personas.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: The workspace ID
+      responses:
+        "200":
+          description: Workspace statistics retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Workspace stats retrieved successfully
+                  data:
+                    type: object
+                    properties:
+                      members:
+                        type: integer
+                        example: 5
+                        description: Number of users with MEMBER role
+                      personas:
+                        type: integer
+                        example: 10
+                        description: Total number of users in workspace
+              example:
+                status: success
+                message: Workspace stats retrieved successfully
+                data:
+                  members: 5
+                  personas: 10
+        "401":
+          description: Authentication required
           content:
             application/json:
               schema:

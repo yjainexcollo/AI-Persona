@@ -88,7 +88,8 @@ async function cleanupExpiredVerifications() {
 
 // Send password reset email
 async function sendPasswordResetEmail(user, token) {
-  const resetUrl = `${config.appBaseUrl}/reset-password?token=${token}`;
+  const resetUrl = `http://localhost:5173/reset-password?token=${token}`;
+  const resetRoute = `${config.appBaseUrl}/reset-password`;
   const mailOptions = {
     from: config.smtpFrom,
     to: user.email,
@@ -96,6 +97,7 @@ async function sendPasswordResetEmail(user, token) {
     html: `<p>Hello ${user.name || ""},</p>
            <p>You requested a password reset. Click the link below to set a new password:</p>
            <a href="${resetUrl}">${resetUrl}</a>
+           <p>Or visit: <a href="${resetRoute}">${resetRoute}</a></p>
            <p>This link will expire in 1 hour. If you did not request this, you can ignore this email.</p>`,
   };
   try {
@@ -109,6 +111,31 @@ async function sendPasswordResetEmail(user, token) {
   }
 }
 
+// Send workspace invite email
+async function sendInviteEmail(email, token, workspaceId) {
+  // Only send the register link with the token as a query parameter
+  const registerUrl = `http://localhost:5173/register?token=${token}`;
+  const mailOptions = {
+    from: config.smtpFrom,
+    to: email,
+    subject: "You're invited to join a workspace on AI-Persona!",
+    html: `<p>Hello,</p>
+           <p>You have been invited to join a workspace on AI-Persona.</p>
+           <p>Click the link below to register and join the workspace:</p>
+           <a href="${registerUrl}">${registerUrl}</a>
+           <p>This link will expire in 48 hours. If you did not expect this invite, you can ignore this email.</p>`,
+  };
+  try {
+    await transporter.sendMail(mailOptions);
+    logger.info(`Sent workspace invite email to ${email}`);
+  } catch (err) {
+    logger.error(
+      `Failed to send workspace invite email to ${email}: ${err.message}`
+    );
+    throw new ApiError(500, "Failed to send workspace invite email");
+  }
+}
+
 module.exports = {
   createEmailVerification,
   sendVerificationEmail,
@@ -116,4 +143,5 @@ module.exports = {
   resendVerificationEmail,
   cleanupExpiredVerifications,
   sendPasswordResetEmail,
+  sendInviteEmail,
 };

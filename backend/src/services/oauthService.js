@@ -98,6 +98,7 @@ async function handleOAuthLogin(provider, profile) {
         workspaceId: user.workspaceId,
       },
       workspaceId: user.workspaceId,
+      workspaceName: workspace?.name || "Unknown Workspace",
       accessToken,
       refreshToken,
       isNewUser,

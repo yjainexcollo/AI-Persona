@@ -114,6 +114,13 @@ async function login({ email, password }) {
     );
     throw new ApiError(403, "User is not a member of any workspace");
   }
+
+  // Fetch workspace details
+  const workspace = await prisma.workspace.findUnique({
+    where: { id: user.workspaceId },
+    select: { id: true, name: true },
+  });
+
   const accessToken = signToken({
     userId: user.id,
     workspaceId: user.workspaceId,
@@ -137,6 +144,7 @@ async function login({ email, password }) {
         workspaceId: user.workspaceId,
       },
       workspaceId: user.workspaceId,
+      workspaceName: workspace?.name || "Unknown Workspace",
       accessToken,
       refreshToken,
     },
