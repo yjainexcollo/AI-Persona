@@ -801,11 +801,13 @@ paths:
 
   /api/admin/users:
     get:
-      summary: List all users
+      summary: List workspace users
       tags: [Admin]
       description: |
         **RBAC:** Only users with the `ADMIN` role can access this endpoint.
-        Returns a paginated list of all users. Supports optional search, skip, and take query parameters.
+        Returns a paginated list of users in the admin's workspace only. Supports optional search, skip, and take query parameters.
+
+        **Workspace Scoped:** This endpoint only returns users from the admin's own workspace for security.
       security:
         - bearerAuth: []
       parameters:
@@ -883,11 +885,13 @@ paths:
 
   /api/admin/users/{id}:
     get:
-      summary: Get user details
+      summary: Get workspace user details
       tags: [Admin]
       description: |
         **RBAC:** Only users with the `ADMIN` role can access this endpoint.
-        Returns details for a specific user.
+        Returns details for a specific user in the admin's workspace only.
+
+        **Workspace Scoped:** This endpoint only returns users from the admin's own workspace for security.
       security:
         - bearerAuth: []
       parameters:
@@ -953,11 +957,13 @@ paths:
 
   /api/admin/users/{id}/activate:
     post:
-      summary: Activate user
+      summary: Activate workspace user
       tags: [Admin]
       description: |
         **RBAC:** Only users with the `ADMIN` role can access this endpoint.
-        Activates the specified user.
+        Activates the specified user in the admin's workspace only.
+
+        **Workspace Scoped:** This endpoint only affects users from the admin's own workspace for security.
       security:
         - bearerAuth: []
       parameters:
@@ -1011,11 +1017,13 @@ paths:
 
   /api/admin/users/{id}/deactivate:
     post:
-      summary: Deactivate user
+      summary: Deactivate workspace user
       tags: [Admin]
       description: |
         **RBAC:** Only users with the `ADMIN` role can access this endpoint.
-        Deactivates the specified user.
+        Deactivates the specified user in the admin's workspace only.
+
+        **Workspace Scoped:** This endpoint only affects users from the admin's own workspace for security.
       security:
         - bearerAuth: []
       parameters:
@@ -1069,11 +1077,13 @@ paths:
 
   /api/admin/stats:
     get:
-      summary: Get system stats
+      summary: Get workspace stats
       tags: [Admin]
       description: |
         **RBAC:** Only users with the `ADMIN` role can access this endpoint.
-        Returns system usage statistics (user, workspace, invite counts).
+        Returns workspace usage statistics (user counts for the admin's workspace only).
+
+        **Workspace Scoped:** This endpoint only returns stats for the admin's own workspace for security.
       security:
         - bearerAuth: []
       responses:
@@ -1092,19 +1102,17 @@ paths:
                     properties:
                       users:
                         type: integer
-                        example: 10
+                        example: 5
+                        description: Total users in the workspace
                       activeUsers:
                         type: integer
-                        example: 8
-                      workspaces:
-                        type: integer
-                        example: 3
+                        example: 4
+                        description: Active users in the workspace
               example:
                 status: success
                 data:
-                  users: 10
-                  activeUsers: 8
-                  workspaces: 3
+                  users: 5
+                  activeUsers: 4
         "401":
           description: Authentication required or insufficient permissions
           content:

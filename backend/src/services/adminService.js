@@ -4,9 +4,9 @@ const ApiError = require("../utils/apiError");
 
 const prisma = new PrismaClient();
 
-// List all users (with optional filters/pagination)
-async function listUsers({ skip, take, search }) {
-  const where = {};
+// List users in workspace (with optional filters/pagination)
+async function listUsers({ skip, take, search, workspaceId }) {
+  const where = { workspaceId };
 
   if (search) {
     where.OR = [
@@ -38,10 +38,13 @@ async function listUsers({ skip, take, search }) {
   return { users, total };
 }
 
-// Get user details
-async function getUser(userId) {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
+// Get user details (workspace-scoped)
+async function getUser(userId, workspaceId) {
+  const user = await prisma.user.findFirst({
+    where: {
+      id: userId,
+      workspaceId: workspaceId,
+    },
     select: {
       id: true,
       email: true,
@@ -54,54 +57,72 @@ async function getUser(userId) {
     },
   });
 
-  if (!user) throw new ApiError(404, "User not found");
+  if (!user) throw new ApiError(404, "User not found in workspace");
   return user;
 }
 
-// Activate user
-async function activateUser(userId) {
-  const user = await prisma.user.update({
+// Activate user (workspace-scoped)
+async function activateUser(userId, workspaceId) {
+  const user = await prisma.user.findFirst({
+    where: {
+      id: userId,
+      workspaceId: workspaceId,
+    },
+  });
+
+  if (!user) throw new ApiError(404, "User not found in workspace");
+
+  const updatedUser = await prisma.user.update({
     where: { id: userId },
     data: { isActive: true },
     select: {
       id: true,
       isActive: true,
+      role: true,
+      workspaceId: true,
     },
   });
 
-  if (!user) throw new ApiError(404, "User not found");
-  logger.info(`Admin activated user ${userId}`);
-  return user;
+  logger.info(`Admin activated user ${userId} in workspace ${workspaceId}`);
+  return updatedUser;
 }
 
-// Deactivate user
-async function deactivateUser(userId) {
-  const user = await prisma.user.update({
+// Deactivate user (workspace-scoped)
+async function deactivateUser(userId, workspaceId) {
+  const user = await prisma.user.findFirst({
+    where: {
+      id: userId,
+      workspaceId: workspaceId,
+    },
+  });
+
+  if (!user) throw new ApiError(404, "User not found in workspace");
+
+  const updatedUser = await prisma.user.update({
     where: { id: userId },
     data: { isActive: false },
     select: {
       id: true,
       isActive: true,
+      role: true,
+      workspaceId: true,
     },
   });
 
-  if (!user) throw new ApiError(404, "User not found");
-  logger.info(`Admin deactivated user ${userId}`);
-  return user;
+  logger.info(`Admin deactivated user ${userId} in workspace ${workspaceId}`);
+  return updatedUser;
 }
 
-// Get system stats
-async function getStats() {
-  const [userCount, activeUserCount, workspaceCount] = await Promise.all([
-    prisma.user.count(),
-    prisma.user.count({ where: { isActive: true } }),
-    prisma.workspace.count(),
+// Get workspace stats
+async function getStats(workspaceId) {
+  const [userCount, activeUserCount] = await Promise.all([
+    prisma.user.count({ where: { workspaceId } }),
+    prisma.user.count({ where: { workspaceId, isActive: true } }),
   ]);
 
   return {
     users: userCount,
     activeUsers: activeUserCount,
-    workspaces: workspaceCount,
   };
 }
 
