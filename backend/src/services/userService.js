@@ -125,10 +125,26 @@ async function deactivateAccount(userId) {
   logger.info(`User ${userId} deactivated their account`);
 }
 
+// Get workspace stats (available to all users in the workspace)
+async function getWorkspaceStats(workspaceId) {
+  const [userCount, activeUserCount, membersCount] = await Promise.all([
+    prisma.user.count({ where: { workspaceId } }),
+    prisma.user.count({ where: { workspaceId, isActive: true } }),
+    prisma.user.count({ where: { workspaceId, role: "MEMBER" } }),
+  ]);
+
+  return {
+    users: userCount,
+    activeUsers: activeUserCount,
+    members: membersCount,
+  };
+}
+
 module.exports = {
   getProfile,
   getWorkspaceUsers,
   updateProfile,
   changePassword,
   deactivateAccount,
+  getWorkspaceStats,
 };

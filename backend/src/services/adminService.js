@@ -115,14 +115,16 @@ async function deactivateUser(userId, workspaceId) {
 
 // Get workspace stats
 async function getStats(workspaceId) {
-  const [userCount, activeUserCount] = await Promise.all([
+  const [userCount, activeUserCount, membersCount] = await Promise.all([
     prisma.user.count({ where: { workspaceId } }),
     prisma.user.count({ where: { workspaceId, isActive: true } }),
+    prisma.user.count({ where: { workspaceId, role: "MEMBER" } }),
   ]);
 
   return {
     users: userCount,
     activeUsers: activeUserCount,
+    members: membersCount,
   };
 }
 

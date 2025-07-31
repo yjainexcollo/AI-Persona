@@ -34,4 +34,7 @@ router.post(
   userController.deactivateAccount
 );
 
+// Get workspace stats (available to all users in the workspace)
+router.get("/stats", authMiddleware, userController.getWorkspaceStats);
+
 module.exports = router;

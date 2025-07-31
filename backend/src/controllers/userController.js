@@ -56,10 +56,20 @@ const deactivateAccount = asyncHandler(async (req, res) => {
   res.status(200).json({ status: "success", message: "Account deactivated" });
 });
 
+// GET /api/users/stats
+const getWorkspaceStats = asyncHandler(async (req, res) => {
+  const workspaceId = req.user && req.user.workspaceId;
+  if (!workspaceId) throw new ApiError(400, "Workspace not found");
+
+  const stats = await userService.getWorkspaceStats(workspaceId);
+  res.status(200).json({ status: "success", data: stats });
+});
+
 module.exports = {
   getProfile,
   getWorkspaceUsers,
   updateProfile,
   changePassword,
   deactivateAccount,
+  getWorkspaceStats,
 };
