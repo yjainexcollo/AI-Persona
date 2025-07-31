@@ -17,6 +17,10 @@ router.post(
   adminController.deactivateUser
 );
 
+// Admin role management
+router.post("/users/:id/promote", ...adminOnly, adminController.promoteUser);
+router.post("/users/:id/demote", ...adminOnly, adminController.demoteUser);
+
 // Stats endpoint
 router.get("/stats", authMiddleware, adminController.getStats);
 

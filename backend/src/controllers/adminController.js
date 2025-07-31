@@ -70,10 +70,46 @@ const getStats = asyncHandler(async (req, res) => {
   res.status(200).json({ status: "success", data: stats });
 });
 
+// POST /api/admin/users/:id/promote
+const promoteUser = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const role = req.user && req.user.role;
+  const workspaceId = req.user && req.user.workspaceId;
+
+  if (role !== "ADMIN") throw new ApiError(403, "Admin role required");
+  if (!workspaceId) throw new ApiError(400, "Workspace not found");
+
+  const user = await adminService.promoteToAdmin(id, workspaceId);
+  res.status(200).json({
+    status: "success",
+    message: "User promoted to admin",
+    user,
+  });
+});
+
+// POST /api/admin/users/:id/demote
+const demoteUser = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const role = req.user && req.user.role;
+  const workspaceId = req.user && req.user.workspaceId;
+
+  if (role !== "ADMIN") throw new ApiError(403, "Admin role required");
+  if (!workspaceId) throw new ApiError(400, "Workspace not found");
+
+  const user = await adminService.demoteToMember(id, workspaceId);
+  res.status(200).json({
+    status: "success",
+    message: "User demoted to member",
+    user,
+  });
+});
+
 module.exports = {
   listUsers,
   getUser,
   activateUser,
   deactivateUser,
   getStats,
+  promoteUser,
+  demoteUser,
 };

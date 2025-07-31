@@ -30,8 +30,16 @@ const refreshTokens = asyncHandler(async (req, res) => {
   res.status(200).json(response);
 });
 
+// POST /api/auth/logout
+const logout = asyncHandler(async (req, res) => {
+  const { refreshToken } = req.body;
+  const response = await authService.logout({ refreshToken });
+  res.status(200).json(response);
+});
+
 module.exports = {
   register,
   login,
   refreshTokens,
+  logout,
 };

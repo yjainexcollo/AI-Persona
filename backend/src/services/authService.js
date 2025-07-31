@@ -287,8 +287,40 @@ async function refreshTokens({ refreshToken }) {
   }
 }
 
+// Logout user
+async function logout({ refreshToken }) {
+  try {
+    // Find and deactivate the session
+    const session = await prisma.session.findUnique({
+      where: { refreshToken },
+    });
+
+    if (session) {
+      await prisma.session.update({
+        where: { id: session.id },
+        data: { isActive: false },
+      });
+
+      logger.info(`User logged out: ${session.userId}`);
+    }
+
+    return {
+      status: "success",
+      message: "Logout successful",
+    };
+  } catch (error) {
+    // Even if there's an error, we consider logout successful
+    logger.warn(`Logout error (non-critical): ${error.message}`);
+    return {
+      status: "success",
+      message: "Logout successful",
+    };
+  }
+}
+
 module.exports = {
   register,
   login,
   refreshTokens,
+  logout,
 };

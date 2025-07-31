@@ -128,10 +128,109 @@ async function getStats(workspaceId) {
   };
 }
 
+// Promote user to admin (workspace-scoped)
+async function promoteToAdmin(userId, workspaceId) {
+  const user = await prisma.user.findFirst({
+    where: {
+      id: userId,
+      workspaceId: workspaceId,
+    },
+  });
+
+  if (!user) {
+    throw new ApiError(404, "User not found in workspace");
+  }
+
+  if (!user.isActive) {
+    throw new ApiError(400, "Cannot promote inactive user");
+  }
+
+  if (user.role === "ADMIN") {
+    throw new ApiError(400, "User is already an admin");
+  }
+
+  const updatedUser = await prisma.user.update({
+    where: { id: userId },
+    data: { role: "ADMIN" },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      isActive: true,
+      role: true,
+      workspaceId: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  });
+
+  logger.info(
+    `Admin promoted user ${userId} to admin in workspace ${workspaceId}`
+  );
+  return updatedUser;
+}
+
+// Demote admin to member (workspace-scoped)
+async function demoteToMember(userId, workspaceId) {
+  const user = await prisma.user.findFirst({
+    where: {
+      id: userId,
+      workspaceId: workspaceId,
+    },
+  });
+
+  if (!user) {
+    throw new ApiError(404, "User not found in workspace");
+  }
+
+  if (!user.isActive) {
+    throw new ApiError(400, "Cannot demote inactive user");
+  }
+
+  if (user.role === "MEMBER") {
+    throw new ApiError(400, "User is already a member");
+  }
+
+  // Check if this is the last admin in the workspace
+  const adminCount = await prisma.user.count({
+    where: {
+      workspaceId: workspaceId,
+      role: "ADMIN",
+      isActive: true,
+    },
+  });
+
+  if (adminCount <= 1) {
+    throw new ApiError(400, "Cannot demote the last admin in the workspace");
+  }
+
+  const updatedUser = await prisma.user.update({
+    where: { id: userId },
+    data: { role: "MEMBER" },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      isActive: true,
+      role: true,
+      workspaceId: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  });
+
+  logger.info(
+    `Admin demoted user ${userId} to member in workspace ${workspaceId}`
+  );
+  return updatedUser;
+}
+
 module.exports = {
   listUsers,
   getUser,
   activateUser,
   deactivateUser,
   getStats,
+  promoteToAdmin,
+  demoteToMember,
 };

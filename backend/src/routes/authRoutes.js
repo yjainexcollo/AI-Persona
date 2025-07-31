@@ -6,10 +6,11 @@ const oauthController = require("../controllers/oauthController");
 const { resendVerificationLimiter } = require("../middlewares/rateLimiter");
 const passwordResetController = require("../controllers/passwordResetController");
 
-// Registration, login, refresh
+// Registration, login, refresh, logout
 router.post("/register", authController.register);
 router.post("/login", authController.login);
 router.post("/refresh", authController.refreshTokens);
+router.post("/logout", authController.logout);
 
 // Email verification endpoints
 router.get("/verify-email", emailController.verifyEmail);
