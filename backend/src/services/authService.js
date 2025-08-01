@@ -148,6 +148,15 @@ async function register(
     throw new ApiError(400, breachCheck.reason);
   }
 
+  // Store breach warning info for response
+  const breachWarning = breachCheck.warning
+    ? {
+        message: breachCheck.reason,
+        severity: breachCheck.severity,
+        count: breachCheck.count,
+      }
+    : null;
+
   // Check if user exists
   const existingUser = await prisma.user.findUnique({
     where: { email },
@@ -194,6 +203,7 @@ async function register(
         user,
         workspace: user.workspace,
         isNewUser: false,
+        breachWarning,
       };
     } else if (existingUser.status === "DEACTIVATED") {
       throw new ApiError(
@@ -245,6 +255,7 @@ async function register(
     user,
     workspace: user.workspace,
     isNewUser: true,
+    breachWarning,
   };
 }
 

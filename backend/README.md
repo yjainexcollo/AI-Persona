@@ -513,20 +513,20 @@ npm run test             # Run tests (placeholder)
 1. **Fork and Clone**
 
    ```bash
-   git clone https://github.com/your-org/AI-Persona.git
-   cd AI-Persona/backend
-   ```
+git clone https://github.com/your-org/AI-Persona.git
+cd AI-Persona/backend
+```
 
 2. **Install Dependencies**
 
    ```bash
-   npm install
-   ```
+npm install
+```
 
 3. **Set Up Environment**
 
    ```bash
-   cp .env.template .env
+cp .env.template .env
    # Edit .env with your local configuration
    ```
 
@@ -539,8 +539,8 @@ npm run test             # Run tests (placeholder)
 
 5. **Start Development Server**
    ```bash
-   npm run dev
-   ```
+npm run dev
+```
 
 ## 🔒 Security
 

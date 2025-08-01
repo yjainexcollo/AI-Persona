@@ -3,48 +3,145 @@ info:
   title: AI-Persona Backend API
   version: 1.0.0
   description: |
-    # AI-Persona SaaS Backend API
+    # AI-Persona SaaS Backend API - Auth & User-Management Module
 
-    This API provides comprehensive, enterprise-grade authentication and user management for the AI-Persona SaaS platform. Features include account lifecycle management, security hardening, audit logging, automated cleanup, monitoring, and OAuth integration.
+    ## **Overview**
+    This API provides comprehensive, enterprise-grade authentication and user management for the AI-Persona SaaS platform. The Auth & User-Management module is designed for production environments with advanced security features, compliance, and scalability.
 
-    **Note:** Most authenticated, workspace-scoped endpoints require the `x-workspace-id` header to enforce strict multi-tenancy. This header must be set to the workspace ID the user is acting within. However, some endpoints (like workspace deletion) get the workspace ID from the URL path and do not require this header.
+    ## **Production Features**
+    - **Enterprise Security**: RSA key rotation, HIBP breach detection, account lockout
+    - **Multi-Tenancy**: Workspace-scoped operations with strict isolation
+    - **Compliance**: GDPR support, audit logging, data retention policies
+    - **Scalability**: Rate limiting, automated cleanup, monitoring
+    - **OAuth Integration**: Google OAuth with automatic account provisioning
+    - **Session Management**: Device tracking, token rotation, session revocation
 
-    ## **Enhanced Features**
-    - **Account Lifecycle**: PENDING_VERIFY → ACTIVE → DEACTIVATED → PENDING_DELETION
-    - **Security Hardening**: Password strength validation, HIBP breach detection, rate limiting, account lockout
-    - **OAuth Integration**: Google OAuth with automatic account creation
-    - **JWT Security**: RSA key rotation with JWKS endpoint and kid headers
-    - **Session Management**: Device tracking, session revocation, token rotation
-    - **Audit Logging**: Complete event trail with IP, user agent, and trace IDs
-    - **Automated Cleanup**: Cron jobs for unverified users and expired sessions
-    - **Monitoring**: Prometheus metrics and health checks
-    - **GraphQL Security**: Query depth limiting and complexity analysis
+    ## **Security Architecture**
+    - **JWT Security**: RSA-256 signing with key rotation and JWKS endpoint
+    - **Password Security**: Strength validation + HIBP breach detection
+    - **Account Protection**: Rate limiting, lockout, session management
+    - **Input Validation**: Comprehensive sanitization and validation
+    - **Audit Trail**: Complete event logging with IP, user agent, trace IDs
 
-    ## **Workflow Summary**
-    - **New User Registration:**
-      1. User registers via `/api/auth/register` (with password strength + HIBP validation).
-      2. Receives a verification email with 24-hour TTL. Must verify before logging in.
-      3. After verification, account becomes ACTIVE and can log in.
-    - **OAuth Registration:**
-      1. User initiates OAuth via `/api/auth/google`.
-      2. Google redirects to `/api/auth/google/callback` with user data.
-      3. Account is automatically created and user is logged in.
-    - **Password Reset:**
-      1. User requests a reset via `/api/auth/request-password-reset` (public endpoint).
-      2. Receives a reset email with a secure link (1-hour TTL).
-      3. Resets password via `/api/auth/reset-password` (public endpoint with valid token).
-    - **Account Management:**
-      1. Users can deactivate their account via `/api/auth/deactivate`.
-      2. Users can request GDPR deletion via `/api/auth/delete-account`.
-      3. Admins can manage user accounts via `/api/admin/users/*` endpoints.
-    - **Session Management:**
-      1. Users can view their sessions via `/api/auth/sessions`.
-      2. Users can revoke specific sessions via `/api/auth/sessions/{sessionId}`.
-    - **JWT Key Management:**
-      1. Public keys available via `/api/auth/.well-known/jwks.json`.
-      2. Admins can rotate keys via `/api/auth/rotate-keys`.
+    ## **Account Lifecycle**
+    ```
+    PENDING_VERIFY → ACTIVE → DEACTIVATED → PENDING_DELETION
+    ```
 
-    **Base URLs:** `/api/auth`, `/api/users`, `/api/admin`, `/api/personas`, `/api/conversations`, `/api/messages`, `/api/folders`, `/api/shareable-links`, `/metrics`
+    ## **Authentication Workflows**
+
+    ### **Local Authentication**
+    1. **Registration**: `POST /api/auth/register`
+       - Password strength validation (8+ chars, uppercase, lowercase, number, special)
+       - HIBP breach detection (real-time)
+       - Email verification required (24-hour TTL)
+       - Rate limited (5 requests/hour per IP)
+
+    2. **Email Verification**: `GET /api/auth/verify-email?token=`
+       - One-time token verification
+       - Sets status to ACTIVE
+       - Required before login
+
+    3. **Login**: `POST /api/auth/login`
+       - Email + password authentication
+       - Account lockout after 10 failed attempts (15 min)
+       - Session creation with device tracking
+       - Rate limited (10 requests/15min per IP)
+
+    4. **Token Refresh**: `POST /api/auth/refresh`
+       - Refresh token rotation
+       - Old token revocation on reuse
+       - New access + refresh tokens
+
+    ### **OAuth Authentication**
+    1. **Initiate**: `GET /api/auth/google`
+       - Redirects to Google OAuth
+       - Public endpoint
+
+    2. **Callback**: `GET /api/auth/google/callback`
+       - Handles Google response
+       - Automatic account creation
+       - Pre-verified email (OAuth users)
+       - Redirects to frontend with tokens
+
+    ### **Password Management**
+    1. **Request Reset**: `POST /api/auth/request-password-reset`
+       - Sends reset email (1-hour TTL)
+       - Rate limited (3 requests/hour per IP)
+
+    2. **Reset Password**: `POST /api/auth/reset-password`
+       - Validates new password strength
+       - HIBP breach detection
+       - Revokes all user sessions
+
+    ### **Account Management**
+    1. **Deactivate**: `POST /api/auth/deactivate`
+       - Sets status to DEACTIVATED
+       - Revokes all sessions
+       - Blocks login and token refresh
+
+    2. **Delete Account**: `POST /api/auth/delete-account`
+       - Sets status to PENDING_DELETION
+       - 30-day grace period
+       - GDPR compliance
+
+    ### **Session Management**
+    1. **List Sessions**: `GET /api/auth/sessions`
+       - Shows all active sessions
+       - Device info, IP, last activity
+
+    2. **Revoke Session**: `DELETE /api/auth/sessions/{sessionId}`
+       - Revokes specific session
+       - Immediate logout
+
+    3. **Logout**: `POST /api/auth/logout`
+       - Revokes current refresh token
+       - Idempotent operation
+
+    ### **JWT Key Management**
+    1. **JWKS Endpoint**: `GET /api/auth/.well-known/jwks.json`
+       - Public keys for JWT verification
+       - Supports key rotation
+       - Standard JWKS format
+
+    2. **Key Rotation**: `POST /api/auth/rotate-keys`
+       - Admin-only operation
+       - Creates new RSA key pair
+       - Keeps old keys for transition
+       - Returns new and old key IDs
+
+    ## **Role-Based Access Control (RBAC)**
+    - **ADMIN**: Full workspace management, user management, key rotation
+    - **MEMBER**: Basic user access, profile management
+    - **Workspace Scoped**: Admins only see their workspace users
+
+    ## **Monitoring & Observability**
+    - **Health Check**: `GET /api/auth/health`
+    - **Prometheus Metrics**: `GET /metrics`
+    - **JSON Metrics**: `GET /metrics/json`
+    - **Structured Logging**: Winston with trace IDs
+
+    ## **Automated Cleanup**
+    - **Unverified Users**: Hourly cleanup (7 days)
+    - **Pending Deletion**: Daily cleanup (30 days)
+    - **Expired Sessions**: Every 6 hours
+    - **Expired Tokens**: Every 2 hours
+
+    **Base URLs:** `/api/auth`, `/api/users`, `/api/admin`, `/metrics`
+  contact:
+    name: AI-Persona Support
+    email: support@ai-persona.com
+    url: https://ai-persona.com/support
+  license:
+    name: Proprietary
+    url: https://ai-persona.com/license
+  servers:
+    - url: https://api.ai-persona.com
+      description: Production server
+    - url: https://staging-api.ai-persona.com
+      description: Staging server
+    - url: http://localhost:3000
+      description: Local development server
 
 servers:
   - url: http://localhost:3000
@@ -1503,9 +1600,9 @@ paths:
                         isActive:
                           type: boolean
                           example: true
-                        role:
-                          type: string
-                          example: MEMBER
+                              role:
+                                type: string
+                                example: MEMBER
                         workspaceId:
                           type: string
                           example: clworkspace_123xyz
@@ -1519,7 +1616,7 @@ paths:
                     email: alice@company.com
                     name: Alice Smith
                     isActive: true
-                    role: MEMBER
+                        role: MEMBER
                     workspaceId: clworkspace_123xyz
                 total: 1
         "401":
@@ -1573,9 +1670,9 @@ paths:
                       isActive:
                         type: boolean
                         example: true
-                      role:
-                        type: string
-                        example: MEMBER
+                            role:
+                              type: string
+                              example: MEMBER
                       workspaceId:
                         type: string
                         example: clworkspace_123xyz
@@ -1586,7 +1683,7 @@ paths:
                   email: alice@company.com
                   name: Alice Smith
                   isActive: true
-                  role: MEMBER
+                      role: MEMBER
                   workspaceId: clworkspace_123xyz
         "401":
           description: Authentication required or insufficient permissions
@@ -4439,7 +4536,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  components:
+components:
   tags:
     - name: Auth
       description: Authentication and authorization endpoints

@@ -18,3 +18,4 @@ const adminOnly = [authMiddleware, roleMiddleware("ADMIN")];
 router.post("/reset", ...adminOnly, metricsController.resetMetrics);
 
 module.exports = router;
+ 

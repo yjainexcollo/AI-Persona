@@ -1,5 +1,0 @@
-extends: spectral:oas
-rules:
-  # Custom rules for our API
-  oas3-api-servers: warn
-  oas3-valid-schema-example: warn

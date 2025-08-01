@@ -71,7 +71,7 @@ model Workspace {
     users       User[]
     conversations Conversation[]
     folders     Folder[]
-    
+
     @@map("workspaces")
     @@index([domain])
     @@index([isActive])

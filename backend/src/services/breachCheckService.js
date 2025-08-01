@@ -80,17 +80,47 @@ class BreachCheckService {
 
   /**
    * Enhanced password validation with breach checking
+   * Accepts strong passwords even if breached, but provides warning
    */
   async validatePasswordWithBreachCheck(password) {
     const breachResult = await this.checkPasswordBreach(password);
 
+    // Check if password meets all strength requirements
+    const hasUpperCase = /[A-Z]/.test(password);
+    const hasLowerCase = /[a-z]/.test(password);
+    const hasNumbers = /\d/.test(password);
+    const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(password);
+    const hasMinLength = password.length >= 8;
+
+    const isStrongPassword =
+      hasUpperCase &&
+      hasLowerCase &&
+      hasNumbers &&
+      hasSpecialChar &&
+      hasMinLength;
+
     if (breachResult.breached) {
-      return {
-        isValid: false,
-        reason: `Password has been breached ${breachResult.count} times`,
-        severity: breachResult.severity,
-        count: breachResult.count,
-      };
+      if (isStrongPassword) {
+        // Accept strong passwords even if breached, but provide warning
+        logger.warn(
+          `Strong password accepted despite breach: ${breachResult.count} occurrences`
+        );
+        return {
+          isValid: true,
+          reason: `Password accepted (strong complexity) but has been breached ${breachResult.count} times. Consider using a different password.`,
+          severity: breachResult.severity,
+          count: breachResult.count,
+          warning: true,
+        };
+      } else {
+        // Reject weak breached passwords
+        return {
+          isValid: false,
+          reason: `Password has been breached ${breachResult.count} times`,
+          severity: breachResult.severity,
+          count: breachResult.count,
+        };
+      }
     }
 
     return {
