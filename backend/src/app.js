@@ -4,6 +4,7 @@ const cors = require("cors");
 const morgan = require("morgan");
 const logger = require("./utils/logger");
 const createApolloServer = require("./graphql/apollo");
+const cronService = require("./services/cronService");
 
 const passport = require("passport");
 const passportSetup = require("./middlewares/passportSetup");
@@ -12,6 +13,12 @@ passportSetup();
 const authRoutes = require("./routes/authRoutes");
 const userRoute = require("./routes/userRoute");
 const adminRoutes = require("./routes/adminRoutes");
+const personaRoutes = require("./routes/personaRoutes");
+const conversationRoutes = require("./routes/conversationRoutes");
+const messageRoutes = require("./routes/messageRoutes");
+const folderRoutes = require("./routes/folderRoutes");
+const shareableLinkRoutes = require("./routes/shareableLinkRoutes");
+const metricsRoutes = require("./routes/metricsRoutes");
 
 const swaggerUi = require("swagger-ui-express");
 const YAML = require("yamljs");
@@ -45,9 +52,18 @@ app.get("/health", (req, res) => {
   res.status(200).json({ status: "ok" });
 });
 
+// Initialize cron jobs
+cronService.init();
+
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoute);
 app.use("/api/admin", adminRoutes);
+app.use("/api/personas", personaRoutes);
+app.use("/api/conversations", conversationRoutes);
+app.use("/api/messages", messageRoutes);
+app.use("/api/folders", folderRoutes);
+app.use("/api/shareable-links", shareableLinkRoutes);
+app.use("/metrics", metricsRoutes);
 
 // Load the swagger.yaml file
 const swaggerDocument = YAML.load(path.join(__dirname, "../docs/swagger.yaml"));

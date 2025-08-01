@@ -36,7 +36,8 @@ async function testEmailConfig() {
 }
 
 // Generate and store a verification token
-async function createEmailVerification(userId, expiresInMinutes = 60) {
+async function createEmailVerification(userId, expiresInMinutes = 1440) {
+  // 24 hours
   const token = generateToken(32);
   const expiresAt = new Date(Date.now() + expiresInMinutes * 60 * 1000);
   await prisma.emailVerification.deleteMany({ where: { userId } });
@@ -109,10 +110,25 @@ async function cleanupExpiredVerifications() {
   logger.info(`Cleaned up ${result.count} expired email verification tokens`);
 }
 
+// Create password reset token
+async function createPasswordResetToken(userId, expiresInMinutes = 60) {
+  const token = generateToken(32);
+  const expiresAt = new Date(Date.now() + expiresInMinutes * 60 * 1000);
+
+  // Delete any existing tokens for this user
+  await prisma.passwordResetToken.deleteMany({ where: { userId } });
+
+  await prisma.passwordResetToken.create({
+    data: { userId, token, expiresAt },
+  });
+
+  logger.debug(`Created password reset token for user ${userId}`);
+  return token;
+}
+
 // Send password reset email
 async function sendPasswordResetEmail(user, token) {
-  const resetUrl = `http://localhost:5173/reset-password?token=${token}`;
-  const resetRoute = `${config.appBaseUrl}/reset-password`;
+  const resetUrl = `${config.appBaseUrl}/reset-password?token=${token}`;
   const mailOptions = {
     from: config.smtpFrom,
     to: user.email,
@@ -120,7 +136,6 @@ async function sendPasswordResetEmail(user, token) {
     html: `<p>Hello ${user.name || ""},</p>
            <p>You requested a password reset. Click the link below to set a new password:</p>
            <a href="${resetUrl}">${resetUrl}</a>
-           <p>Or visit: <a href="${resetRoute}">${resetRoute}</a></p>
            <p>This link will expire in 1 hour. If you did not request this, you can ignore this email.</p>`,
   };
   try {
@@ -166,6 +181,7 @@ module.exports = {
   verifyEmailToken,
   resendVerificationEmail,
   cleanupExpiredVerifications,
+  createPasswordResetToken,
   sendPasswordResetEmail,
   sendInviteEmail,
 };

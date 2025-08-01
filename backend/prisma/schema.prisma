@@ -20,8 +20,12 @@ model User {
     email         String   @unique
     name          String?
     passwordHash  String?  // Nullable for OAuth-only users
+    status        UserStatus @default(PENDING_VERIFY)
     emailVerified Boolean  @default(false)
-    isActive      Boolean  @default(true)
+    verifiedAt    DateTime? // When email was verified
+    failedLoginCount Int    @default(0)
+    lockedUntil   DateTime? // Account lockout until
+    lastLoginAt   DateTime?
     role          MemberRole @default(MEMBER)
     createdAt     DateTime @default(now())
     updatedAt     DateTime @updatedAt
@@ -31,6 +35,7 @@ model User {
     sessions      Session[]
     emailVerifications EmailVerification[]
     passwordResetTokens PasswordResetToken[]
+    auditEvents   AuditEvent[]
     
     // Chat relationships
     messages      Message[]
@@ -41,12 +46,14 @@ model User {
     ownedFolders  Folder[]
     folderItems   FolderItem[]
     
-    // No soft delete, no profile, no 2FA, no audit fields
     @@map("users")
     @@index([email])
+    @@index([status])
     @@index([emailVerified])
-    @@index([isActive])
+    @@index([failedLoginCount])
+    @@index([lockedUntil])
     @@index([workspaceId])
+    @@index([status, createdAt]) // For cleanup queries
 }
 
 // ===================================
@@ -78,6 +85,7 @@ model Persona {
     name        String
     description String?
     traits      Json     // { tone: "formal", expertise: ["finance"], domains: [...] }
+    persona_id  String   @unique  // Unique identifier for webhook requests (e.g., "Chief-Financial-Officer")
     isActive    Boolean  @default(true)
     createdAt   DateTime @default(now())
     updatedAt   DateTime @updatedAt
@@ -86,6 +94,7 @@ model Persona {
     
     @@map("personas")
     @@index([isActive])
+    @@index([persona_id])
 }
 
 // ===================================
@@ -243,12 +252,16 @@ model Session {
     createdAt     DateTime @default(now())
     updatedAt     DateTime @updatedAt
     userId        String
+    userAgent     String?  // Browser/device info
+    ipAddress     String?  // IP address
+    deviceId      String?  // Unique device identifier
     user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
     @@map("sessions")
     @@index([userId])
     @@index([refreshToken])
     @@index([expiresAt])
     @@index([isActive])
+    @@index([userId, deviceId]) // For device-specific queries
 }
 
 // ===================================
@@ -282,8 +295,37 @@ model PasswordResetToken {
 }
 
 // ===================================
+// AUDIT EVENT MODEL
+// ===================================
+model AuditEvent {
+    id          String      @id @default(cuid())
+    userId      String
+    eventType   AuditEventType
+    eventData   Json?       // Additional event data
+    ipAddress   String?
+    userAgent   String?
+    traceId     String?     // Request trace ID
+    createdAt   DateTime    @default(now())
+    
+    user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+    
+    @@map("audit_events")
+    @@index([userId])
+    @@index([eventType])
+    @@index([createdAt])
+    @@index([traceId])
+}
+
+// ===================================
 // ENUMS
 // ===================================
+enum UserStatus {
+    PENDING_VERIFY
+    ACTIVE
+    DEACTIVATED
+    PENDING_DELETION
+}
+
 enum MemberRole {
     ADMIN
     MEMBER
@@ -298,4 +340,22 @@ enum ItemType {
 enum ReactionType {
     LIKE
     DISLIKE
+}
+
+enum AuditEventType {
+    REGISTER
+    VERIFY_EMAIL
+    LOGIN_SUCCESS
+    LOGIN_FAILED
+    LOGOUT
+    REFRESH_TOKEN
+    REQUEST_PASSWORD_RESET
+    RESET_PASSWORD
+    CHANGE_PASSWORD
+    DEACTIVATE_ACCOUNT
+    REACTIVATE_ACCOUNT
+    ROLE_CHANGED
+    SESSION_REVOKED
+    ACCOUNT_LOCKED
+    ACCOUNT_UNLOCKED
 }

@@ -5,21 +5,62 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](http://makeapullrequest.com)
 
-A secure, scalable, and enterprise-grade multi-tenant backend for the AI-Persona SaaS platform. Supports modular authentication (local, OAuth), strict workspace/user isolation, robust RBAC, and comprehensive API documentation.
+A secure, scalable, and enterprise-grade multi-tenant backend for the AI-Persona SaaS platform. Features comprehensive authentication, user lifecycle management, security hardening, audit logging, and automated cleanup systems.
 
 ## 🚀 Features
 
-- **🔐 Multi-Tenant Authentication**: Local (email/password) and Google OAuth authentication
-- **🏢 Workspace Isolation**: Strict tenant boundaries with domain-based workspace assignment
-- **👥 Role-Based Access Control**: Admin and Member roles with workspace-scoped permissions
-- **📧 Email Verification**: Secure email verification with token-based validation
-- **🔄 Account Reactivation**: Automatic account reactivation for deactivated users
-- **🔒 Security**: JWT tokens, rate limiting, CORS, and comprehensive security headers
-- **📊 Logging**: Structured logging with Winston
-- **📚 API Documentation**: Complete OpenAPI/Swagger documentation
-- **🕸️ GraphQL Support**: Basic GraphQL setup with Apollo Server
-- **🐳 Docker Ready**: Production-ready Docker configuration
-- **📧 Email Service**: SMTP-based email sending with Nodemailer
+### 🔐 Enhanced Authentication & User Management
+
+- **Multi-Tenant Authentication**: Local (email/password) and Google OAuth authentication
+- **Account Lifecycle Management**: PENDING_VERIFY → ACTIVE → DEACTIVATED → PENDING_DELETION
+- **Email Verification**: 24-hour TTL verification tokens with resend capability
+- **Password Reset**: Secure token-based password reset with 1-hour TTL
+- **Session Management**: Device tracking, session revocation, and token rotation
+- **Account Lockout**: Automatic lockout after failed login attempts (10 attempts → 15 min)
+- **GDPR Compliance**: Account deletion with 30-day grace period
+
+### 🛡️ Security Hardening
+
+- **Password Strength Validation**: Score-based validation (minimum score 3)
+- **Rate Limiting**: Per-endpoint and per-IP rate limiting
+- **Input Validation**: Comprehensive validation with express-validator
+- **Security Headers**: Helmet.js with CSP, HSTS, XSS protection
+- **Audit Logging**: Complete event trail with IP, user agent, and trace IDs
+
+### 🏢 Workspace & Role Management
+
+- **Workspace Isolation**: Strict tenant boundaries with domain-based assignment
+- **Role-Based Access Control**: ADMIN and MEMBER roles with workspace-scoped permissions
+- **Admin Operations**: User activation/deactivation, role promotion/demotion
+- **Workspace Statistics**: User counts, activity metrics, and usage analytics
+
+### 📊 Monitoring & Observability
+
+- **Prometheus Metrics**: Authentication events, performance metrics, and business KPIs
+- **Health Checks**: Database connectivity and service health monitoring
+- **Structured Logging**: Winston JSON logs with request trace IDs
+- **Audit Events**: Complete user action history with event categorization
+
+### 🔄 Automation & Cleanup
+
+- **Automated Cleanup Jobs**: Cron-based cleanup for unverified users and expired sessions
+- **Token Management**: Automatic cleanup of expired verification and reset tokens
+- **Session Cleanup**: Regular cleanup of expired sessions
+- **Account Lifecycle**: Automated account state management
+
+### 📧 Email Services
+
+- **Transactional Emails**: Verification, password reset, and notification emails
+- **SMTP Integration**: Configurable SMTP with Nodemailer
+- **Email Templates**: Professional HTML email templates
+- **Delivery Tracking**: Email send success/failure logging
+
+### 📚 API & Documentation
+
+- **OpenAPI/Swagger**: Complete API documentation with examples
+- **GraphQL Support**: Apollo Server with GraphQL playground
+- **RESTful APIs**: Comprehensive REST API with proper HTTP status codes
+- **Interactive Docs**: Swagger UI for API exploration
 
 ## 📋 Table of Contents
 
@@ -30,6 +71,7 @@ A secure, scalable, and enterprise-grade multi-tenant backend for the AI-Persona
 - [Deployment](#deployment)
 - [Development](#development)
 - [Security](#security)
+- [Monitoring](#monitoring)
 - [Troubleshooting](#troubleshooting)
 - [Contributing](#contributing)
 - [License](#license)
@@ -98,13 +140,20 @@ docker-compose exec backend npm run migrate
                        │   PostgreSQL    │
                        │   (Primary DB)  │
                        └─────────────────┘
+                                │
+                                ▼
+                       ┌─────────────────┐
+                       │   Cron Jobs     │
+                       │   (Cleanup)     │
+                       └─────────────────┘
 ```
 
-### Multi-Tenant Architecture
+### Enhanced Multi-Tenant Architecture
 
 - **Workspace Isolation**: Each tenant has a dedicated workspace with domain-based assignment
-- **Data Segregation**: All database queries are scoped to the user's workspace
-- **Security Boundaries**: Cross-workspace access is prevented at the application layer
+- **User Lifecycle Management**: Complete account lifecycle from registration to deletion
+- **Security Boundaries**: Cross-workspace access prevention with audit logging
+- **Automated Cleanup**: Scheduled jobs for maintaining data hygiene
 - **Scalable Design**: Horizontal scaling support with stateless application design
 
 ### Technology Stack
@@ -122,6 +171,9 @@ docker-compose exec backend npm run migrate
 | **Security**       | Helmet + CORS      | Latest  | Security headers          |
 | **Logging**        | Winston            | 3.17+   | Structured logging        |
 | **Rate Limiting**  | express-rate-limit | 8.0+    | API rate limiting         |
+| **Validation**     | express-validator  | 7.0+    | Input validation          |
+| **Cron Jobs**      | node-cron          | 3.0+    | Scheduled tasks           |
+| **Metrics**        | Custom Prometheus  | -       | Application metrics       |
 
 ## 📚 API Documentation
 
@@ -130,49 +182,109 @@ docker-compose exec backend npm run migrate
 - **Swagger UI**: `http://localhost:3000/docs`
 - **OpenAPI Spec**: `http://localhost:3000/docs/swagger.yaml`
 - **GraphQL Playground**: `http://localhost:3000/graphql`
+- **Health Check**: `http://localhost:3000/api/auth/health`
+- **Metrics**: `http://localhost:3000/metrics`
 
-### Core Endpoints
+### Enhanced Authentication Endpoints
 
-#### Authentication
+#### Account Lifecycle Management
 
 ```http
-POST /api/auth/register          # User registration
-POST /api/auth/login            # User authentication
-POST /api/auth/refresh          # Token refresh
-GET  /api/auth/verify-email     # Email verification
-POST /api/auth/resend-verification # Resend verification (rate limited)
-POST /api/auth/request-password-reset # Password reset request
-POST /api/auth/reset-password   # Password reset
-GET  /api/auth/google           # Google OAuth
-GET  /api/auth/google/callback  # OAuth callback
+POST /api/auth/register                    # User registration with validation
+POST /api/auth/login                       # User authentication with lockout
+POST /api/auth/refresh                     # Token refresh with rotation
+POST /api/auth/logout                      # Secure logout with session cleanup
+GET  /api/auth/verify-email               # Email verification (24h TTL)
+POST /api/auth/resend-verification        # Resend verification (rate limited)
+POST /api/auth/request-password-reset     # Password reset request
+POST /api/auth/reset-password             # Password reset with validation
 ```
 
-#### User Management
+#### Session Management
 
 ```http
-GET  /api/users/me              # Get user profile
-PUT  /api/users/me              # Update profile
-PUT  /api/users/me/password     # Change password
-POST /api/users/me/deactivate   # Deactivate account
-GET  /api/users/workspace       # Get workspace users
+GET    /api/auth/sessions                  # List user sessions
+DELETE /api/auth/sessions/:sessionId      # Revoke specific session
 ```
 
-#### Admin Operations
+#### Account Management
 
 ```http
-GET  /api/admin/users           # List workspace users
-GET  /api/admin/users/:id       # Get user details
-POST /api/admin/users/:id/activate   # Activate user
-POST /api/admin/users/:id/deactivate # Deactivate user
-GET  /api/admin/stats           # Workspace statistics
-DELETE /api/admin/workspace/:id # Delete workspace
+POST /api/auth/deactivate                 # Deactivate account
+POST /api/auth/delete-account             # Request GDPR deletion
 ```
 
-#### System
+#### System Endpoints
 
 ```http
-GET  /health                    # Health check
-GET  /graphql                   # GraphQL endpoint
+GET  /api/auth/health                     # Health check
+GET  /metrics                             # Prometheus metrics
+GET  /metrics/json                        # JSON metrics
+POST /metrics/reset                       # Reset metrics (admin only)
+```
+
+### User Management Endpoints
+
+```http
+GET  /api/users/me                        # Get user profile
+PUT  /api/users/me                        # Update profile
+PUT  /api/users/me/password               # Change password
+GET  /api/users/stats                     # User statistics
+```
+
+### Admin Operations
+
+```http
+GET  /api/admin/users                     # List workspace users
+GET  /api/admin/users/:id                 # Get user details
+POST /api/admin/users/:id/activate        # Activate user
+POST /api/admin/users/:id/deactivate      # Deactivate user
+POST /api/admin/users/:id/promote         # Promote to admin
+POST /api/admin/users/:id/demote          # Demote to member
+GET  /api/admin/stats                     # Workspace statistics
+```
+
+### Persona & Chat Endpoints
+
+```http
+GET  /api/personas                        # List all personas
+GET  /api/personas/:id                    # Get persona details
+GET  /api/personas/stats                  # Persona statistics
+
+POST /api/conversations                   # Create conversation
+GET  /api/conversations                   # List user conversations
+GET  /api/conversations/public            # List public conversations
+GET  /api/conversations/:id               # Get conversation details
+PUT  /api/conversations/:id/toggle-visibility # Toggle public/private
+DELETE /api/conversations/:id             # Delete conversation
+
+POST /api/messages                        # Send user message
+POST /api/messages/response               # Send persona response
+POST /api/messages/:messageId/reactions   # Add reaction
+DELETE /api/messages/:messageId/reactions # Remove reaction
+```
+
+### Folder Management
+
+```http
+POST /api/folders                         # Create folder
+GET  /api/folders                         # List user folders
+GET  /api/folders/:id                     # Get folder details
+PUT  /api/folders/:id                     # Update folder
+DELETE /api/folders/:id                   # Delete folder
+POST /api/folders/:id/items              # Add item to folder
+DELETE /api/folders/:id/items             # Remove item from folder
+PUT  /api/folders/:id/reorder             # Reorder folder items
+```
+
+### Shareable Links
+
+```http
+POST /api/shareable-links                 # Create shareable link
+GET  /api/shareable-links                 # List user links
+GET  /api/shareable-links/:id             # Get link details
+DELETE /api/shareable-links/:id           # Delete link
+GET  /api/shareable-links/share/:token    # Public access (no auth)
 ```
 
 ### Authentication
@@ -205,7 +317,7 @@ DATABASE_URL="postgresql://user:password@host:5432/database"
 JWT_SECRET="your-super-secret-jwt-key"
 SESSION_SECRET="your-session-secret"
 BCRYPT_SALT_ROUNDS=12
-JWT_EXPIRES_IN=1d
+JWT_EXPIRES_IN=15m
 JWT_REFRESH_EXPIRES_IN=7d
 
 # OAuth Configuration
@@ -361,8 +473,15 @@ backend/
 │   ├── config/            # Configuration management
 │   ├── controllers/       # Route controllers
 │   ├── middlewares/       # Express middlewares
+│   │   ├── authMiddleware.js
+│   │   ├── roleMiddleware.js
+│   │   └── validationMiddleware.js
 │   ├── routes/            # API route definitions
 │   ├── services/          # Business logic
+│   │   ├── authService.js
+│   │   ├── emailService.js
+│   │   ├── cronService.js
+│   │   └── metricsService.js
 │   ├── utils/             # Utility functions
 │   ├── graphql/           # GraphQL implementation
 │   ├── app.js            # Express app setup
@@ -425,16 +544,19 @@ npm run test             # Run tests (placeholder)
 
 ## 🔒 Security
 
-### Security Features
+### Enhanced Security Features
 
-- **Authentication**: JWT tokens with refresh mechanism
-- **Authorization**: Role-based access control (RBAC)
-- **Rate Limiting**: Per-endpoint rate limiting (resend verification)
+- **Authentication**: JWT tokens with refresh mechanism and rotation
+- **Authorization**: Role-based access control (RBAC) with workspace scoping
+- **Rate Limiting**: Per-endpoint rate limiting with configurable limits
 - **CORS**: Configurable cross-origin resource sharing
-- **Security Headers**: Helmet.js for security headers
+- **Security Headers**: Helmet.js with comprehensive security headers
 - **SQL Injection Protection**: Prisma ORM with parameterized queries
-- **Password Security**: bcrypt with configurable salt rounds
-- **Workspace Isolation**: Strict tenant boundaries
+- **Password Security**: bcrypt with configurable salt rounds and strength validation
+- **Workspace Isolation**: Strict tenant boundaries with audit logging
+- **Account Lockout**: Automatic lockout after failed attempts
+- **Session Management**: Device tracking and session revocation
+- **Input Validation**: Comprehensive validation with sanitization
 
 ### Security Best Practices
 
@@ -443,6 +565,9 @@ npm run test             # Run tests (placeholder)
 3. **Regular Updates**: Keep dependencies updated
 4. **Access Logging**: Comprehensive access logging with Morgan
 5. **Error Handling**: Secure error handling without information leakage
+6. **Audit Logging**: Complete event trail for security monitoring
+7. **Rate Limiting**: Prevent brute force and abuse attacks
+8. **Input Validation**: Prevent injection and validation attacks
 
 ### Security Headers
 
@@ -464,6 +589,54 @@ app.use(
     },
   })
 );
+```
+
+## 📊 Monitoring
+
+### Metrics & Observability
+
+- **Prometheus Metrics**: Authentication events, performance metrics, and business KPIs
+- **Health Checks**: Database connectivity and service health monitoring
+- **Structured Logging**: Winston JSON logs with request trace IDs
+- **Audit Events**: Complete user action history with event categorization
+
+### Available Metrics
+
+```bash
+# Authentication Metrics
+auth_register_total
+auth_login_success_total
+auth_login_failed_total
+auth_logout_total
+auth_refresh_total
+auth_verify_email_total
+
+# User Lifecycle Metrics
+user_deactivated_total
+user_deletion_requested_total
+user_reactivated_total
+
+# Session Metrics
+session_created_total
+session_revoked_total
+session_expired_total
+
+# Security Metrics
+account_locked_total
+failed_login_attempts_total
+
+# Cleanup Metrics
+cleanup_unverified_users_total
+cleanup_pending_deletion_users_total
+cleanup_expired_sessions_total
+```
+
+### Monitoring Endpoints
+
+```http
+GET /api/auth/health          # Health check
+GET /metrics                  # Prometheus metrics
+GET /metrics/json             # JSON metrics
 ```
 
 ## 🐛 Troubleshooting
@@ -491,6 +664,13 @@ node -e "const emailService = require('./src/services/emailService'); emailServi
 node -e "const jwt = require('jsonwebtoken'); console.log('JWT Secret length:', process.env.JWT_SECRET?.length || 0)"
 ```
 
+#### Cron Job Issues
+
+```bash
+# Check cron job status
+curl -s http://localhost:3000/metrics/json | jq '.counters | keys | map(select(test("cleanup")))'
+```
+
 ### Debug Mode
 
 Enable debug logging:
@@ -504,6 +684,9 @@ DEBUG=* npm run dev
 ```bash
 # View application logs
 npm run dev | grep -E "(error|warn|info)"
+
+# Check audit logs
+node -e "const { PrismaClient } = require('@prisma/client'); const prisma = new PrismaClient(); prisma.auditEvent.findMany({ take: 10, orderBy: { createdAt: 'desc' } }).then(console.log).catch(console.error)"
 ```
 
 ### Performance Issues
@@ -512,6 +695,7 @@ npm run dev | grep -E "(error|warn|info)"
 2. **Memory Usage**: Monitor Node.js memory usage
 3. **CPU Usage**: Check for CPU-intensive operations
 4. **Network Latency**: Monitor API response times
+5. **Session Management**: Check session cleanup performance
 
 ## 🤝 Contributing
 
@@ -537,6 +721,7 @@ We welcome contributions! Please follow these guidelines:
    - Follow the coding standards
    - Add tests for new functionality
    - Update documentation
+   - Add audit logging for new features
 
 4. **Run Tests**
 
@@ -556,6 +741,7 @@ We welcome contributions! Please follow these guidelines:
 - **Prettier**: Use Prettier for code formatting (when implemented)
 - **Conventional Commits**: Use conventional commit messages
 - **Documentation**: Update API documentation for new endpoints
+- **Audit Logging**: Add audit events for security-relevant operations
 
 ### Pull Request Process
 

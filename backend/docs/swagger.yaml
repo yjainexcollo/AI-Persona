@@ -5,21 +5,46 @@ info:
   description: |
     # AI-Persona SaaS Backend API
 
-    This API provides robust, secure, and multi-tenant authentication and user management for the AI-Persona SaaS platform.
+    This API provides comprehensive, enterprise-grade authentication and user management for the AI-Persona SaaS platform. Features include account lifecycle management, security hardening, audit logging, automated cleanup, monitoring, and OAuth integration.
 
     **Note:** Most authenticated, workspace-scoped endpoints require the `x-workspace-id` header to enforce strict multi-tenancy. This header must be set to the workspace ID the user is acting within. However, some endpoints (like workspace deletion) get the workspace ID from the URL path and do not require this header.
 
+    ## **Enhanced Features**
+    - **Account Lifecycle**: PENDING_VERIFY → ACTIVE → DEACTIVATED → PENDING_DELETION
+    - **Security Hardening**: Password strength validation, HIBP breach detection, rate limiting, account lockout
+    - **OAuth Integration**: Google OAuth with automatic account creation
+    - **JWT Security**: RSA key rotation with JWKS endpoint and kid headers
+    - **Session Management**: Device tracking, session revocation, token rotation
+    - **Audit Logging**: Complete event trail with IP, user agent, and trace IDs
+    - **Automated Cleanup**: Cron jobs for unverified users and expired sessions
+    - **Monitoring**: Prometheus metrics and health checks
+    - **GraphQL Security**: Query depth limiting and complexity analysis
+
     ## **Workflow Summary**
     - **New User Registration:**
-      1. User registers via `/api/auth/register`.
-      2. Receives a verification email. Must verify before logging in.
-      3. After verification, can log in and access their workspace.
+      1. User registers via `/api/auth/register` (with password strength + HIBP validation).
+      2. Receives a verification email with 24-hour TTL. Must verify before logging in.
+      3. After verification, account becomes ACTIVE and can log in.
+    - **OAuth Registration:**
+      1. User initiates OAuth via `/api/auth/google`.
+      2. Google redirects to `/api/auth/google/callback` with user data.
+      3. Account is automatically created and user is logged in.
     - **Password Reset:**
       1. User requests a reset via `/api/auth/request-password-reset` (public endpoint).
-      2. Receives a reset email with a secure link.
+      2. Receives a reset email with a secure link (1-hour TTL).
       3. Resets password via `/api/auth/reset-password` (public endpoint with valid token).
+    - **Account Management:**
+      1. Users can deactivate their account via `/api/auth/deactivate`.
+      2. Users can request GDPR deletion via `/api/auth/delete-account`.
+      3. Admins can manage user accounts via `/api/admin/users/*` endpoints.
+    - **Session Management:**
+      1. Users can view their sessions via `/api/auth/sessions`.
+      2. Users can revoke specific sessions via `/api/auth/sessions/{sessionId}`.
+    - **JWT Key Management:**
+      1. Public keys available via `/api/auth/.well-known/jwks.json`.
+      2. Admins can rotate keys via `/api/auth/rotate-keys`.
 
-    **Base URLs:** `/api/auth`, `/api/users`, `/api/admin`
+    **Base URLs:** `/api/auth`, `/api/users`, `/api/admin`, `/api/personas`, `/api/conversations`, `/api/messages`, `/api/folders`, `/api/shareable-links`, `/metrics`
 
 servers:
   - url: http://localhost:3000
@@ -36,6 +61,11 @@ paths:
       tags: [Auth]
       description: |
         Registers a new user or reactivates a deactivated account. After registration/reactivation, a verification email is sent to the provided email address.
+
+        **Security Features:**
+        - Password strength validation (minimum 8 characters, uppercase, lowercase, number, special character)
+        - HIBP (Have I Been Pwned) breach detection - rejects passwords found in data breaches
+        - Rate limiting (5 requests per hour per IP)
 
         **Note:** The user must verify their email before they can log in.
 
@@ -111,11 +141,36 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "400":
-          description: Invalid input
+          description: Invalid input (weak password, breached password, or validation error)
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                weak_password:
+                  summary: Weak password
+                  value:
+                    error:
+                      message: "Validation failed: Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character"
+                breached_password:
+                  summary: Breached password
+                  value:
+                    error:
+                      message: "Password has been breached 176566 times"
+                validation_error:
+                  summary: Other validation error
+                  value:
+                    error:
+                      message: "Validation failed: Please provide a valid email address"
+        "429":
+          description: Too many registration attempts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error:
+                  message: "Too many registration attempts, please try again later"
 
   /api/auth/login:
     post:
@@ -184,6 +239,15 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Too many login attempts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error:
+                  message: "Too many login attempts, please try again later"
 
   /api/auth/refresh:
     post:
@@ -269,6 +333,487 @@ paths:
                 message: Logout successful
         "400":
           description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ===================================
+  # ENHANCED AUTHENTICATION ENDPOINTS
+  # ===================================
+
+  /api/auth/sessions:
+    get:
+      summary: Get user sessions
+      tags: [Auth]
+      description: |
+        **RBAC:** Any authenticated user can access this endpoint.
+        Returns a list of all active sessions for the authenticated user.
+        Includes device information and last used timestamps.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: User sessions retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: User sessions retrieved
+                  data:
+                    type: object
+                    properties:
+                      sessions:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              example: session_123
+                            deviceId:
+                              type: string
+                              example: device_abc123
+                            userAgent:
+                              type: string
+                              example: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)
+                            ipAddress:
+                              type: string
+                              example: 192.168.1.100
+                            lastUsedAt:
+                              type: string
+                              format: date-time
+                              example: "2025-01-15T10:30:00Z"
+                            createdAt:
+                              type: string
+                              format: date-time
+                              example: "2025-01-15T09:00:00Z"
+                example:
+                  status: success
+                  message: User sessions retrieved
+                  data:
+                    sessions:
+                      - id: session_123
+                        deviceId: device_abc123
+                        userAgent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)
+                        ipAddress: 192.168.1.100
+                        lastUsedAt: "2025-01-15T10:30:00Z"
+                        createdAt: "2025-01-15T09:00:00Z"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/auth/sessions/{sessionId}:
+    delete:
+      summary: Revoke specific session
+      tags: [Auth]
+      description: |
+        **RBAC:** Any authenticated user can access this endpoint.
+        Revokes a specific session by its ID. The session will be marked as inactive.
+        Users can only revoke their own sessions.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema:
+            type: string
+            example: session_123
+          description: The ID of the session to revoke
+      responses:
+        "200":
+          description: Session revoked successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Session revoked successfully
+              example:
+                status: success
+                message: Session revoked successfully
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Session not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/auth/deactivate:
+    post:
+      summary: Deactivate account
+      tags: [Auth]
+      description: |
+        **RBAC:** Any authenticated user can access this endpoint.
+        Deactivates the authenticated user's account. The account will be marked as DEACTIVATED.
+        All active sessions will be revoked immediately.
+        The user will not be able to log in until the account is reactivated by an admin.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Account deactivated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Account deactivated successfully
+              example:
+                status: success
+                message: Account deactivated successfully
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/auth/delete-account:
+    post:
+      summary: Request account deletion (GDPR)
+      tags: [Auth]
+      description: |
+        **RBAC:** Any authenticated user can access this endpoint.
+        Requests deletion of the authenticated user's account for GDPR compliance.
+        The account will be marked as PENDING_DELETION.
+        All active sessions will be revoked immediately.
+        The account will be permanently deleted after 30 days.
+        Users can reactivate their account by logging in within the 30-day period.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Account deletion requested successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Account deletion requested. Your account will be permanently deleted in 30 days.
+              example:
+                status: success
+                message: Account deletion requested. Your account will be permanently deleted in 30 days.
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/auth/health:
+    get:
+      summary: Health check
+      tags: [System]
+      description: |
+        **Public endpoint** - No authentication required.
+        Checks the health of the application and database connectivity.
+        Returns system status, uptime, and environment information.
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Service is healthy
+                  data:
+                    type: object
+                    properties:
+                      timestamp:
+                        type: string
+                        format: date-time
+                        example: "2025-01-15T10:30:00Z"
+                      uptime:
+                        type: number
+                        example: 3600.5
+                      environment:
+                        type: string
+                        example: production
+                example:
+                  status: success
+                  message: Service is healthy
+                  data:
+                    timestamp: "2025-01-15T10:30:00Z"
+                    uptime: 3600.5
+                    environment: production
+        "503":
+          description: Service is unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/auth/.well-known/jwks.json:
+    get:
+      summary: Get JSON Web Key Set (JWKS)
+      tags: [System]
+      description: |
+        **Public endpoint** - No authentication required.
+        Returns the JSON Web Key Set (JWKS) containing public keys for JWT verification.
+        Used by clients to verify JWT tokens without needing to contact the server for each verification.
+        Supports key rotation with multiple keys and kid (key ID) headers.
+      responses:
+        "200":
+          description: JWKS in standard format
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  keys:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        kty:
+                          type: string
+                          example: RSA
+                        use:
+                          type: string
+                          example: sig
+                        kid:
+                          type: string
+                          example: "3907adeee32f00f7a09f5330fa3c0727"
+                        x5t:
+                          type: string
+                          example: "3907adeee32f00f7a09f5330fa3c0727"
+                        n:
+                          type: string
+                          example: "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA..."
+                        e:
+                          type: string
+                          example: "AQAB"
+              example:
+                keys:
+                  - kty: RSA
+                    use: sig
+                    kid: "3907adeee32f00f7a09f5330fa3c0727"
+                    x5t: "3907adeee32f00f7a09f5330fa3c0727"
+                    n: "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA..."
+                    e: "AQAB"
+
+  /api/auth/rotate-keys:
+    post:
+      summary: Rotate JWT keys (Admin only)
+      tags: [System]
+      description: |
+        **Admin only** - Requires authentication and ADMIN role.
+        Rotates the RSA key pair used for JWT signing and verification.
+        Creates new keys while keeping old keys for token verification during transition.
+        Returns the new and old key IDs for tracking.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Keys rotated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Keys rotated successfully
+                  data:
+                    type: object
+                    properties:
+                      newKid:
+                        type: string
+                        description: Key ID of the new key
+                        example: "new_key_id_123"
+                      oldKid:
+                        type: string
+                        description: Key ID of the old key
+                        example: "old_key_id_456"
+              example:
+                status: success
+                message: Keys rotated successfully
+                data:
+                  newKid: "new_key_id_123"
+                  oldKid: "old_key_id_456"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ===================================
+  # METRICS ENDPOINTS
+  # ===================================
+
+  /metrics:
+    get:
+      summary: Get Prometheus metrics
+      tags: [System]
+      description: |
+        **Public endpoint** - No authentication required.
+        Returns application metrics in Prometheus format.
+        Includes authentication events, performance metrics, and business KPIs.
+      responses:
+        "200":
+          description: Metrics in Prometheus format
+          content:
+            text/plain:
+              schema:
+                type: string
+              example: |
+                # HELP app_uptime_seconds Application uptime in seconds
+                # TYPE app_uptime_seconds gauge
+                app_uptime_seconds 3600.5
+                # HELP auth_register_total Total number of user registrations
+                # TYPE auth_register_total counter
+                auth_register_total 42
+
+  /metrics/json:
+    get:
+      summary: Get metrics in JSON format
+      tags: [System]
+      description: |
+        **Public endpoint** - No authentication required.
+        Returns application metrics in JSON format.
+        Includes counters and histograms for various metrics.
+      responses:
+        "200":
+          description: Metrics in JSON format
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  data:
+                    type: object
+                    properties:
+                      uptime:
+                        type: number
+                        example: 3600.5
+                      counters:
+                        type: object
+                        example:
+                          auth_register_total: 42
+                          auth_login_success_total: 156
+                          auth_login_failed_total: 23
+                      histograms:
+                        type: object
+                        example:
+                          request_duration_ms:
+                            count: 1000
+                            sum: 50000
+                            avg: 50
+                            min: 10
+                            max: 200
+                            p50: 45
+                            p95: 120
+                            p99: 180
+                      timestamp:
+                        type: string
+                        format: date-time
+                        example: "2025-01-15T10:30:00Z"
+              example:
+                status: success
+                data:
+                  uptime: 3600.5
+                  counters:
+                    auth_register_total: 42
+                    auth_login_success_total: 156
+                    auth_login_failed_total: 23
+                  histograms:
+                    request_duration_ms:
+                      count: 1000
+                      sum: 50000
+                      avg: 50
+                      min: 10
+                      max: 200
+                      p50: 45
+                      p95: 120
+                      p99: 180
+                  timestamp: "2025-01-15T10:30:00Z"
+
+  /metrics/reset:
+    post:
+      summary: Reset metrics (Admin only)
+      tags: [System]
+      description: |
+        **RBAC:** ADMIN role required.
+        Resets all application metrics to zero.
+        Useful for testing or when starting fresh monitoring.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Metrics reset successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Metrics reset successfully
+              example:
+                status: success
+                message: Metrics reset successfully
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Insufficient permissions
           content:
             application/json:
               schema:
@@ -1440,7 +1985,2482 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-components:
+  # ===================================
+  # PERSONA ENDPOINTS
+  # ===================================
+
+  /api/personas:
+    get:
+      summary: Get all personas
+      tags: [Persona]
+      description: |
+        **RBAC:** Any authenticated user can access this endpoint.
+        Returns a list of all active personas (global, not workspace-scoped).
+        Personas are read-only and managed externally.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: List of personas retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Personas retrieved successfully
+                  data:
+                    type: object
+                    properties:
+                      personas:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              example: persona_123
+                            name:
+                              type: string
+                              example: Chief Financial Officer
+                            description:
+                              type: string
+                              example: Expert in financial planning and analysis
+                            persona_id:
+                              type: string
+                              example: Chief-Financial-Officer
+                            traits:
+                              type: object
+                              example:
+                                tone: formal
+                                expertise: ["finance", "accounting"]
+                                domains: ["budgeting", "investment"]
+                            isActive:
+                              type: boolean
+                              example: true
+                            createdAt:
+                              type: string
+                              format: date-time
+                              example: "2025-01-15T10:30:00Z"
+                            updatedAt:
+                              type: string
+                              format: date-time
+                              example: "2025-01-15T10:30:00Z"
+              example:
+                status: success
+                message: Personas retrieved successfully
+                data:
+                  personas:
+                    - id: persona_123
+                      name: Chief Financial Officer
+                      description: Expert in financial planning and analysis
+                      persona_id: Chief-Financial-Officer
+                      traits:
+                        tone: formal
+                        expertise: ["finance", "accounting"]
+                        domains: ["budgeting", "investment"]
+                      isActive: true
+                      createdAt: "2025-01-15T10:30:00Z"
+                      updatedAt: "2025-01-15T10:30:00Z"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/personas/{id}:
+    get:
+      summary: Get persona by ID
+      tags: [Persona]
+      description: |
+        **RBAC:** Any authenticated user can access this endpoint.
+        Returns details for a specific persona by ID.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: The persona ID
+      responses:
+        "200":
+          description: Persona details retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Persona retrieved successfully
+                  data:
+                    type: object
+                    properties:
+                      persona:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                            example: persona_123
+                          name:
+                            type: string
+                            example: Chief Financial Officer
+                          description:
+                            type: string
+                            example: Expert in financial planning and analysis
+                          persona_id:
+                            type: string
+                            example: Chief-Financial-Officer
+                          traits:
+                            type: object
+                            example:
+                              tone: formal
+                              expertise: ["finance", "accounting"]
+                              domains: ["budgeting", "investment"]
+                          isActive:
+                            type: boolean
+                            example: true
+                          createdAt:
+                            type: string
+                            format: date-time
+                            example: "2025-01-15T10:30:00Z"
+                          updatedAt:
+                            type: string
+                            format: date-time
+                            example: "2025-01-15T10:30:00Z"
+              example:
+                status: success
+                message: Persona retrieved successfully
+                data:
+                  persona:
+                    id: persona_123
+                    name: Chief Financial Officer
+                    description: Expert in financial planning and analysis
+                    persona_id: Chief-Financial-Officer
+                    traits:
+                      tone: formal
+                      expertise: ["finance", "accounting"]
+                      domains: ["budgeting", "investment"]
+                    isActive: true
+                    createdAt: "2025-01-15T10:30:00Z"
+                    updatedAt: "2025-01-15T10:30:00Z"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Persona not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/personas/stats:
+    get:
+      summary: Get persona statistics
+      tags: [Persona]
+      description: |
+        **RBAC:** Any authenticated user can access this endpoint.
+        Returns statistics about personas.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Persona statistics retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Persona statistics retrieved successfully
+                  data:
+                    type: object
+                    properties:
+                      stats:
+                        type: object
+                        properties:
+                          totalPersonas:
+                            type: integer
+                            example: 10
+                          activePersonas:
+                            type: integer
+                            example: 8
+              example:
+                status: success
+                message: Persona statistics retrieved successfully
+                data:
+                  stats:
+                    totalPersonas: 10
+                    activePersonas: 8
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ===================================
+  # CONVERSATION ENDPOINTS
+  # ===================================
+
+  /api/conversations:
+    post:
+      summary: Create a new conversation
+      tags: [Conversation]
+      description: |
+        **RBAC:** Any authenticated user can access this endpoint.
+        Creates a new conversation between the user and a persona.
+        Workspace-scoped: conversations belong to the user's workspace.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - personaId
+              properties:
+                personaId:
+                  type: string
+                  example: persona_123
+                  description: The ID of the persona to start a conversation with
+            example:
+              personaId: persona_123
+      responses:
+        "201":
+          description: Conversation created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Conversation created successfully
+                  data:
+                    type: object
+                    properties:
+                      conversation:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                            example: conversation_456
+                          userId:
+                            type: string
+                            example: user_789
+                          personaId:
+                            type: string
+                            example: persona_123
+                          workspaceId:
+                            type: string
+                            example: workspace_101
+                          isPublic:
+                            type: boolean
+                            example: false
+                          messageCount:
+                            type: integer
+                            example: 0
+                          createdAt:
+                            type: string
+                            format: date-time
+                            example: "2025-01-15T10:30:00Z"
+                          updatedAt:
+                            type: string
+                            format: date-time
+                            example: "2025-01-15T10:30:00Z"
+                          persona:
+                            type: object
+                            properties:
+                              id:
+                                type: string
+                                example: persona_123
+                              name:
+                                type: string
+                                example: Chief Financial Officer
+                              description:
+                                type: string
+                                example: Expert in financial planning
+                              persona_id:
+                                type: string
+                                example: Chief-Financial-Officer
+              example:
+                status: success
+                message: Conversation created successfully
+                data:
+                  conversation:
+                    id: conversation_456
+                    userId: user_789
+                    personaId: persona_123
+                    workspaceId: workspace_101
+                    isPublic: false
+                    messageCount: 0
+                    createdAt: "2025-01-15T10:30:00Z"
+                    updatedAt: "2025-01-15T10:30:00Z"
+                    persona:
+                      id: persona_123
+                      name: Chief Financial Officer
+                      description: Expert in financial planning
+                      persona_id: Chief-Financial-Officer
+        "400":
+          description: Invalid input or persona not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conversation already exists between user and persona
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    get:
+      summary: Get user's conversations
+      tags: [Conversation]
+      description: |
+        **RBAC:** Any authenticated user can access this endpoint.
+        Returns a list of the user's conversations in their workspace.
+        Supports optional filtering by public/private status.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: isPublic
+          schema:
+            type: boolean
+          description: Filter by public/private status (optional)
+      responses:
+        "200":
+          description: User's conversations retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Conversations retrieved successfully
+                  data:
+                    type: object
+                    properties:
+                      conversations:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              example: conversation_456
+                            userId:
+                              type: string
+                              example: user_789
+                            personaId:
+                              type: string
+                              example: persona_123
+                            workspaceId:
+                              type: string
+                              example: workspace_101
+                            isPublic:
+                              type: boolean
+                              example: false
+                            messageCount:
+                              type: integer
+                              example: 5
+                            createdAt:
+                              type: string
+                              format: date-time
+                              example: "2025-01-15T10:30:00Z"
+                            updatedAt:
+                              type: string
+                              format: date-time
+                              example: "2025-01-15T10:35:00Z"
+                            persona:
+                              type: object
+                              properties:
+                                id:
+                                  type: string
+                                  example: persona_123
+                                name:
+                                  type: string
+                                  example: Chief Financial Officer
+                                description:
+                                  type: string
+                                  example: Expert in financial planning
+                                persona_id:
+                                  type: string
+                                  example: Chief-Financial-Officer
+              example:
+                status: success
+                message: Conversations retrieved successfully
+                data:
+                  conversations:
+                    - id: conversation_456
+                      userId: user_789
+                      personaId: persona_123
+                      workspaceId: workspace_101
+                      isPublic: false
+                      messageCount: 5
+                      createdAt: "2025-01-15T10:30:00Z"
+                      updatedAt: "2025-01-15T10:35:00Z"
+                      persona:
+                        id: persona_123
+                        name: Chief Financial Officer
+                        description: Expert in financial planning
+                        persona_id: Chief-Financial-Officer
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/conversations/public:
+    get:
+      summary: Get public conversations
+      tags: [Conversation]
+      description: |
+        **RBAC:** Any authenticated user can access this endpoint.
+        Returns a list of public conversations in the user's workspace.
+        Supports pagination with skip and take parameters.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: skip
+          schema:
+            type: integer
+            example: 0
+          description: Number of conversations to skip (for pagination)
+        - in: query
+          name: take
+          schema:
+            type: integer
+            example: 20
+          description: Number of conversations to return (for pagination)
+      responses:
+        "200":
+          description: Public conversations retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Public conversations retrieved successfully
+                  data:
+                    type: object
+                    properties:
+                      conversations:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              example: conversation_456
+                            userId:
+                              type: string
+                              example: user_789
+                            personaId:
+                              type: string
+                              example: persona_123
+                            workspaceId:
+                              type: string
+                              example: workspace_101
+                            isPublic:
+                              type: boolean
+                              example: true
+                            messageCount:
+                              type: integer
+                              example: 10
+                            createdAt:
+                              type: string
+                              format: date-time
+                              example: "2025-01-15T10:30:00Z"
+                            updatedAt:
+                              type: string
+                              format: date-time
+                              example: "2025-01-15T10:35:00Z"
+                            persona:
+                              type: object
+                              properties:
+                                id:
+                                  type: string
+                                  example: persona_123
+                                name:
+                                  type: string
+                                  example: Chief Financial Officer
+                                description:
+                                  type: string
+                                  example: Expert in financial planning
+                                persona_id:
+                                  type: string
+                                  example: Chief-Financial-Officer
+                      total:
+                        type: integer
+                        example: 25
+              example:
+                status: success
+                message: Public conversations retrieved successfully
+                data:
+                  conversations:
+                    - id: conversation_456
+                      userId: user_789
+                      personaId: persona_123
+                      workspaceId: workspace_101
+                      isPublic: true
+                      messageCount: 10
+                      createdAt: "2025-01-15T10:30:00Z"
+                      updatedAt: "2025-01-15T10:35:00Z"
+                      persona:
+                        id: persona_123
+                        name: Chief Financial Officer
+                        description: Expert in financial planning
+                        persona_id: Chief-Financial-Officer
+                  total: 25
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/conversations/{id}:
+    get:
+      summary: Get conversation by ID
+      tags: [Conversation]
+      description: |
+        **RBAC:** Any authenticated user can access this endpoint.
+        Returns details for a specific conversation by ID.
+        Users can only access conversations in their workspace.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: The conversation ID
+      responses:
+        "200":
+          description: Conversation details retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Conversation retrieved successfully
+                  data:
+                    type: object
+                    properties:
+                      conversation:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                            example: conversation_456
+                          userId:
+                            type: string
+                            example: user_789
+                          personaId:
+                            type: string
+                            example: persona_123
+                          workspaceId:
+                            type: string
+                            example: workspace_101
+                          isPublic:
+                            type: boolean
+                            example: false
+                          messageCount:
+                            type: integer
+                            example: 5
+                          createdAt:
+                            type: string
+                            format: date-time
+                            example: "2025-01-15T10:30:00Z"
+                          updatedAt:
+                            type: string
+                            format: date-time
+                            example: "2025-01-15T10:35:00Z"
+                          persona:
+                            type: object
+                            properties:
+                              id:
+                                type: string
+                                example: persona_123
+                              name:
+                                type: string
+                                example: Chief Financial Officer
+                              description:
+                                type: string
+                                example: Expert in financial planning
+                              persona_id:
+                                type: string
+                                example: Chief-Financial-Officer
+              example:
+                status: success
+                message: Conversation retrieved successfully
+                data:
+                  conversation:
+                    id: conversation_456
+                    userId: user_789
+                    personaId: persona_123
+                    workspaceId: workspace_101
+                    isPublic: false
+                    messageCount: 5
+                    createdAt: "2025-01-15T10:30:00Z"
+                    updatedAt: "2025-01-15T10:35:00Z"
+                    persona:
+                      id: persona_123
+                      name: Chief Financial Officer
+                      description: Expert in financial planning
+                      persona_id: Chief-Financial-Officer
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Conversation not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    delete:
+      summary: Delete conversation
+      tags: [Conversation]
+      description: |
+        **RBAC:** Any authenticated user can access this endpoint.
+        Deletes a conversation and all its messages.
+        Users can only delete conversations they own.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: The conversation ID
+      responses:
+        "200":
+          description: Conversation deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Conversation deleted successfully
+              example:
+                status: success
+                message: Conversation deleted successfully
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Conversation not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/conversations/{id}/toggle-visibility:
+    put:
+      summary: Toggle conversation visibility
+      tags: [Conversation]
+      description: |
+        **RBAC:** Any authenticated user can access this endpoint.
+        Toggles the conversation between public and private visibility.
+        Users can only toggle conversations they own.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: The conversation ID
+      responses:
+        "200":
+          description: Conversation visibility toggled successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Conversation visibility toggled successfully
+                  data:
+                    type: object
+                    properties:
+                      conversation:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                            example: conversation_456
+                          isPublic:
+                            type: boolean
+                            example: true
+              example:
+                status: success
+                message: Conversation visibility toggled successfully
+                data:
+                  conversation:
+                    id: conversation_456
+                    isPublic: true
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Conversation not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ===================================
+  # MESSAGE ENDPOINTS
+  # ===================================
+
+  /api/messages:
+    post:
+      summary: Send user message
+      tags: [Message]
+      description: |
+        **RBAC:** Any authenticated user can access this endpoint.
+        Sends a user message in a conversation.
+        Workspace-scoped: users can only send messages in conversations they own.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - conversationId
+                - content
+              properties:
+                conversationId:
+                  type: string
+                  example: conversation_456
+                  description: The conversation ID to send the message in
+                content:
+                  type: string
+                  example: "Hello, I need help with budgeting"
+                  description: The message content
+            example:
+              conversationId: conversation_456
+              content: "Hello, I need help with budgeting"
+      responses:
+        "201":
+          description: Message sent successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Message sent successfully
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                            example: message_789
+                          conversationId:
+                            type: string
+                            example: conversation_456
+                          content:
+                            type: string
+                            example: "Hello, I need help with budgeting"
+                          isFromUser:
+                            type: boolean
+                            example: true
+                          createdAt:
+                            type: string
+                            format: date-time
+                            example: "2025-01-15T10:30:00Z"
+              example:
+                status: success
+                message: Message sent successfully
+                data:
+                  message:
+                    id: message_789
+                    conversationId: conversation_456
+                    content: "Hello, I need help with budgeting"
+                    isFromUser: true
+                    createdAt: "2025-01-15T10:30:00Z"
+        "400":
+          description: Invalid input or conversation not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/messages/response:
+    post:
+      summary: Send persona response
+      tags: [Message]
+      description: |
+        **RBAC:** Any authenticated user can access this endpoint.
+        Sends a persona response in a conversation.
+        This simulates the persona's side of the conversation.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - conversationId
+                - content
+              properties:
+                conversationId:
+                  type: string
+                  example: conversation_456
+                  description: The conversation ID to send the response in
+                content:
+                  type: string
+                  example: "I'd be happy to help you with budgeting! Let me ask a few questions to understand your situation better."
+                  description: The persona's response content
+            example:
+              conversationId: conversation_456
+              content: "I'd be happy to help you with budgeting! Let me ask a few questions to understand your situation better."
+      responses:
+        "201":
+          description: Persona response sent successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Persona response sent successfully
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                            example: message_790
+                          conversationId:
+                            type: string
+                            example: conversation_456
+                          content:
+                            type: string
+                            example: "I'd be happy to help you with budgeting! Let me ask a few questions to understand your situation better."
+                          isFromUser:
+                            type: boolean
+                            example: false
+                          createdAt:
+                            type: string
+                            format: date-time
+                            example: "2025-01-15T10:31:00Z"
+              example:
+                status: success
+                message: Persona response sent successfully
+                data:
+                  message:
+                    id: message_790
+                    conversationId: conversation_456
+                    content: "I'd be happy to help you with budgeting! Let me ask a few questions to understand your situation better."
+                    isFromUser: false
+                    createdAt: "2025-01-15T10:31:00Z"
+        "400":
+          description: Invalid input or conversation not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/messages/{messageId}/reactions:
+    post:
+      summary: Add reaction to message
+      tags: [Message]
+      description: |
+        **RBAC:** Any authenticated user can access this endpoint.
+        Adds a reaction (like/dislike) to a persona message.
+        Only persona messages (isFromUser: false) can have reactions.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: messageId
+          required: true
+          schema:
+            type: string
+          description: The message ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - type
+              properties:
+                type:
+                  type: string
+                  enum: [LIKE, DISLIKE]
+                  example: LIKE
+                  description: The reaction type
+            example:
+              type: LIKE
+      responses:
+        "201":
+          description: Reaction added successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Reaction added successfully
+                  data:
+                    type: object
+                    properties:
+                      reaction:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                            example: reaction_123
+                          messageId:
+                            type: string
+                            example: message_790
+                          userId:
+                            type: string
+                            example: user_789
+                          type:
+                            type: string
+                            example: LIKE
+                          createdAt:
+                            type: string
+                            format: date-time
+                            example: "2025-01-15T10:32:00Z"
+              example:
+                status: success
+                message: Reaction added successfully
+                data:
+                  reaction:
+                    id: reaction_123
+                    messageId: message_790
+                    userId: user_789
+                    type: LIKE
+                    createdAt: "2025-01-15T10:32:00Z"
+        "400":
+          description: Invalid input or message not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Cannot add reaction to user message
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    delete:
+      summary: Remove reaction from message
+      tags: [Message]
+      description: |
+        **RBAC:** Any authenticated user can access this endpoint.
+        Removes a user's reaction from a message.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: messageId
+          required: true
+          schema:
+            type: string
+          description: The message ID
+      responses:
+        "200":
+          description: Reaction removed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Reaction removed successfully
+              example:
+                status: success
+                message: Reaction removed successfully
+        "400":
+          description: Invalid input or message not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ===================================
+  # FOLDER ENDPOINTS
+  # ===================================
+
+  /api/folders:
+    post:
+      summary: Create a new folder
+      tags: [Folder]
+      description: |
+        **RBAC:** Any authenticated user can access this endpoint.
+        Creates a new folder for organizing conversations and personas.
+        Workspace-scoped: folders belong to the user's workspace.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  example: "Financial Planning"
+                  description: The folder name
+            example:
+              name: "Financial Planning"
+      responses:
+        "201":
+          description: Folder created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Folder created successfully
+                  data:
+                    type: object
+                    properties:
+                      folder:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                            example: folder_123
+                          name:
+                            type: string
+                            example: "Financial Planning"
+                          ownerId:
+                            type: string
+                            example: user_789
+                          workspaceId:
+                            type: string
+                            example: workspace_101
+                          itemCount:
+                            type: integer
+                            example: 0
+                          createdAt:
+                            type: string
+                            format: date-time
+                            example: "2025-01-15T10:30:00Z"
+                          updatedAt:
+                            type: string
+                            format: date-time
+                            example: "2025-01-15T10:30:00Z"
+              example:
+                status: success
+                message: Folder created successfully
+                data:
+                  folder:
+                    id: folder_123
+                    name: "Financial Planning"
+                    ownerId: user_789
+                    workspaceId: workspace_101
+                    itemCount: 0
+                    createdAt: "2025-01-15T10:30:00Z"
+                    updatedAt: "2025-01-15T10:30:00Z"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Folder with this name already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    get:
+      summary: Get user's folders
+      tags: [Folder]
+      description: |
+        **RBAC:** Any authenticated user can access this endpoint.
+        Returns a list of the user's folders in their workspace.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: User's folders retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Folders retrieved successfully
+                  data:
+                    type: object
+                    properties:
+                      folders:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              example: folder_123
+                            name:
+                              type: string
+                              example: "Financial Planning"
+                            ownerId:
+                              type: string
+                              example: user_789
+                            workspaceId:
+                              type: string
+                              example: workspace_101
+                            itemCount:
+                              type: integer
+                              example: 3
+                            createdAt:
+                              type: string
+                              format: date-time
+                              example: "2025-01-15T10:30:00Z"
+                            updatedAt:
+                              type: string
+                              format: date-time
+                              example: "2025-01-15T10:30:00Z"
+              example:
+                status: success
+                message: Folders retrieved successfully
+                data:
+                  folders:
+                    - id: folder_123
+                      name: "Financial Planning"
+                      ownerId: user_789
+                      workspaceId: workspace_101
+                      itemCount: 3
+                      createdAt: "2025-01-15T10:30:00Z"
+                      updatedAt: "2025-01-15T10:30:00Z"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/folders/{id}:
+    get:
+      summary: Get folder by ID with contents
+      tags: [Folder]
+      description: |
+        **RBAC:** Any authenticated user can access this endpoint.
+        Returns details for a specific folder with its items.
+        Users can only access folders they own.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: The folder ID
+      responses:
+        "200":
+          description: Folder details retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Folder retrieved successfully
+                  data:
+                    type: object
+                    properties:
+                      folder:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                            example: folder_123
+                          name:
+                            type: string
+                            example: "Financial Planning"
+                          ownerId:
+                            type: string
+                            example: user_789
+                          workspaceId:
+                            type: string
+                            example: workspace_101
+                          itemCount:
+                            type: integer
+                            example: 3
+                          createdAt:
+                            type: string
+                            format: date-time
+                            example: "2025-01-15T10:30:00Z"
+                          updatedAt:
+                            type: string
+                            format: date-time
+                            example: "2025-01-15T10:30:00Z"
+                          items:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                id:
+                                  type: string
+                                  example: item_1
+                                itemType:
+                                  type: string
+                                  enum: [PERSONA, CONVERSATION, FOLDER]
+                                  example: PERSONA
+                                itemId:
+                                  type: string
+                                  example: persona_123
+                                order:
+                                  type: integer
+                                  example: 1
+                                addedAt:
+                                  type: string
+                                  format: date-time
+                                  example: "2025-01-15T10:31:00Z"
+              example:
+                status: success
+                message: Folder retrieved successfully
+                data:
+                  folder:
+                    id: folder_123
+                    name: "Financial Planning"
+                    ownerId: user_789
+                    workspaceId: workspace_101
+                    itemCount: 3
+                    createdAt: "2025-01-15T10:30:00Z"
+                    updatedAt: "2025-01-15T10:30:00Z"
+                    items:
+                      - id: item_1
+                        itemType: PERSONA
+                        itemId: persona_123
+                        order: 1
+                        addedAt: "2025-01-15T10:31:00Z"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Folder not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    put:
+      summary: Update folder name
+      tags: [Folder]
+      description: |
+        **RBAC:** Any authenticated user can access this endpoint.
+        Updates the name of a folder.
+        Users can only update folders they own.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: The folder ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  example: "Updated Folder Name"
+                  description: The new folder name
+            example:
+              name: "Updated Folder Name"
+      responses:
+        "200":
+          description: Folder updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Folder updated successfully
+                  data:
+                    type: object
+                    properties:
+                      folder:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                            example: folder_123
+                          name:
+                            type: string
+                            example: "Updated Folder Name"
+                          ownerId:
+                            type: string
+                            example: user_789
+                          workspaceId:
+                            type: string
+                            example: workspace_101
+                          itemCount:
+                            type: integer
+                            example: 3
+                          createdAt:
+                            type: string
+                            format: date-time
+                            example: "2025-01-15T10:30:00Z"
+                          updatedAt:
+                            type: string
+                            format: date-time
+                            example: "2025-01-15T10:35:00Z"
+              example:
+                status: success
+                message: Folder updated successfully
+                data:
+                  folder:
+                    id: folder_123
+                    name: "Updated Folder Name"
+                    ownerId: user_789
+                    workspaceId: workspace_101
+                    itemCount: 3
+                    createdAt: "2025-01-15T10:30:00Z"
+                    updatedAt: "2025-01-15T10:35:00Z"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Folder not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Folder with this name already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    delete:
+      summary: Delete folder
+      tags: [Folder]
+      description: |
+        **RBAC:** Any authenticated user can access this endpoint.
+        Deletes a folder and all its items.
+        Users can only delete folders they own.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: The folder ID
+      responses:
+        "200":
+          description: Folder deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Folder deleted successfully
+              example:
+                status: success
+                message: Folder deleted successfully
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Folder not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/folders/{id}/items:
+    post:
+      summary: Add item to folder
+      tags: [Folder]
+      description: |
+        **RBAC:** Any authenticated user can access this endpoint.
+        Adds a persona, conversation, or sub-folder to a folder.
+        Users can only add items to folders they own.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: The folder ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - itemType
+                - itemId
+              properties:
+                itemType:
+                  type: string
+                  enum: [PERSONA, CONVERSATION, FOLDER]
+                  example: PERSONA
+                  description: The type of item to add
+                itemId:
+                  type: string
+                  example: persona_123
+                  description: The ID of the item to add
+            example:
+              itemType: PERSONA
+              itemId: persona_123
+      responses:
+        "201":
+          description: Item added to folder successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Item added to folder successfully
+                  data:
+                    type: object
+                    properties:
+                      folderItem:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                            example: item_1
+                          folderId:
+                            type: string
+                            example: folder_123
+                          itemType:
+                            type: string
+                            example: PERSONA
+                          itemId:
+                            type: string
+                            example: persona_123
+                          order:
+                            type: integer
+                            example: 1
+                          addedAt:
+                            type: string
+                            format: date-time
+                            example: "2025-01-15T10:31:00Z"
+              example:
+                status: success
+                message: Item added to folder successfully
+                data:
+                  folderItem:
+                    id: item_1
+                    folderId: folder_123
+                    itemType: PERSONA
+                    itemId: persona_123
+                    order: 1
+                    addedAt: "2025-01-15T10:31:00Z"
+        "400":
+          description: Invalid input or item not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Folder not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Item already exists in folder
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    delete:
+      summary: Remove item from folder
+      tags: [Folder]
+      description: |
+        **RBAC:** Any authenticated user can access this endpoint.
+        Removes an item from a folder.
+        Users can only remove items from folders they own.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: The folder ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - itemType
+                - itemId
+              properties:
+                itemType:
+                  type: string
+                  enum: [PERSONA, CONVERSATION, FOLDER]
+                  example: PERSONA
+                  description: The type of item to remove
+                itemId:
+                  type: string
+                  example: persona_123
+                  description: The ID of the item to remove
+            example:
+              itemType: PERSONA
+              itemId: persona_123
+      responses:
+        "200":
+          description: Item removed from folder successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Item removed from folder successfully
+              example:
+                status: success
+                message: Item removed from folder successfully
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Folder not found or item not found in folder
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/folders/{id}/reorder:
+    put:
+      summary: Reorder items in folder
+      tags: [Folder]
+      description: |
+        **RBAC:** Any authenticated user can access this endpoint.
+        Reorders items within a folder.
+        Users can only reorder items in folders they own.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: The folder ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - itemOrders
+              properties:
+                itemOrders:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                      - itemId
+                      - order
+                    properties:
+                      itemId:
+                        type: string
+                        example: persona_123
+                        description: The item ID
+                      order:
+                        type: integer
+                        example: 1
+                        description: The new order position
+                  description: Array of items with their new order positions
+            example:
+              itemOrders:
+                - itemId: persona_123
+                  order: 1
+                - itemId: conversation_456
+                  order: 2
+      responses:
+        "200":
+          description: Items reordered successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Items reordered successfully
+              example:
+                status: success
+                message: Items reordered successfully
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Folder not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ===================================
+  # SHAREABLE LINK ENDPOINTS
+  # ===================================
+
+  /api/shareable-links:
+    post:
+      summary: Create shareable link
+      tags: [ShareableLink]
+      description: |
+        **RBAC:** Any authenticated user can access this endpoint.
+        Creates a shareable link for a conversation.
+        Users can only create links for conversations they own.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - conversationId
+              properties:
+                conversationId:
+                  type: string
+                  example: conversation_456
+                  description: The conversation ID to create a link for
+            example:
+              conversationId: conversation_456
+      responses:
+        "201":
+          description: Shareable link created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Shareable link created successfully
+                  data:
+                    type: object
+                    properties:
+                      shareableLink:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                            example: link_123
+                          conversationId:
+                            type: string
+                            example: conversation_456
+                          token:
+                            type: string
+                            example: a1b2c3d4e5f678901234567890123456
+                          createdBy:
+                            type: string
+                            example: user_789
+                          workspaceId:
+                            type: string
+                            example: workspace_101
+                          createdAt:
+                            type: string
+                            format: date-time
+                            example: "2025-01-15T10:30:00Z"
+                          conversation:
+                            type: object
+                            properties:
+                              id:
+                                type: string
+                                example: conversation_456
+                              isPublic:
+                                type: boolean
+                                example: true
+                              messageCount:
+                                type: integer
+                                example: 10
+                              persona:
+                                type: object
+                                properties:
+                                  id:
+                                    type: string
+                                    example: persona_123
+                                  name:
+                                    type: string
+                                    example: Chief Financial Officer
+                                  description:
+                                    type: string
+                                    example: Expert in financial planning
+                                  persona_id:
+                                    type: string
+                                    example: Chief-Financial-Officer
+              example:
+                status: success
+                message: Shareable link created successfully
+                data:
+                  shareableLink:
+                    id: link_123
+                    conversationId: conversation_456
+                    token: a1b2c3d4e5f678901234567890123456
+                    createdBy: user_789
+                    workspaceId: workspace_101
+                    createdAt: "2025-01-15T10:30:00Z"
+                    conversation:
+                      id: conversation_456
+                      isPublic: true
+                      messageCount: 10
+                      persona:
+                        id: persona_123
+                        name: Chief Financial Officer
+                        description: Expert in financial planning
+                        persona_id: Chief-Financial-Officer
+        "400":
+          description: Invalid input or conversation not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Shareable link already exists for this conversation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    get:
+      summary: Get user's shareable links
+      tags: [ShareableLink]
+      description: |
+        **RBAC:** Any authenticated user can access this endpoint.
+        Returns a list of the user's shareable links.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Shareable links retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Shareable links retrieved successfully
+                  data:
+                    type: object
+                    properties:
+                      shareableLinks:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              example: link_123
+                            conversationId:
+                              type: string
+                              example: conversation_456
+                            token:
+                              type: string
+                              example: a1b2c3d4e5f678901234567890123456
+                            createdAt:
+                              type: string
+                              format: date-time
+                              example: "2025-01-15T10:30:00Z"
+                            conversation:
+                              type: object
+                              properties:
+                                id:
+                                  type: string
+                                  example: conversation_456
+                                isPublic:
+                                  type: boolean
+                                  example: true
+                                messageCount:
+                                  type: integer
+                                  example: 10
+                                persona:
+                                  type: object
+                                  properties:
+                                    id:
+                                      type: string
+                                      example: persona_123
+                                    name:
+                                      type: string
+                                      example: Chief Financial Officer
+                                    description:
+                                      type: string
+                                      example: Expert in financial planning
+                                    persona_id:
+                                      type: string
+                                      example: Chief-Financial-Officer
+              example:
+                status: success
+                message: Shareable links retrieved successfully
+                data:
+                  shareableLinks:
+                    - id: link_123
+                      conversationId: conversation_456
+                      token: a1b2c3d4e5f678901234567890123456
+                      createdAt: "2025-01-15T10:30:00Z"
+                      conversation:
+                        id: conversation_456
+                        isPublic: true
+                        messageCount: 10
+                        persona:
+                          id: persona_123
+                          name: Chief Financial Officer
+                          description: Expert in financial planning
+                          persona_id: Chief-Financial-Officer
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/shareable-links/stats:
+    get:
+      summary: Get shareable link statistics
+      tags: [ShareableLink]
+      description: |
+        **RBAC:** Any authenticated user can access this endpoint.
+        Returns statistics about the user's shareable links.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Shareable link statistics retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Shareable link statistics retrieved successfully
+                  data:
+                    type: object
+                    properties:
+                      stats:
+                        type: object
+                        properties:
+                          totalLinks:
+                            type: integer
+                            example: 5
+              example:
+                status: success
+                message: Shareable link statistics retrieved successfully
+                data:
+                  stats:
+                    totalLinks: 5
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/shareable-links/{id}:
+    get:
+      summary: Get shareable link by ID
+      tags: [ShareableLink]
+      description: |
+        **RBAC:** Any authenticated user can access this endpoint.
+        Returns details for a specific shareable link.
+        Users can only access their own shareable links.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: The shareable link ID
+      responses:
+        "200":
+          description: Shareable link details retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Shareable link retrieved successfully
+                  data:
+                    type: object
+                    properties:
+                      shareableLink:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                            example: link_123
+                          conversationId:
+                            type: string
+                            example: conversation_456
+                          token:
+                            type: string
+                            example: a1b2c3d4e5f678901234567890123456
+                          createdBy:
+                            type: string
+                            example: user_789
+                          workspaceId:
+                            type: string
+                            example: workspace_101
+                          createdAt:
+                            type: string
+                            format: date-time
+                            example: "2025-01-15T10:30:00Z"
+                          conversation:
+                            type: object
+                            properties:
+                              id:
+                                type: string
+                                example: conversation_456
+                              isPublic:
+                                type: boolean
+                                example: true
+                              messageCount:
+                                type: integer
+                                example: 10
+                              persona:
+                                type: object
+                                properties:
+                                  id:
+                                    type: string
+                                    example: persona_123
+                                  name:
+                                    type: string
+                                    example: Chief Financial Officer
+                                  description:
+                                    type: string
+                                    example: Expert in financial planning
+                                  persona_id:
+                                    type: string
+                                    example: Chief-Financial-Officer
+              example:
+                status: success
+                message: Shareable link retrieved successfully
+                data:
+                  shareableLink:
+                    id: link_123
+                    conversationId: conversation_456
+                    token: a1b2c3d4e5f678901234567890123456
+                    createdBy: user_789
+                    workspaceId: workspace_101
+                    createdAt: "2025-01-15T10:30:00Z"
+                    conversation:
+                      id: conversation_456
+                      isPublic: true
+                      messageCount: 10
+                      persona:
+                        id: persona_123
+                        name: Chief Financial Officer
+                        description: Expert in financial planning
+                        persona_id: Chief-Financial-Officer
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Shareable link not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    delete:
+      summary: Delete shareable link
+      tags: [ShareableLink]
+      description: |
+        **RBAC:** Any authenticated user can access this endpoint.
+        Deletes a shareable link.
+        Users can only delete their own shareable links.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: The shareable link ID
+      responses:
+        "200":
+          description: Shareable link deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Shareable link deleted successfully
+              example:
+                status: success
+                message: Shareable link deleted successfully
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Shareable link not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/shareable-links/share/{token}:
+    get:
+      summary: Access conversation via shareable link (Public)
+      tags: [ShareableLink]
+      description: |
+        **Public endpoint:** No authentication required.
+        Returns the conversation and its messages via a shareable link token.
+        Only public conversations can be accessed via shareable links.
+      parameters:
+        - in: path
+          name: token
+          required: true
+          schema:
+            type: string
+          description: The shareable link token
+      responses:
+        "200":
+          description: Conversation accessed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Conversation retrieved successfully
+                  data:
+                    type: object
+                    properties:
+                      shareableLink:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                            example: link_123
+                          conversationId:
+                            type: string
+                            example: conversation_456
+                          token:
+                            type: string
+                            example: a1b2c3d4e5f678901234567890123456
+                          createdAt:
+                            type: string
+                            format: date-time
+                            example: "2025-01-15T10:30:00Z"
+                          conversation:
+                            type: object
+                            properties:
+                              id:
+                                type: string
+                                example: conversation_456
+                              isPublic:
+                                type: boolean
+                                example: true
+                              messageCount:
+                                type: integer
+                                example: 10
+                              createdAt:
+                                type: string
+                                format: date-time
+                                example: "2025-01-15T10:30:00Z"
+                              updatedAt:
+                                type: string
+                                format: date-time
+                                example: "2025-01-15T10:35:00Z"
+                              persona:
+                                type: object
+                                properties:
+                                  id:
+                                    type: string
+                                    example: persona_123
+                                  name:
+                                    type: string
+                                    example: Chief Financial Officer
+                                  description:
+                                    type: string
+                                    example: Expert in financial planning
+                                  persona_id:
+                                    type: string
+                                    example: Chief-Financial-Officer
+                                  traits:
+                                    type: object
+                                    example:
+                                      tone: formal
+                                      expertise: ["finance", "accounting"]
+                                      domains: ["budgeting", "investment"]
+                              messages:
+                                type: array
+                                items:
+                                  type: object
+                                  properties:
+                                    id:
+                                      type: string
+                                      example: message_789
+                                    content:
+                                      type: string
+                                      example: "Hello, I need help with budgeting"
+                                    isFromUser:
+                                      type: boolean
+                                      example: true
+                                    createdAt:
+                                      type: string
+                                      format: date-time
+                                      example: "2025-01-15T10:30:00Z"
+                                    reactions:
+                                      type: array
+                                      items:
+                                        type: object
+                                        properties:
+                                          id:
+                                            type: string
+                                            example: reaction_123
+                                          type:
+                                            type: string
+                                            example: LIKE
+                                          createdAt:
+                                            type: string
+                                            format: date-time
+                                            example: "2025-01-15T10:32:00Z"
+              example:
+                status: success
+                message: Conversation retrieved successfully
+                data:
+                  shareableLink:
+                    id: link_123
+                    conversationId: conversation_456
+                    token: a1b2c3d4e5f678901234567890123456
+                    createdAt: "2025-01-15T10:30:00Z"
+                    conversation:
+                      id: conversation_456
+                      isPublic: true
+                      messageCount: 10
+                      createdAt: "2025-01-15T10:30:00Z"
+                      updatedAt: "2025-01-15T10:35:00Z"
+                      persona:
+                        id: persona_123
+                        name: Chief Financial Officer
+                        description: Expert in financial planning
+                        persona_id: Chief-Financial-Officer
+                        traits:
+                          tone: formal
+                          expertise: ["finance", "accounting"]
+                          domains: ["budgeting", "investment"]
+                      messages:
+                        - id: message_789
+                          content: "Hello, I need help with budgeting"
+                          isFromUser: true
+                          createdAt: "2025-01-15T10:30:00Z"
+                          reactions: []
+                        - id: message_790
+                          content: "I'd be happy to help you with budgeting!"
+                          isFromUser: false
+                          createdAt: "2025-01-15T10:31:00Z"
+                          reactions:
+                            - id: reaction_123
+                              type: LIKE
+                              createdAt: "2025-01-15T10:32:00Z"
+        "400":
+          description: Token is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: This conversation is not publicly accessible
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Shareable link not found or invalid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  components:
+  tags:
+    - name: Auth
+      description: Authentication and authorization endpoints
+    - name: OAuth
+      description: OAuth authentication endpoints (Google)
+    - name: User
+      description: User profile and account management
+    - name: Admin
+      description: Administrative operations (workspace-scoped)
+    - name: Persona
+      description: AI persona management
+    - name: Conversation
+      description: User-persona conversation management
+    - name: Message
+      description: Message handling within conversations
+    - name: Folder
+      description: Folder organization system
+    - name: ShareableLink
+      description: Shareable link management
+    - name: System
+      description: System health and monitoring endpoints
   parameters:
     WorkspaceIdHeader:
       name: x-workspace-id

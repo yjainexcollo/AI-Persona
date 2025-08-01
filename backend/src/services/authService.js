@@ -1,20 +1,114 @@
+/**
+ * AuthService - Enhanced authentication and user management
+ * Includes account lifecycle, security hardening, and audit logging
+ */
+
 const { PrismaClient } = require("@prisma/client");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
 const logger = require("../utils/logger");
 const ApiError = require("../utils/apiError");
-const {
-  signToken,
-  signRefreshToken,
-  verifyRefreshToken,
-} = require("../utils/jwt");
+const config = require("../config");
 const emailService = require("./emailService");
+const breachCheckService = require("./breachCheckService");
 
 const prisma = new PrismaClient();
 
-// Helper function to get or create default workspace
+// Password strength validation using zxcvbn-like logic
+function validatePasswordStrength(password) {
+  const minLength = 8;
+  const hasUpperCase = /[A-Z]/.test(password);
+  const hasLowerCase = /[a-z]/.test(password);
+  const hasNumbers = /\d/.test(password);
+  const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(password);
+
+  let score = 0;
+  if (password.length >= minLength) score++;
+  if (hasUpperCase) score++;
+  if (hasLowerCase) score++;
+  if (hasNumbers) score++;
+  if (hasSpecialChar) score++;
+
+  // Additional complexity checks
+  if (password.length >= 12) score++;
+  if (/(.)\1{2,}/.test(password)) score--; // Deduct for repeated characters
+  if (/^(.)\1+$/.test(password)) score -= 2; // Deduct for all same characters
+
+  return {
+    isValid: score >= 3,
+    score: score,
+    feedback:
+      score < 3
+        ? "Password too weak. Include uppercase, lowercase, numbers, and special characters."
+        : null,
+  };
+}
+
+// Check if account is locked
+function isAccountLocked(user) {
+  if (!user.lockedUntil) return false;
+  return new Date() < user.lockedUntil;
+}
+
+// Lock account after failed attempts
+async function lockAccount(userId, lockoutMinutes = 15) {
+  const lockedUntil = new Date(Date.now() + lockoutMinutes * 60 * 1000);
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      lockedUntil,
+      failedLoginCount: { increment: 1 },
+    },
+  });
+
+  logger.warn(`Account locked for user ${userId} until ${lockedUntil}`);
+}
+
+// Unlock account
+async function unlockAccount(userId) {
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      lockedUntil: null,
+      failedLoginCount: 0,
+    },
+  });
+
+  logger.info(`Account unlocked for user ${userId}`);
+}
+
+// Create audit event
+async function createAuditEvent(
+  userId,
+  eventType,
+  eventData = null,
+  ipAddress = null,
+  userAgent = null,
+  traceId = null
+) {
+  try {
+    // Only create audit event if userId is provided
+    if (userId) {
+      await prisma.auditEvent.create({
+        data: {
+          userId,
+          eventType,
+          eventData: eventData ? JSON.stringify(eventData) : null,
+          ipAddress,
+          userAgent,
+          traceId,
+        },
+      });
+    }
+  } catch (error) {
+    logger.error(`Failed to create audit event: ${error.message}`);
+  }
+}
+
+// Get or create default workspace
 async function getOrCreateDefaultWorkspace(email) {
-  const domain = email.split("@")[1] || "default.local";
+  const domain = email.split("@")[1];
 
   let workspace = await prisma.workspace.findUnique({
     where: { domain },
@@ -23,299 +117,677 @@ async function getOrCreateDefaultWorkspace(email) {
   if (!workspace) {
     workspace = await prisma.workspace.create({
       data: {
-        name: domain,
+        name: `${domain} Workspace`,
         domain,
       },
     });
-    logger.info(`Created new workspace: ${workspace.id} (${workspace.domain})`);
+    logger.info(`Created new workspace: ${workspace.id} for domain: ${domain}`);
   }
 
   return workspace;
 }
 
-// Register a new user
-async function register({ email, password, name }) {
-  // Check if user already exists
+// Enhanced registration with account lifecycle
+async function register(
+  { email, password, name },
+  ipAddress = null,
+  userAgent = null,
+  traceId = null
+) {
+  // Validate password strength
+  const passwordValidation = validatePasswordStrength(password);
+  if (!passwordValidation.isValid) {
+    throw new ApiError(400, passwordValidation.feedback);
+  }
+
+  // Check password against breached database
+  const breachCheck = await breachCheckService.validatePasswordWithBreachCheck(
+    password
+  );
+  if (!breachCheck.isValid) {
+    throw new ApiError(400, breachCheck.reason);
+  }
+
+  // Check if user exists
   const existingUser = await prisma.user.findUnique({
     where: { email },
     include: { workspace: true },
   });
 
   if (existingUser) {
-    // If user exists but is deactivated, reactivate them
-    if (!existingUser.isActive) {
-      logger.info(`Reactivating deactivated user: ${existingUser.email}`);
+    if (existingUser.status === "PENDING_DELETION") {
+      // Reactivate account
+      const passwordHash = await bcrypt.hash(password, config.bcryptSaltRounds);
+      const workspace = await getOrCreateDefaultWorkspace(email);
 
-      // Update the deactivated user with new password and name
-      const updatedUser = await prisma.user.update({
+      const user = await prisma.user.update({
         where: { id: existingUser.id },
         data: {
-          passwordHash: await bcrypt.hash(password, 12),
-          name: name || existingUser.name,
-          isActive: true,
-          emailVerified: false, // Require re-verification
+          name,
+          passwordHash,
+          status: "PENDING_VERIFY",
+          emailVerified: false,
+          verifiedAt: null,
+          failedLoginCount: 0,
+          lockedUntil: null,
+          workspaceId: workspace.id,
+          role: "MEMBER", // Reactivated users start as members
         },
-        select: {
-          id: true,
-          email: true,
-          name: true,
-          emailVerified: true,
-          isActive: true,
-          role: true,
-          workspaceId: true,
-          createdAt: true,
-          updatedAt: true,
-        },
+        include: { workspace: true },
       });
 
       // Send verification email
-      try {
-        const token = await emailService.createEmailVerification(
-          updatedUser.id
-        );
-        await emailService.sendVerificationEmail(updatedUser, token);
-        logger.info(`Verification email sent to ${updatedUser.email}`);
-      } catch (err) {
-        logger.error(
-          `Failed to send verification email to ${updatedUser.email}: ${err.message}`
-        );
-      }
+      const token = await emailService.createEmailVerification(user.id);
+      await emailService.sendVerificationEmail(user, token);
+
+      // Audit event
+      await createAuditEvent(
+        user.id,
+        "REACTIVATE_ACCOUNT",
+        { email },
+        ipAddress,
+        userAgent,
+        traceId
+      );
 
       return {
-        status: "success",
-        message: "Account reactivated. Verification email sent.",
-        data: {
-          user: updatedUser,
-          workspace: {
-            id: updatedUser.workspaceId,
-            domain: existingUser.workspace?.domain || "unknown",
-          },
-        },
+        user,
+        workspace: user.workspace,
+        isNewUser: false,
       };
+    } else if (existingUser.status === "DEACTIVATED") {
+      throw new ApiError(
+        409,
+        "Account is deactivated. Contact support to reactivate."
+      );
+    } else {
+      throw new ApiError(409, "Email already registered");
     }
-
-    // If user exists and is active, throw error
-    throw new ApiError(409, "Email already registered");
   }
 
-  // Hash password
-  const hashedPassword = await bcrypt.hash(password, 12);
-
-  // Get or create workspace
+  // Create new user
+  const passwordHash = await bcrypt.hash(password, config.bcryptSaltRounds);
   const workspace = await getOrCreateDefaultWorkspace(email);
 
-  // Check if this is the first user in the workspace
-  const userCount = await prisma.user.count({
+  // Check if this is the first user in workspace (make them ADMIN)
+  const workspaceUserCount = await prisma.user.count({
     where: { workspaceId: workspace.id },
   });
-  const role = userCount === 0 ? "ADMIN" : "MEMBER";
 
-  // Create user
   const user = await prisma.user.create({
     data: {
       email,
-      passwordHash: hashedPassword,
       name,
+      passwordHash,
+      status: "PENDING_VERIFY",
+      role: workspaceUserCount === 0 ? "ADMIN" : "MEMBER",
       workspaceId: workspace.id,
-      role,
     },
-    select: {
-      id: true,
-      email: true,
-      name: true,
-      emailVerified: true,
-      isActive: true,
-      role: true,
-      workspaceId: true,
-      createdAt: true,
-      updatedAt: true,
-    },
+    include: { workspace: true },
   });
 
-  logger.info(
-    `User registered: ${user.id} (${user.email}) in workspace ${workspace.id} as ${role}`
+  // Send verification email
+  const token = await emailService.createEmailVerification(user.id);
+  await emailService.sendVerificationEmail(user, token);
+
+  // Audit event
+  await createAuditEvent(
+    user.id,
+    "REGISTER",
+    { email },
+    ipAddress,
+    userAgent,
+    traceId
   );
 
-  // Send verification email
-  try {
-    const token = await emailService.createEmailVerification(user.id);
-    await emailService.sendVerificationEmail(user, token);
-    logger.info(`Verification email sent to ${user.email}`);
-  } catch (err) {
-    logger.error(
-      `Failed to send verification email to ${user.email}: ${err.message}`
-    );
-    // Don't throw error here - user is created successfully, just email failed
-  }
-
+  logger.info(`New user registered: ${user.id} (${email})`);
   return {
-    status: "success",
-    message: "Registration successful. Verification email sent.",
-    data: {
-      user,
-      workspace: {
-        id: workspace.id,
-        domain: workspace.domain,
-      },
-    },
+    user,
+    workspace: user.workspace,
+    isNewUser: true,
   };
 }
 
-// Login user
-async function login({ email, password }) {
-  // Find user
+// Enhanced login with security features
+async function login(
+  { email, password },
+  ipAddress = null,
+  userAgent = null,
+  traceId = null
+) {
   const user = await prisma.user.findUnique({
     where: { email },
-    include: {
-      workspace: true,
-    },
+    include: { workspace: true },
   });
 
   if (!user) {
+    await createAuditEvent(
+      null,
+      "LOGIN_FAILED",
+      { email, reason: "User not found" },
+      ipAddress,
+      userAgent,
+      traceId
+    );
     throw new ApiError(401, "Invalid email or password");
   }
 
-  // Check if user is active
-  if (!user.isActive) {
+  // Check account status
+  if (user.status === "PENDING_VERIFY") {
+    await createAuditEvent(
+      user.id,
+      "LOGIN_FAILED",
+      { reason: "Email not verified" },
+      ipAddress,
+      userAgent,
+      traceId
+    );
+    throw new ApiError(403, "Please verify your email before logging in");
+  }
+
+  if (user.status === "DEACTIVATED") {
+    await createAuditEvent(
+      user.id,
+      "LOGIN_FAILED",
+      { reason: "Account deactivated" },
+      ipAddress,
+      userAgent,
+      traceId
+    );
     throw new ApiError(403, "Account is deactivated");
   }
 
-  // Check if email is verified
-  if (!user.emailVerified) {
-    throw new ApiError(403, "Email not verified. Please check your inbox.");
+  if (user.status === "PENDING_DELETION") {
+    await createAuditEvent(
+      user.id,
+      "LOGIN_FAILED",
+      { reason: "Account pending deletion" },
+      ipAddress,
+      userAgent,
+      traceId
+    );
+    throw new ApiError(403, "Account is pending deletion");
+  }
+
+  // Check if account is locked
+  if (isAccountLocked(user)) {
+    await createAuditEvent(
+      user.id,
+      "LOGIN_FAILED",
+      { reason: "Account locked" },
+      ipAddress,
+      userAgent,
+      traceId
+    );
+    throw new ApiError(
+      423,
+      "Account is temporarily locked due to too many failed attempts"
+    );
   }
 
   // Verify password
   const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
   if (!isPasswordValid) {
+    await lockAccount(user.id);
+    await createAuditEvent(
+      user.id,
+      "LOGIN_FAILED",
+      { reason: "Invalid password" },
+      ipAddress,
+      userAgent,
+      traceId
+    );
     throw new ApiError(401, "Invalid email or password");
   }
 
+  // Reset failed login count and unlock account
+  await unlockAccount(user.id);
+
+  // Update last login
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { lastLoginAt: new Date() },
+  });
+
   // Generate tokens
-  const accessToken = signToken({
-    userId: user.id,
-    workspaceId: user.workspaceId,
-    role: user.role,
-  });
-  const refreshToken = signRefreshToken({
-    userId: user.id,
-    workspaceId: user.workspaceId,
-    role: user.role,
-  });
+  const accessToken = jwt.sign(
+    {
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+      workspaceId: user.workspaceId,
+    },
+    config.jwtSecret,
+    { expiresIn: config.jwtExpiresIn }
+  );
+
+  const refreshToken = crypto.randomBytes(32).toString("hex");
+  const deviceId = crypto.randomBytes(16).toString("hex");
 
   // Create session
   await prisma.session.create({
     data: {
       userId: user.id,
       refreshToken,
-      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+      userAgent,
+      ipAddress,
+      deviceId,
+    },
+  });
+
+  // Audit event
+  await createAuditEvent(
+    user.id,
+    "LOGIN_SUCCESS",
+    { deviceId },
+    ipAddress,
+    userAgent,
+    traceId
+  );
+
+  logger.info(`User logged in: ${user.id} (${email})`);
+  return {
+    user,
+    workspaceId: user.workspaceId,
+    workspaceName: user.workspace.name,
+    accessToken,
+    refreshToken,
+  };
+}
+
+// Enhanced token refresh with rotation
+async function refreshTokens(
+  { refreshToken },
+  ipAddress = null,
+  userAgent = null,
+  traceId = null
+) {
+  const session = await prisma.session.findUnique({
+    where: { refreshToken },
+    include: { user: true },
+  });
+
+  if (!session || !session.isActive || session.expiresAt < new Date()) {
+    throw new ApiError(401, "Invalid or expired refresh token");
+  }
+
+  // Check user status
+  if (session.user.status !== "ACTIVE") {
+    await prisma.session.update({
+      where: { id: session.id },
+      data: { isActive: false },
+    });
+    throw new ApiError(401, "Account is not active");
+  }
+
+  // Generate new tokens
+  const newAccessToken = jwt.sign(
+    {
+      userId: session.user.id,
+      email: session.user.email,
+      role: session.user.role,
+      workspaceId: session.user.workspaceId,
+    },
+    config.jwtSecret,
+    { expiresIn: config.jwtExpiresIn }
+  );
+
+  const newRefreshToken = crypto.randomBytes(32).toString("hex");
+
+  // Revoke old session and create new one
+  await prisma.session.update({
+    where: { id: session.id },
+    data: { isActive: false },
+  });
+
+  await prisma.session.create({
+    data: {
+      userId: session.user.id,
+      refreshToken: newRefreshToken,
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      userAgent,
+      ipAddress,
+      deviceId: session.deviceId,
+    },
+  });
+
+  // Audit event
+  await createAuditEvent(
+    session.user.id,
+    "REFRESH_TOKEN",
+    { deviceId: session.deviceId },
+    ipAddress,
+    userAgent,
+    traceId
+  );
+
+  return {
+    accessToken: newAccessToken,
+    refreshToken: newRefreshToken,
+  };
+}
+
+// Enhanced logout
+async function logout(
+  { refreshToken },
+  ipAddress = null,
+  userAgent = null,
+  traceId = null
+) {
+  const session = await prisma.session.findUnique({
+    where: { refreshToken },
+    include: { user: true },
+  });
+
+  if (session) {
+    await prisma.session.update({
+      where: { id: session.id },
+      data: { isActive: false },
+    });
+
+    await createAuditEvent(
+      session.user.id,
+      "LOGOUT",
+      { deviceId: session.deviceId },
+      ipAddress,
+      userAgent,
+      traceId
+    );
+    logger.info(`User logged out: ${session.user.id}`);
+  }
+
+  return {
+    status: "success",
+    message: "Logout successful",
+  };
+}
+
+// Get user sessions
+async function getUserSessions(userId) {
+  return await prisma.session.findMany({
+    where: { userId, isActive: true },
+    orderBy: { lastUsedAt: "desc" },
+  });
+}
+
+// Revoke specific session
+async function revokeSession(
+  userId,
+  sessionId,
+  ipAddress = null,
+  userAgent = null,
+  traceId = null
+) {
+  const session = await prisma.session.findFirst({
+    where: { id: sessionId, userId },
+  });
+
+  if (!session) {
+    throw new ApiError(404, "Session not found");
+  }
+
+  await prisma.session.update({
+    where: { id: sessionId },
+    data: { isActive: false },
+  });
+
+  await createAuditEvent(
+    userId,
+    "SESSION_REVOKED",
+    { sessionId },
+    ipAddress,
+    userAgent,
+    traceId
+  );
+
+  return { success: true };
+}
+
+// Enhanced email verification
+async function verifyEmail(
+  token,
+  ipAddress = null,
+  userAgent = null,
+  traceId = null
+) {
+  const record = await prisma.emailVerification.findUnique({
+    where: { token },
+    include: { user: true },
+  });
+
+  if (!record || record.expiresAt < new Date()) {
+    throw new ApiError(400, "Invalid or expired verification token");
+  }
+
+  // Update user status
+  await prisma.user.update({
+    where: { id: record.userId },
+    data: {
+      emailVerified: true,
+      status: "ACTIVE",
+      verifiedAt: new Date(),
+    },
+  });
+
+  // Delete verification token
+  await prisma.emailVerification.delete({ where: { token } });
+
+  // Audit event
+  await createAuditEvent(
+    record.userId,
+    "VERIFY_EMAIL",
+    null,
+    ipAddress,
+    userAgent,
+    traceId
+  );
+
+  logger.info(`User verified email: ${record.userId}`);
+  return record.user;
+}
+
+// Enhanced password reset request
+async function requestPasswordReset(
+  { email },
+  ipAddress = null,
+  userAgent = null,
+  traceId = null
+) {
+  const user = await prisma.user.findUnique({ where: { email } });
+
+  if (user) {
+    const token = await emailService.createPasswordResetToken(user.id);
+    await emailService.sendPasswordResetEmail(user, token);
+
+    await createAuditEvent(
+      user.id,
+      "REQUEST_PASSWORD_RESET",
+      null,
+      ipAddress,
+      userAgent,
+      traceId
+    );
+  }
+
+  // Always return success to prevent email enumeration
+  return {
+    status: "success",
+    message:
+      "If an account with that email exists, a password reset link has been sent.",
+  };
+}
+
+// Enhanced password reset
+async function resetPassword(
+  { token, newPassword },
+  ipAddress = null,
+  userAgent = null,
+  traceId = null
+) {
+  // Validate password strength
+  const passwordValidation = validatePasswordStrength(newPassword);
+  if (!passwordValidation.isValid) {
+    throw new ApiError(400, passwordValidation.feedback);
+  }
+
+  const record = await prisma.passwordResetToken.findUnique({
+    where: { token },
+    include: { user: true },
+  });
+
+  if (!record || record.expiresAt < new Date() || record.used) {
+    throw new ApiError(400, "Invalid or expired reset token");
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, config.bcryptSaltRounds);
+
+  // Update password and mark token as used
+  await prisma.user.update({
+    where: { id: record.userId },
+    data: { passwordHash },
+  });
+
+  await prisma.passwordResetToken.update({
+    where: { id: record.id },
+    data: { used: true, usedAt: new Date() },
+  });
+
+  // Revoke all existing sessions
+  await prisma.session.updateMany({
+    where: { userId: record.userId },
+    data: { isActive: false },
+  });
+
+  await createAuditEvent(
+    record.userId,
+    "RESET_PASSWORD",
+    null,
+    ipAddress,
+    userAgent,
+    traceId
+  );
+
+  logger.info(`Password reset for user: ${record.userId}`);
+  return { success: true };
+}
+
+// Deactivate account
+async function deactivateAccount(
+  userId,
+  ipAddress = null,
+  userAgent = null,
+  traceId = null
+) {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: { status: "DEACTIVATED" },
+  });
+
+  // Revoke all sessions
+  await prisma.session.updateMany({
+    where: { userId },
+    data: { isActive: false },
+  });
+
+  await createAuditEvent(
+    userId,
+    "DEACTIVATE_ACCOUNT",
+    null,
+    ipAddress,
+    userAgent,
+    traceId
+  );
+
+  logger.info(`Account deactivated: ${userId}`);
+  return { success: true };
+}
+
+// Request account deletion (GDPR)
+async function requestAccountDeletion(
+  userId,
+  ipAddress = null,
+  userAgent = null,
+  traceId = null
+) {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: { status: "PENDING_DELETION" },
+  });
+
+  // Revoke all sessions
+  await prisma.session.updateMany({
+    where: { userId },
+    data: { isActive: false },
+  });
+
+  await createAuditEvent(
+    userId,
+    "DEACTIVATE_ACCOUNT",
+    { reason: "GDPR deletion request" },
+    ipAddress,
+    userAgent,
+    traceId
+  );
+
+  logger.info(`Account deletion requested: ${userId}`);
+  return { success: true };
+}
+
+// Cleanup functions for cron jobs
+async function cleanupUnverifiedUsers(daysOld = 7) {
+  const cutoffDate = new Date(Date.now() - daysOld * 24 * 60 * 60 * 1000);
+
+  const result = await prisma.user.deleteMany({
+    where: {
+      status: "PENDING_VERIFY",
+      createdAt: { lt: cutoffDate },
     },
   });
 
   logger.info(
-    `User logged in: ${user.id} (${user.email}) in workspace ${user.workspaceId}`
+    `Cleaned up ${result.count} unverified users older than ${daysOld} days`
   );
+  return result.count;
+}
 
-  return {
-    status: "success",
-    message: "Login successful",
-    data: {
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        emailVerified: user.emailVerified,
-        isActive: user.isActive,
-        role: user.role,
-        workspaceId: user.workspaceId,
-      },
-      workspaceId: user.workspaceId,
-      workspaceName: user.workspace?.name || "Unknown Workspace",
-      accessToken,
-      refreshToken,
+async function cleanupPendingDeletionUsers(daysOld = 30) {
+  const cutoffDate = new Date(Date.now() - daysOld * 24 * 60 * 60 * 1000);
+
+  const result = await prisma.user.deleteMany({
+    where: {
+      status: "PENDING_DELETION",
+      createdAt: { lt: cutoffDate },
     },
-  };
+  });
+
+  logger.info(
+    `Cleaned up ${result.count} pending deletion users older than ${daysOld} days`
+  );
+  return result.count;
 }
 
-// Refresh tokens
-async function refreshTokens({ refreshToken }) {
-  try {
-    const payload = verifyRefreshToken(refreshToken);
-    const { userId, workspaceId, role } = payload;
+async function cleanupExpiredSessions() {
+  const result = await prisma.session.deleteMany({
+    where: {
+      expiresAt: { lt: new Date() },
+    },
+  });
 
-    // Find session
-    const session = await prisma.session.findUnique({
-      where: { refreshToken },
-      include: { user: true },
-    });
-
-    if (!session || !session.isActive) {
-      throw new ApiError(401, "Invalid refresh token");
-    }
-
-    if (session.expiresAt < new Date()) {
-      throw new ApiError(401, "Refresh token expired");
-    }
-
-    // Generate new tokens
-    const newAccessToken = signToken({ userId, workspaceId, role });
-    const newRefreshToken = signRefreshToken({ userId, workspaceId, role });
-
-    // Update session
-    await prisma.session.update({
-      where: { id: session.id },
-      data: {
-        refreshToken: newRefreshToken,
-        lastUsedAt: new Date(),
-      },
-    });
-
-    logger.info(
-      `Refresh token used for user: ${userId} in workspace ${workspaceId}`
-    );
-
-    return {
-      status: "success",
-      message: "Tokens refreshed",
-      data: {
-        accessToken: newAccessToken,
-        refreshToken: newRefreshToken,
-      },
-    };
-  } catch (error) {
-    throw new ApiError(401, "Invalid refresh token");
-  }
-}
-
-// Logout user
-async function logout({ refreshToken }) {
-  try {
-    // Find and deactivate the session
-    const session = await prisma.session.findUnique({
-      where: { refreshToken },
-    });
-
-    if (session) {
-      await prisma.session.update({
-        where: { id: session.id },
-        data: { isActive: false },
-      });
-
-      logger.info(`User logged out: ${session.userId}`);
-    }
-
-    return {
-      status: "success",
-      message: "Logout successful",
-    };
-  } catch (error) {
-    // Even if there's an error, we consider logout successful
-    logger.warn(`Logout error (non-critical): ${error.message}`);
-    return {
-      status: "success",
-      message: "Logout successful",
-    };
-  }
+  logger.info(`Cleaned up ${result.count} expired sessions`);
+  return result.count;
 }
 
 module.exports = {
@@ -323,4 +795,16 @@ module.exports = {
   login,
   refreshTokens,
   logout,
+  getUserSessions,
+  revokeSession,
+  verifyEmail,
+  requestPasswordReset,
+  resetPassword,
+  deactivateAccount,
+  requestAccountDeletion,
+  cleanupUnverifiedUsers,
+  cleanupPendingDeletionUsers,
+  cleanupExpiredSessions,
+  validatePasswordStrength,
+  createAuditEvent,
 };
