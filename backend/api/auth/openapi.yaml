@@ -1,0 +1,1053 @@
+openapi: 3.1.0
+info:
+  title: Auth & User-Management API
+  version: 1.0.0
+  contact:
+    name: AI-Persona Support
+    email: support@aipersona.com
+    url: https://aipersona.com/support
+  description: |
+    # Auth & User-Management Module
+
+    This module provides comprehensive authentication and user management functionality for the AI-Persona SaaS platform.
+
+    ## Features
+    - **Account Lifecycle**: Registration, verification, login, logout, deactivation, deletion
+    - **Security**: Password strength validation, HIBP breach detection, rate limiting, account lockout
+    - **OAuth Integration**: Google OAuth with automatic account creation
+    - **JWT Security**: RSA key rotation with JWKS endpoint and kid headers
+    - **Session Management**: Device tracking, session revocation, token rotation
+    - **Audit Logging**: Complete event trail with IP, user agent, and trace IDs
+    - **Email Verification**: 24-hour TTL verification tokens
+    - **Password Reset**: Secure password reset with token validation
+
+    ## Security
+    - Rate limiting on all critical endpoints
+    - Account lockout after 10 failed login attempts
+    - Password strength requirements (8+ chars, uppercase, lowercase, number, special char)
+    - HIBP breach detection for password security
+    - JWT token rotation and session management
+
+    ## Account Status Flow
+    `PENDING_VERIFY` → `ACTIVE` → `DEACTIVATED` → `PENDING_DELETION`
+
+    ## Multi-tenancy
+    All endpoints respect workspace isolation. Users are automatically assigned to workspaces based on email domain.
+
+servers:
+  - url: http://localhost:3000/api/auth
+    description: Local development server
+  - url: https://api.aipersona.com/api/auth
+    description: Production server
+
+tags:
+  - name: Authentication
+    description: Core authentication endpoints (register, login, logout, refresh)
+  - name: Email Verification
+    description: Email verification and resend functionality
+  - name: Password Management
+    description: Password reset and change functionality
+  - name: Session Management
+    description: User session management and revocation
+  - name: Account Management
+    description: Account deactivation and deletion
+  - name: OAuth
+    description: OAuth authentication endpoints
+  - name: System
+    description: Health checks and system endpoints
+  - name: Security
+    description: JWT key management and JWKS endpoints
+
+paths:
+  /register:
+    post:
+      operationId: registerUser
+      summary: Register a new user or reactivate deactivated account
+      tags: [Authentication]
+      description: |
+        Registers a new user or reactivates a deactivated account. After registration/reactivation, 
+        a verification email is sent to the provided email address.
+
+        **Security Features:**
+        - Password strength validation (minimum 8 characters, uppercase, lowercase, number, special character)
+        - HIBP (Have I Been Pwned) breach detection - rejects passwords found in data breaches
+        - Rate limiting (5 requests per hour per IP)
+
+        **Note:** The user must verify their email before they can log in.
+
+        **Reactivation:** If a user with the provided email exists but is deactivated, the account will be reactivated with the new password and name. The user will need to verify their email again.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+            examples:
+              newUser:
+                summary: New user registration
+                value:
+                  email: newuser@company.com
+                  password: StrongPassword!2025
+                  name: Alice Smith
+              reactivation:
+                summary: Account reactivation
+                value:
+                  email: existing@company.com
+                  password: NewPassword!2025
+                  name: John Doe
+      responses:
+        "201":
+          description: Registration successful. Verification email sent.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSuccessResponse"
+              example:
+                status: success
+                message: Registration successful. Verification email sent.
+                data:
+                  user:
+                    id: clxyz123abc
+                    email: newuser@company.com
+                    name: Alice Smith
+                    status: PENDING_VERIFY
+                    role: MEMBER
+                    workspaceId: clxyzworkspace123
+                  workspace:
+                    id: clxyzworkspace123
+                    domain: company.com
+        "200":
+          description: Account reactivated. Verification email sent.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSuccessResponse"
+        "400":
+          description: Invalid input (weak password, breached password, or validation error)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                weakPassword:
+                  summary: Weak password
+                  value:
+                    error:
+                      message: Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character
+                breachedPassword:
+                  summary: Breached password
+                  value:
+                    error:
+                      message: This password has been found in data breaches. Please choose a different password.
+        "409":
+          description: Email already registered (active account)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Too many registration attempts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /login:
+    post:
+      operationId: loginUser
+      summary: Login with email and password
+      tags: [Authentication]
+      description: |
+        Logs in a user with email and password. Only users with verified emails can log in.
+        If the email is not verified, an error is returned and the user should check their inbox or request a new verification email.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+            example:
+              email: alice@company.com
+              password: StrongPassword!2025
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSuccessResponse"
+              example:
+                status: success
+                message: Login successful
+                data:
+                  user:
+                    id: clxyz123abc
+                    email: alice@company.com
+                    name: Alice Smith
+                    status: ACTIVE
+                    role: MEMBER
+                    workspaceId: clxyzworkspace123
+                  workspaceId: clxyzworkspace123
+                  workspaceName: Company Workspace
+                  accessToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                  refreshToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        "401":
+          description: Invalid email or password
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Email not verified or user account is inactive
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Too many login attempts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /refresh:
+    post:
+      operationId: refreshTokens
+      summary: Refresh access and refresh tokens
+      tags: [Authentication]
+      description: |
+        Refreshes the access token using a valid refresh token. The old refresh token is revoked
+        and a new access token and refresh token are issued.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshTokenRequest"
+            example:
+              refreshToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...xyz789
+      responses:
+        "200":
+          description: Tokens refreshed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RefreshSuccessResponse"
+              example:
+                status: success
+                message: Tokens refreshed
+                data:
+                  accessToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                  refreshToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        "401":
+          description: Invalid or expired refresh token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /logout:
+    post:
+      operationId: logoutUser
+      summary: Logout user
+      tags: [Authentication]
+      description: |
+        Logs out a user by invalidating their refresh token. The session will be marked as inactive.
+        This endpoint does not require authentication - users can logout even if their token is expired.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LogoutRequest"
+            example:
+              refreshToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...xyz789
+      responses:
+        "200":
+          description: Logout successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                status: success
+                message: Logout successful
+
+  /verify-email:
+    get:
+      operationId: verifyEmail
+      summary: Verify email address
+      tags: [Email Verification]
+      description: |
+        Verifies a user's email address using a verification token sent via email.
+        Sets the user status to ACTIVE and marks the email as verified.
+      parameters:
+        - name: token
+          in: query
+          required: true
+          description: Email verification token
+          schema:
+            type: string
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+      responses:
+        "200":
+          description: Email verified successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSuccessResponse"
+              example:
+                status: success
+                message: Email verified
+                data:
+                  user:
+                    id: clxyz123abc
+                    email: alice@company.com
+                    name: Alice Smith
+                    status: ACTIVE
+                    role: MEMBER
+                    workspaceId: clxyzworkspace123
+        "400":
+          description: Invalid or expired verification token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /resend-verification:
+    post:
+      operationId: resendVerification
+      summary: Resend verification email
+      tags: [Email Verification]
+      description: |
+        Resends a verification email to a user who hasn't verified their email yet.
+        Rate limited to 5 requests per hour per IP.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResendVerificationRequest"
+            example:
+              email: alice@company.com
+      responses:
+        "200":
+          description: Verification email resent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                status: success
+                message: Verification email resent
+        "400":
+          description: Email already verified or account not pending verification
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Too many verification resend attempts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /request-password-reset:
+    post:
+      operationId: requestPasswordReset
+      summary: Request password reset
+      tags: [Password Management]
+      description: |
+        Sends a password reset email to the provided email address.
+        Rate limited to 3 requests per hour per IP.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasswordResetRequest"
+            example:
+              email: alice@company.com
+      responses:
+        "200":
+          description: Password reset email sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                status: success
+                message: Password reset email sent
+        "429":
+          description: Too many password reset attempts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /reset-password:
+    post:
+      operationId: resetPassword
+      summary: Reset password
+      tags: [Password Management]
+      description: |
+        Resets the user's password using a reset token sent via email.
+        The new password must meet strength requirements.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasswordResetConfirmRequest"
+            example:
+              token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+              newPassword: NewStrongPassword!2025
+      responses:
+        "200":
+          description: Password reset successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                status: success
+                message: Password has been reset successfully.
+        "400":
+          description: Invalid token or weak password
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /sessions:
+    get:
+      operationId: getUserSessions
+      summary: Get user sessions
+      tags: [Session Management]
+      description: |
+        Retrieves all active sessions for the authenticated user.
+        Requires authentication.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: User sessions retrieved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionsResponse"
+              example:
+                status: success
+                message: User sessions retrieved
+                data:
+                  sessions:
+                    - id: clsession123
+                      userAgent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)
+                      ipAddress: 192.168.1.100
+                      deviceId: device_abc123
+                      lastUsedAt: 2025-01-15T10:30:00Z
+                      createdAt: 2025-01-15T09:00:00Z
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /sessions/{sessionId}:
+    delete:
+      operationId: revokeSession
+      summary: Revoke session
+      tags: [Session Management]
+      description: |
+        Revokes a specific user session by session ID.
+        Requires authentication.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          description: Session ID to revoke
+          schema:
+            type: string
+          example: clsession123
+      responses:
+        "200":
+          description: Session revoked successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                status: success
+                message: Session revoked successfully
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Session not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /deactivate:
+    post:
+      operationId: deactivateAccount
+      summary: Deactivate account
+      tags: [Account Management]
+      description: |
+        Deactivates the authenticated user's account.
+        Sets status to DEACTIVATED and revokes all sessions.
+        Requires authentication.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Account deactivated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                status: success
+                message: Account deactivated successfully
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /delete-account:
+    post:
+      operationId: requestAccountDeletion
+      summary: Request account deletion
+      tags: [Account Management]
+      description: |
+        Requests permanent deletion of the authenticated user's account.
+        Sets status to PENDING_DELETION and revokes all sessions.
+        Account will be permanently deleted after 30 days.
+        Requires authentication.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Account deletion requested
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                status: success
+                message: Account deletion requested. Your account will be permanently deleted in 30 days.
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /google:
+    get:
+      operationId: initiateGoogleOAuth
+      summary: Initiate Google OAuth login
+      tags: [OAuth]
+      description: |
+        Redirects the user to Google for authentication. This is a public endpoint.
+        On success, Google will redirect the user to `/google/callback`.
+      responses:
+        "302":
+          description: Redirects to Google OAuth login page
+
+  /google/callback:
+    get:
+      operationId: googleOAuthCallback
+      summary: Google OAuth callback
+      tags: [OAuth]
+      description: |
+        Handles the callback from Google after user authentication.
+        On success, redirects to frontend with token and workspace info.
+        On failure, redirects to `/login` or returns an error.
+      responses:
+        "302":
+          description: Redirects to frontend with OAuth tokens
+        "500":
+          description: OAuth login failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /health:
+    get:
+      operationId: healthCheck
+      summary: Health check
+      tags: [System]
+      description: |
+        **Public endpoint** - No authentication required.
+        Checks the health of the application and database connectivity.
+        Returns system status, uptime, and environment information.
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                status: success
+                message: Service is healthy
+                data:
+                  timestamp: 2025-01-15T10:30:00Z
+                  uptime: 3600.5
+                  environment: production
+
+  /.well-known/jwks.json:
+    get:
+      operationId: getJWKS
+      summary: Get JSON Web Key Set (JWKS)
+      tags: [Security]
+      description: |
+        **Public endpoint** - No authentication required.
+        Returns the JSON Web Key Set (JWKS) containing public keys for JWT verification.
+        Used by clients to verify JWT tokens without needing to contact the server for each verification.
+        Supports key rotation with multiple keys and kid (key ID) headers.
+      responses:
+        "200":
+          description: JWKS in standard format
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JWKSResponse"
+              example:
+                keys:
+                  - kty: RSA
+                    use: sig
+                    kid: 3907adeee32f00f7a09f5330fa3c0727
+                    x5t: 3907adeee32f00f7a09f5330fa3c0727
+                    n: MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA...
+                    e: AQAB
+
+  /rotate-keys:
+    post:
+      operationId: rotateKeys
+      summary: Rotate JWT keys (Admin only)
+      tags: [Security]
+      description: |
+        **Admin only** - Requires authentication and ADMIN role.
+        Rotates the RSA key pair used for JWT signing and verification.
+        Creates new keys while keeping old keys for token verification during transition.
+        Returns the new and old key IDs for tracking.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Keys rotated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KeyRotationResponse"
+              example:
+                status: success
+                message: Keys rotated successfully
+                data:
+                  newKid: new_key_id_123
+                  oldKid: old_key_id_456
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  schemas:
+    # Request Schemas
+    RegisterRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          description: User's email address
+          example: newuser@company.com
+        password:
+          type: string
+          format: password
+          description: User's password (must meet strength requirements)
+          example: StrongPassword!2025
+        name:
+          type: string
+          description: User's full name
+          minLength: 2
+          maxLength: 50
+          example: Alice Smith
+
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          description: User's email address
+          example: alice@company.com
+        password:
+          type: string
+          format: password
+          description: User's password
+          example: StrongPassword!2025
+
+    RefreshTokenRequest:
+      type: object
+      required:
+        - refreshToken
+      properties:
+        refreshToken:
+          type: string
+          description: Valid refresh token
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...xyz789
+
+    LogoutRequest:
+      type: object
+      required:
+        - refreshToken
+      properties:
+        refreshToken:
+          type: string
+          description: Refresh token to invalidate
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...xyz789
+
+    ResendVerificationRequest:
+      type: object
+      required:
+        - email
+      properties:
+        email:
+          type: string
+          format: email
+          description: User's email address
+          example: alice@company.com
+
+    PasswordResetRequest:
+      type: object
+      required:
+        - email
+      properties:
+        email:
+          type: string
+          format: email
+          description: User's email address
+          example: alice@company.com
+
+    PasswordResetConfirmRequest:
+      type: object
+      required:
+        - token
+        - newPassword
+      properties:
+        token:
+          type: string
+          description: Password reset token from email
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        newPassword:
+          type: string
+          format: password
+          description: New password (must meet strength requirements)
+          example: NewStrongPassword!2025
+
+    # Response Schemas
+    AuthSuccessResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [success]
+          example: success
+        message:
+          type: string
+          description: Success message
+          example: Login successful
+        data:
+          type: object
+          properties:
+            user:
+              $ref: "#/components/schemas/User"
+            workspace:
+              $ref: "#/components/schemas/Workspace"
+            accessToken:
+              type: string
+              description: JWT access token
+              example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+            refreshToken:
+              type: string
+              description: JWT refresh token
+              example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+            isNewUser:
+              type: boolean
+              description: Whether this is a new user registration
+              example: false
+            provider:
+              type: string
+              description: Authentication provider (local, google)
+              example: google
+
+    RefreshSuccessResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [success]
+          example: success
+        message:
+          type: string
+          description: Success message
+          example: Tokens refreshed
+        data:
+          type: object
+          properties:
+            accessToken:
+              type: string
+              description: New JWT access token
+              example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+            refreshToken:
+              type: string
+              description: New JWT refresh token
+              example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+
+    SuccessResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [success]
+          example: success
+        message:
+          type: string
+          description: Success message
+          example: Operation successful
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            message:
+              type: string
+              description: Error message
+              example: Invalid email or password
+            details:
+              type: string
+              description: Additional error details (optional)
+              example: Stack trace or additional error details
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [success]
+          example: success
+        message:
+          type: string
+          description: Health status message
+          example: Service is healthy
+        data:
+          type: object
+          properties:
+            timestamp:
+              type: string
+              format: date-time
+              description: Current timestamp
+              example: 2025-01-15T10:30:00Z
+            uptime:
+              type: number
+              description: Service uptime in seconds
+              example: 3600.5
+            environment:
+              type: string
+              description: Current environment
+              example: production
+
+    SessionsResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [success]
+          example: success
+        message:
+          type: string
+          description: Success message
+          example: User sessions retrieved
+        data:
+          type: object
+          properties:
+            sessions:
+              type: array
+              items:
+                $ref: "#/components/schemas/Session"
+
+    JWKSResponse:
+      type: object
+      properties:
+        keys:
+          type: array
+          items:
+            $ref: "#/components/schemas/JWK"
+
+    KeyRotationResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [success]
+          example: success
+        message:
+          type: string
+          description: Success message
+          example: Keys rotated successfully
+        data:
+          type: object
+          properties:
+            newKid:
+              type: string
+              description: Key ID of the new key
+              example: new_key_id_123
+            oldKid:
+              type: string
+              description: Key ID of the old key
+              example: old_key_id_456
+
+    # Data Models
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique user ID
+          example: clxyz123abc
+        email:
+          type: string
+          format: email
+          description: User's email address
+          example: alice@company.com
+        name:
+          type: string
+          description: User's full name
+          example: Alice Smith
+        status:
+          type: string
+          enum: [PENDING_VERIFY, ACTIVE, DEACTIVATED, PENDING_DELETION]
+          description: User account status
+          example: ACTIVE
+        role:
+          type: string
+          enum: [ADMIN, MEMBER]
+          description: User role in workspace
+          example: MEMBER
+        workspaceId:
+          type: string
+          description: Workspace ID
+          example: clxyzworkspace123
+
+    Workspace:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique workspace ID
+          example: clxyzworkspace123
+        domain:
+          type: string
+          description: Workspace domain
+          example: company.com
+
+    Session:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Session ID
+          example: clsession123
+        userAgent:
+          type: string
+          description: User agent string
+          example: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)
+        ipAddress:
+          type: string
+          description: IP address
+          example: 192.168.1.100
+        deviceId:
+          type: string
+          description: Device identifier
+          example: device_abc123
+        lastUsedAt:
+          type: string
+          format: date-time
+          description: Last activity timestamp
+          example: 2025-01-15T10:30:00Z
+        createdAt:
+          type: string
+          format: date-time
+          description: Session creation timestamp
+          example: 2025-01-15T09:00:00Z
+
+    JWK:
+      type: object
+      properties:
+        kty:
+          type: string
+          description: Key type
+          example: RSA
+        use:
+          type: string
+          description: Key usage
+          example: sig
+        kid:
+          type: string
+          description: Key ID
+          example: 3907adeee32f00f7a09f5330fa3c0727
+        x5t:
+          type: string
+          description: X.509 certificate thumbprint
+          example: 3907adeee32f00f7a09f5330fa3c0727
+        n:
+          type: string
+          description: RSA modulus
+          example: MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA...
+        e:
+          type: string
+          description: RSA exponent
+          example: AQAB
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT Bearer token authentication
