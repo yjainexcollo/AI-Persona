@@ -29,3 +29,8 @@ prisma/.env
 # Docker 
 db_data/
 /src/generated/prisma
+
+# JWT Keys (security)
+.keys/
+*.pem
+keyid.txt

@@ -138,6 +138,128 @@ const validateDateRange = [
   handleValidationErrors,
 ];
 
+// Profile validation schemas
+const validateProfileUpdate = [
+  body("name")
+    .optional()
+    .trim()
+    .isLength({ min: 2, max: 50 })
+    .withMessage("Name must be between 2 and 50 characters"),
+  body("avatarUrl")
+    .optional()
+    .isURL()
+    .withMessage("Avatar URL must be a valid URL"),
+  body("timezone")
+    .optional()
+    .isString()
+    .withMessage("Timezone must be a string"),
+  body("locale").optional().isString().withMessage("Locale must be a string"),
+  handleValidationErrors,
+];
+
+const validatePasswordChange = [
+  body("currentPassword")
+    .notEmpty()
+    .withMessage("Current password is required"),
+  body("newPassword")
+    .isLength({ min: 8 })
+    .withMessage("Password must be at least 8 characters long")
+    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/)
+    .withMessage(
+      "Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character"
+    ),
+  handleValidationErrors,
+];
+
+const validateAvatarUpload = [
+  body("presignedUrl")
+    .optional()
+    .isURL()
+    .withMessage("Presigned URL must be a valid URL"),
+  handleValidationErrors,
+];
+
+// Workspace validation schemas
+const validateWorkspaceUpdate = [
+  body("name")
+    .optional()
+    .trim()
+    .isLength({ min: 2, max: 100 })
+    .withMessage("Workspace name must be between 2 and 100 characters"),
+  body("timezone")
+    .optional()
+    .isString()
+    .withMessage("Timezone must be a string"),
+  body("locale").optional().isString().withMessage("Locale must be a string"),
+  handleValidationErrors,
+];
+
+const validateRoleChange = [
+  body("role")
+    .isIn(["ADMIN", "MEMBER"])
+    .withMessage("Role must be either 'ADMIN' or 'MEMBER'"),
+  handleValidationErrors,
+];
+
+const validateWorkspaceId = [
+  param("id").notEmpty().withMessage("Workspace ID is required"),
+  handleValidationErrors,
+];
+
+const validateMemberId = [
+  param("uid").notEmpty().withMessage("Member ID is required"),
+  handleValidationErrors,
+];
+
+const validateDeletionRequest = [
+  body("reason")
+    .optional()
+    .trim()
+    .isLength({ max: 500 })
+    .withMessage("Reason must be less than 500 characters"),
+  handleValidationErrors,
+];
+
+// New smart member management validation schemas
+const validateMembersListQuery = [
+  query("search")
+    .optional()
+    .trim()
+    .isLength({ max: 100 })
+    .withMessage("Search term must be less than 100 characters"),
+  query("status")
+    .optional()
+    .isIn(["ACTIVE", "DEACTIVATED", "PENDING_VERIFY"])
+    .withMessage("Status must be one of: ACTIVE, DEACTIVATED, PENDING_VERIFY"),
+  query("role")
+    .optional()
+    .isIn(["ADMIN", "MEMBER"])
+    .withMessage("Role must be one of: ADMIN, MEMBER"),
+  query("page")
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage("Page must be a positive integer"),
+  query("limit")
+    .optional()
+    .isInt({ min: 1, max: 100 })
+    .withMessage("Limit must be between 1 and 100"),
+  handleValidationErrors,
+];
+
+const validateRolePatch = [
+  body("role")
+    .isIn(["ADMIN", "MEMBER"])
+    .withMessage("Role must be either 'ADMIN' or 'MEMBER'"),
+  handleValidationErrors,
+];
+
+const validateStatusPatch = [
+  body("status")
+    .isIn(["ACTIVE", "DEACTIVATED", "PENDING_VERIFY"])
+    .withMessage("Status must be one of: ACTIVE, DEACTIVATED, PENDING_VERIFY"),
+  handleValidationErrors,
+];
+
 // Generic string validation
 const validateString = (fieldName, minLength = 1, maxLength = 255) => [
   body(fieldName)
@@ -180,5 +302,19 @@ module.exports = {
   validateString,
   validateEmail,
   validateId,
+  // Profile validation schemas
+  validateProfileUpdate,
+  validatePasswordChange,
+  validateAvatarUpload,
+  // Workspace validation schemas
+  validateWorkspaceUpdate,
+  validateRoleChange,
+  validateWorkspaceId,
+  validateMemberId,
+  validateDeletionRequest,
+  // New smart member management validation schemas
+  validateMembersListQuery,
+  validateRolePatch,
+  validateStatusPatch,
   handleValidationErrors,
 };

@@ -5,7 +5,6 @@
 
 const { PrismaClient } = require("@prisma/client");
 const bcrypt = require("bcrypt");
-const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const logger = require("../utils/logger");
 const ApiError = require("../utils/apiError");
@@ -394,7 +393,7 @@ async function login(
   });
 
   // Generate tokens
-  const accessToken = jwtUtils.signToken({
+  const accessToken = await jwtUtils.signToken({
     userId: user.id,
     email: user.email,
     role: user.role,
@@ -462,7 +461,7 @@ async function refreshTokens(
   }
 
   // Generate new tokens
-  const newAccessToken = jwtUtils.signToken({
+  const newAccessToken = await jwtUtils.signToken({
     userId: session.user.id,
     email: session.user.email,
     role: session.user.role,

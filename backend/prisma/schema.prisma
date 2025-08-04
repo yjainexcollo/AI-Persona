@@ -1,5 +1,5 @@
 // ===================================
-// AI-Persona Backend - Database Schema (ROBUST, MULTI-TENANT, SAAS-READY)
+// AI-Persona Backend - Database Schema (CORE AUTHENTICATION & USER MANAGEMENT)
 // ===================================
 // Only models/fields/enums used in backend code are kept
 
@@ -31,20 +31,16 @@ model User {
     updatedAt     DateTime @updatedAt
     workspaceId   String
     workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+    
+    // Profile fields
+    avatarUrl     String?  // CDN URL for user avatar
+    timezone      String?  @default("UTC")
+    locale        String?  @default("en")
 
     sessions      Session[]
     emailVerifications EmailVerification[]
     passwordResetTokens PasswordResetToken[]
     auditEvents   AuditEvent[]
-    
-    // Chat relationships
-    messages      Message[]
-    conversations Conversation[]
-    reactions     Reaction[]
-    
-    // Folder relationships
-    ownedFolders  Folder[]
-    folderItems   FolderItem[]
     
     @@map("users")
     @@index([email])
@@ -68,176 +64,35 @@ model Workspace {
     createdAt   DateTime @default(now())
     updatedAt   DateTime @updatedAt
     
+    // Workspace settings
+    timezone    String?  @default("UTC")
+    locale      String?  @default("en")
+    status      WorkspaceStatus @default(ACTIVE)
+    
     users       User[]
-    conversations Conversation[]
-    folders     Folder[]
+    deletionRequest WorkspaceDeletion?
 
     @@map("workspaces")
     @@index([domain])
     @@index([isActive])
+    @@index([status])
 }
 
 // ===================================
-// PERSONA MODEL (Global - accessible by all workspaces)
+// WORKSPACE DELETION MODEL
 // ===================================
-model Persona {
+model WorkspaceDeletion {
     id          String   @id @default(cuid())
-    name        String
-    description String?
-    traits      Json     // { tone: "formal", expertise: ["finance"], domains: [...] }
-    persona_id  String   @unique  // Unique identifier for webhook requests (e.g., "Chief-Financial-Officer")
-    isActive    Boolean  @default(true)
-    createdAt   DateTime @default(now())
-    updatedAt   DateTime @updatedAt
-    
-    conversations Conversation[]
-    
-    @@map("personas")
-    @@index([isActive])
-    @@index([persona_id])
-}
-
-// ===================================
-// CONVERSATION MODEL (User-Persona chats)
-// ===================================
-model Conversation {
-    id           String   @id @default(cuid())
-    userId       String                    // User who owns this conversation
-    personaId    String                    // Persona being conversed with
-    workspaceId  String                    // Workspace where conversation belongs
-    isPublic     Boolean  @default(false)  // Whether this conversation is public
-    messageCount Int      @default(0)      // Track total messages in conversation
-    lastMessageAt DateTime?                // Last activity timestamp
-    createdAt    DateTime @default(now())
-    updatedAt    DateTime @updatedAt
-    
-    user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-    workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-    persona      Persona  @relation(fields: [personaId], references: [id], onDelete: Cascade)
-    messages     Message[]
-    shareableLinks ShareableLink[]
-    
-    @@unique([userId, personaId])         // One conversation per user per persona
-    @@map("conversations")
-    @@index([userId])
-    @@index([personaId])
-    @@index([workspaceId])
-    @@index([isPublic])
-    @@index([workspaceId, isPublic])      // Optimized for public conversation listings
-    @@index([lastMessageAt])              // For recent activity queries
-}
-
-// ===================================
-// SHAREABLE LINK MODEL (No expiration)
-// ===================================
-model ShareableLink {
-    id        String   @id @default(cuid())
-    token     String   @unique            // Unique token for the link
-    createdAt DateTime @default(now())
-    conversationId String
-    conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-    
-    @@map("shareable_links")
-    @@index([token])
-    @@index([conversationId])
-}
-
-// ===================================
-// MESSAGE MODEL (User-Persona messages)
-// ===================================
-model Message {
-    id          String   @id @default(cuid())
-    content     String   @db.Text         // Better for long messages, no length limit
-    conversationId String                 // Which conversation this message belongs to
-    replyToId   String?                  // For replies to other messages
-    isFromUser  Boolean  @default(true)   // true = from user, false = from persona
-    createdAt   DateTime @default(now())
-    updatedAt   DateTime @updatedAt
-    userId      String                    // User who sent the message (or owns the conversation)
-    user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-    
-    conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-    replyTo     Message? @relation("MessageReplies", fields: [replyToId], references: [id])
-    replies     Message[] @relation("MessageReplies")
-    reactions   Reaction[]
-    
-    @@map("messages")
-    @@index([conversationId])
-    @@index([userId])
-    @@index([replyToId])
-    @@index([isFromUser])
-    @@index([createdAt])
-    @@index([conversationId, createdAt])  // Optimized for message ordering
-    @@index([conversationId, isFromUser]) // For filtering user vs persona messages
-}
-
-// ===================================
-// REACTION MODEL (Like/Dislike)
-// ===================================
-model Reaction {
-    id        String   @id @default(cuid())
-    messageId String                      // Which message is being reacted to
-    userId    String                      // Who gave the reaction
-    type      ReactionType                // LIKE or DISLIKE
-    createdAt DateTime @default(now())
-    
-    message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
-    user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-    
-    @@unique([messageId, userId])         // One reaction per user per message
-    @@map("reactions")
-    @@index([messageId])
-    @@index([userId])
-    @@index([type])
-    @@index([createdAt])
-    @@index([messageId, type])            // For reaction aggregation queries
-}
-
-// ===================================
-// FOLDER MODEL
-// ===================================
-model Folder {
-    id          String   @id @default(cuid())
-    name        String                    // Folder name
-    ownerId     String                    // Who owns this folder
-    workspaceId String                    // Which workspace this folder belongs to
-    itemCount   Int      @default(0)      // Track number of items in folder
-    createdAt   DateTime @default(now())
-    updatedAt   DateTime @updatedAt
-    
-    owner       User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+    workspaceId String   @unique
     workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-    items       FolderItem[]
+    requestedBy String   // User ID who requested deletion
+    reason      String?
+    purgeAfter  DateTime // When workspace will be permanently deleted
+    createdAt   DateTime @default(now())
     
-    @@map("folders")
-    @@index([ownerId])
+    @@map("workspace_deletions")
     @@index([workspaceId])
-    @@index([workspaceId, ownerId])       // For user's folders in workspace
-}
-
-// ===================================
-// FOLDER ITEM MODEL
-// ===================================
-model FolderItem {
-    id       String      @id @default(cuid())
-    folderId String
-    itemType ItemType                    // PERSONA, CONVERSATION, FOLDER
-    itemId   String                      // ID of the actual item
-    order    Int         @default(0)     // For ordering items in folder
-    addedAt  DateTime    @default(now())
-    
-    folder   Folder      @relation(fields: [folderId], references: [id], onDelete: Cascade)
-    user     User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-    userId   String
-    
-    @@map("folder_items")
-    @@index([folderId])
-    @@index([itemType])
-    @@index([itemId])
-    @@index([order])
-    @@index([folderId, order])           // For ordered folder item queries
-    @@unique([folderId, itemType, itemId]) // Prevent duplicate items in folder
-    @@index([userId])
+    @@index([purgeAfter])
 }
 
 // ===================================
@@ -256,6 +111,7 @@ model Session {
     ipAddress     String?  // IP address
     deviceId      String?  // Unique device identifier
     user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+    
     @@map("sessions")
     @@index([userId])
     @@index([refreshToken])
@@ -274,6 +130,11 @@ model EmailVerification {
     expiresAt DateTime
     user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
     createdAt DateTime @default(now())
+    
+    @@map("email_verifications")
+    @@index([userId])
+    @@index([token])
+    @@index([expiresAt])
 }
 
 // ===================================
@@ -288,6 +149,8 @@ model PasswordResetToken {
     usedAt    DateTime?
     user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
     createdAt DateTime @default(now())
+    
+    @@map("password_reset_tokens")
     @@index([userId])
     @@index([token])
     @@index([expiresAt])
@@ -331,15 +194,10 @@ enum MemberRole {
     MEMBER
 }
 
-enum ItemType {
-    PERSONA
-    CONVERSATION
-    FOLDER
-}
-
-enum ReactionType {
-    LIKE
-    DISLIKE
+enum WorkspaceStatus {
+    ACTIVE
+    PENDING_DELETION
+    DELETED
 }
 
 enum AuditEventType {
@@ -358,4 +216,10 @@ enum AuditEventType {
     SESSION_REVOKED
     ACCOUNT_LOCKED
     ACCOUNT_UNLOCKED
+    PROFILE_UPDATED
+    AVATAR_UPLOADED
+    WORKSPACE_UPDATED
+    MEMBER_ROLE_CHANGED
+    MEMBER_REMOVED
+    WORKSPACE_DELETION_REQUESTED
 }

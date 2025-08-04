@@ -56,12 +56,12 @@ async function handleOAuthLogin(provider, profile) {
     );
 
     // Generate tokens
-    const accessToken = signToken({
+    const accessToken = await signToken({
       userId: user.id,
       workspaceId: user.workspaceId,
       role: user.role,
     });
-    const refreshToken = signRefreshToken({
+    const refreshToken = await signRefreshToken({
       userId: user.id,
       workspaceId: user.workspaceId,
       role: user.role,
@@ -132,12 +132,12 @@ async function handleOAuthLogin(provider, profile) {
     );
 
     // Generate tokens
-    const accessToken = signToken({
+    const accessToken = await signToken({
       userId: user.id,
       workspaceId: user.workspaceId,
       role: user.role,
     });
-    const refreshToken = signRefreshToken({
+    const refreshToken = await signRefreshToken({
       userId: user.id,
       workspaceId: user.workspaceId,
       role: user.role,

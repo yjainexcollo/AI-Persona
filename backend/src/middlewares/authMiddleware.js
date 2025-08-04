@@ -20,8 +20,9 @@ async function authMiddleware(req, res, next) {
       throw new ApiError(401, "Authorization token missing or malformed");
     }
     const token = authHeader.split(" ")[1];
-    // Verify token and extract payload
-    const payload = verifyToken(token);
+
+    // Verify token and extract payload (now async)
+    const payload = await verifyToken(token);
     if (!payload || !payload.userId) {
       throw new ApiError(401, "Invalid or expired token");
     }

@@ -99,15 +99,26 @@ info:
        - Revokes current refresh token
        - Idempotent operation
 
-    ### **Admin Operations**
-    1. **User Management**: `GET /api/admin/users`
-       - List workspace users
-       - Role management
-       - Account status management
+    ### **Workspace Member Management**
+    1. **Smart Member Listing**: `GET /api/workspaces/{id}/members`
+       - Advanced filtering (search, status, role)
+       - Pagination support
+       - Admin-only access
 
-    2. **Workspace Management**: `GET /api/admin/workspace`
-       - Workspace statistics
-       - User counts and activity
+    2. **Role Management**: `PATCH /api/workspaces/{id}/members/{uid}/role`
+       - Promote/demote members
+       - Last admin protection
+       - Admin-only access
+
+    3. **Status Management**: `PATCH /api/workspaces/{id}/members/{uid}/status`
+       - Activate/deactivate members
+       - Session revocation on deactivation
+       - Last admin protection
+
+    4. **Force Password Reset**: `POST /api/workspaces/{id}/members/{uid}/force-reset`
+       - Generate reset token
+       - Send email notification
+       - Admin-only access
 
     ### **Security Endpoints**
     1. **JWKS Endpoint**: `GET /api/auth/.well-known/jwks.json`
@@ -157,8 +168,8 @@ tags:
     description: User authentication and authorization
   - name: User Management
     description: User profile and account management
-  - name: Admin
-    description: Administrative operations
+  - name: Workspace Management
+    description: Workspace and member management
   - name: Security
     description: Security and key management
 
@@ -696,33 +707,38 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  # User Management Endpoints
-  /api/users/profile:
+  # Profile Management Endpoints
+  /api/users/me:
     get:
       tags:
         - User Management
-      summary: Get user profile
-      description: Get current user profile information
+      summary: Get current user profile
+      description: Get the current user's profile information
       security:
         - BearerAuth: []
       responses:
         "200":
-          description: User profile retrieved
+          description: User profile
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/UserProfileResponse"
+                $ref: "#/components/schemas/ApiResponse"
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        $ref: "#/components/schemas/UserProfile"
         "401":
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
     put:
       tags:
         - User Management
-      summary: Update user profile
-      description: Update current user profile information
+      summary: Update current user profile
+      description: Update the current user's profile information
       security:
         - BearerAuth: []
       requestBody:
@@ -735,37 +751,251 @@ paths:
                 name:
                   type: string
                   minLength: 2
+                  maxLength: 50
                   example: "John Doe"
+                avatarUrl:
+                  type: string
+                  format: uri
+                  example: "https://cdn.example.com/avatar.jpg"
+                timezone:
+                  type: string
+                  example: "America/New_York"
+                locale:
+                  type: string
+                  example: "en-US"
       responses:
         "200":
           description: Profile updated successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/UserProfileResponse"
+                $ref: "#/components/schemas/ApiResponse"
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        $ref: "#/components/schemas/UserProfile"
         "400":
-          description: Validation error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
+          $ref: "#/components/responses/BadRequest"
         "401":
-          description: Unauthorized
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /api/users/me/avatar:
+    post:
+      tags:
+        - User Management
+      summary: Upload user avatar
+      description: Upload a new avatar image for the current user
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                avatar:
+                  type: string
+                  format: binary
+                  description: Image file (JPEG, PNG, GIF, WebP, max 2MB)
+          application/json:
+            schema:
+              type: object
+              properties:
+                presignedUrl:
+                  type: string
+                  format: uri
+                  description: Presigned URL for avatar upload
+      responses:
+        "200":
+          description: Avatar uploaded successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/ApiResponse"
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      avatarUrl:
+                        type: string
+                        format: uri
+                        example: "https://cdn.example.com/avatar.jpg"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationError"
 
-  # Admin Endpoints
-  /api/admin/users:
+  /api/users/me/password:
+    put:
+      tags:
+        - User Management
+      summary: Change password
+      description: Change the current user's password
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - currentPassword
+                - newPassword
+              properties:
+                currentPassword:
+                  type: string
+                  example: "currentPassword123!"
+                newPassword:
+                  type: string
+                  minLength: 8
+                  example: "newPassword123!"
+      responses:
+        "200":
+          description: Password changed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  # Workspace Management Endpoints
+  /api/workspaces/{id}:
     get:
       tags:
-        - Admin
-      summary: Get workspace users
-      description: Get all users in the current workspace (admin only)
+        - Workspace Management
+      summary: Get workspace details
+      description: Get workspace information for the current user's workspace
       security:
         - BearerAuth: []
       parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Workspace ID
+      responses:
+        "200":
+          description: Workspace details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponse"
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      workspace:
+                        $ref: "#/components/schemas/Workspace"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    put:
+      tags:
+        - Workspace Management
+      summary: Update workspace
+      description: Update workspace settings (Admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Workspace ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  minLength: 2
+                  maxLength: 100
+                  example: "My Workspace"
+                timezone:
+                  type: string
+                  example: "America/New_York"
+                locale:
+                  type: string
+                  example: "en-US"
+      responses:
+        "200":
+          description: Workspace updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponse"
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      workspace:
+                        $ref: "#/components/schemas/Workspace"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /api/workspaces/{id}/members:
+    get:
+      tags:
+        - Workspace Management
+      summary: Smart member listing
+      description: Get workspace members with advanced filtering and pagination (Admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Workspace ID
+        - name: search
+          in: query
+          schema:
+            type: string
+            maxLength: 100
+          description: Search in email or name (case-insensitive)
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [ACTIVE, DEACTIVATED, PENDING_VERIFY]
+          description: Filter by member status
+        - name: role
+          in: query
+          schema:
+            type: string
+            enum: [ADMIN, MEMBER]
+          description: Filter by member role
         - name: page
           in: query
           schema:
@@ -780,116 +1010,309 @@ paths:
             minimum: 1
             maximum: 100
             default: 20
-          description: Number of users per page
-        - name: status
-          in: query
-          schema:
-            type: string
-            enum: [ACTIVE, PENDING_VERIFY, DEACTIVATED, PENDING_DELETION]
-          description: Filter by user status
+          description: Number of members per page
       responses:
         "200":
-          description: Users retrieved successfully
+          description: List of workspace members with pagination
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/UsersListResponse"
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/WorkspaceMember"
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                        example: 1
+                      limit:
+                        type: integer
+                        example: 20
+                      total:
+                        type: integer
+                        example: 138
         "401":
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
+          $ref: "#/components/responses/Unauthorized"
         "403":
-          description: Forbidden (admin only)
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
 
-  /api/admin/users/{userId}:
-    put:
+  /api/workspaces/{id}/members/{uid}/role:
+    patch:
       tags:
-        - Admin
-      summary: Update user (admin only)
-      description: Update user status or role (admin only)
+        - Workspace Management
+      summary: Change member role
+      description: Promote or demote a workspace member (Admin only). Cannot demote the last admin.
       security:
         - BearerAuth: []
       parameters:
-        - name: userId
+        - name: id
           in: path
           required: true
           schema:
             type: string
-          description: User ID to update
+          description: Workspace ID
+        - name: uid
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Member user ID
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
+              required:
+                - role
               properties:
-                status:
-                  type: string
-                  enum: [ACTIVE, DEACTIVATED]
-                  example: "ACTIVE"
                 role:
                   type: string
                   enum: [ADMIN, MEMBER]
-                  example: "MEMBER"
+                  example: "ADMIN"
       responses:
         "200":
-          description: User updated successfully
+          description: Member role updated successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/UserResponse"
+                $ref: "#/components/schemas/ApiResponse"
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      member:
+                        $ref: "#/components/schemas/WorkspaceMember"
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "401":
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
+          $ref: "#/components/responses/Unauthorized"
         "403":
-          description: Forbidden (admin only)
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
+          $ref: "#/components/responses/Forbidden"
         "404":
-          description: User not found
+          $ref: "#/components/responses/NotFound"
+        "422":
+          description: Cannot demote last admin
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: "Cannot demote last admin"
 
-  /api/admin/workspace:
-    get:
+  /api/workspaces/{id}/members/{uid}/status:
+    patch:
       tags:
-        - Admin
-      summary: Get workspace statistics
-      description: Get workspace statistics and user counts (admin only)
+        - Workspace Management
+      summary: Change member status
+      description: Activate or deactivate a workspace member (Admin only). Cannot deactivate the last admin.
       security:
         - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Workspace ID
+        - name: uid
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Member user ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - status
+              properties:
+                status:
+                  type: string
+                  enum: [ACTIVE, DEACTIVATED, PENDING_VERIFY]
+                  example: "ACTIVE"
       responses:
         "200":
-          description: Workspace statistics retrieved
+          description: Member status updated successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkspaceStatsResponse"
+                $ref: "#/components/schemas/ApiResponse"
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      member:
+                        $ref: "#/components/schemas/WorkspaceMember"
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "401":
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
+          $ref: "#/components/responses/Unauthorized"
         "403":
-          description: Forbidden (admin only)
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          description: Cannot deactivate last admin
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: "Cannot deactivate the last admin in the workspace"
+
+  /api/workspaces/{id}/members/{uid}/force-reset:
+    post:
+      tags:
+        - Workspace Management
+      summary: Force password reset
+      description: Generate a password reset token and send email to member (Admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Workspace ID
+        - name: uid
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Member user ID
+      responses:
+        "200":
+          description: Password reset email sent successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  message:
+                    type: string
+                    example: "Password reset email sent successfully"
+                  data:
+                    type: object
+                    properties:
+                      resetEmailSent:
+                        type: boolean
+                        example: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /api/workspaces/{id}/members/{uid}:
+    delete:
+      tags:
+        - Workspace Management
+      summary: Remove member
+      description: Remove a member from the workspace (Admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Workspace ID
+        - name: uid
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Member user ID
+      responses:
+        "200":
+          description: Member removed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/workspaces/{id}/delete:
+    post:
+      tags:
+        - Workspace Management
+      summary: Request workspace deletion
+      description: Request deletion of the workspace (Admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Workspace ID
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  maxLength: 500
+                  example: "No longer needed"
+      responses:
+        "200":
+          description: Workspace deletion requested successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
 
 components:
   securitySchemes:
@@ -1198,6 +1621,99 @@ components:
           format: date-time
           example: "2024-01-22T10:30:00Z"
 
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "user_id_here"
+        email:
+          type: string
+          format: email
+          example: "user@example.com"
+        name:
+          type: string
+          example: "John Doe"
+        avatarUrl:
+          type: string
+          format: uri
+          nullable: true
+          example: "https://cdn.example.com/avatar.jpg"
+        timezone:
+          type: string
+          example: "America/New_York"
+        locale:
+          type: string
+          example: "en-US"
+        emailVerified:
+          type: boolean
+          example: true
+        status:
+          type: string
+          enum: [PENDING_VERIFY, ACTIVE, DEACTIVATED, PENDING_DELETION]
+          example: "ACTIVE"
+        role:
+          type: string
+          enum: [ADMIN, MEMBER]
+          example: "MEMBER"
+        workspaceId:
+          type: string
+          example: "workspace_id_here"
+        lastLoginAt:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00Z"
+        createdAt:
+          type: string
+          format: date-time
+          example: "2024-01-01T00:00:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00Z"
+
+    WorkspaceMember:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "user_id_here"
+        email:
+          type: string
+          format: email
+          example: "user@example.com"
+        name:
+          type: string
+          example: "John Doe"
+        role:
+          type: string
+          enum: [ADMIN, MEMBER]
+          example: "MEMBER"
+        status:
+          type: string
+          enum: [PENDING_VERIFY, ACTIVE, DEACTIVATED, PENDING_DELETION]
+          example: "ACTIVE"
+        lastLoginAt:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00Z"
+        createdAt:
+          type: string
+          format: date-time
+          example: "2024-01-01T00:00:00Z"
+
+    ApiResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: "success"
+        message:
+          type: string
+          example: "Operation completed successfully"
+        data:
+          type: object
+
     Pagination:
       type: object
       properties:
@@ -1219,3 +1735,97 @@ components:
         hasPrev:
           type: boolean
           example: false
+
+  # Common Response Definitions
+  responses:
+    BadRequest:
+      description: Bad Request
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              status:
+                type: string
+                example: "error"
+              message:
+                type: string
+                example: "Bad request"
+              errors:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    field:
+                      type: string
+                      example: "email"
+                    message:
+                      type: string
+                      example: "Invalid email format"
+
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              status:
+                type: string
+                example: "error"
+              message:
+                type: string
+                example: "Authentication required"
+
+    Forbidden:
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              status:
+                type: string
+                example: "error"
+              message:
+                type: string
+                example: "Insufficient permissions"
+
+    NotFound:
+      description: Not Found
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              status:
+                type: string
+                example: "error"
+              message:
+                type: string
+                example: "Resource not found"
+
+    ValidationError:
+      description: Validation Error
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              status:
+                type: string
+                example: "error"
+              message:
+                type: string
+                example: "Validation failed"
+              errors:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    field:
+                      type: string
+                      example: "email"
+                    message:
+                      type: string
+                      example: "Invalid email format"

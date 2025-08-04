@@ -1,5 +1,7 @@
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
+const fs = require("fs").promises;
+const path = require("path");
 const config = require("../config");
 const ApiError = require("./apiError");
 const apiResponse = require("./apiResponse");
@@ -13,23 +15,76 @@ const apiResponse = require("./apiResponse");
 let currentKeyPair = null;
 let keyId = null;
 
+// Key storage path
+const KEY_STORAGE_PATH = path.join(__dirname, "../../.keys");
+
 // Initialize or rotate keys
-function initializeKeys() {
+async function initializeKeys() {
   if (!currentKeyPair) {
-    // Generate new RSA key pair
-    currentKeyPair = crypto.generateKeyPairSync("rsa", {
-      modulusLength: 2048,
-      publicKeyEncoding: {
-        type: "spki",
-        format: "pem",
-      },
-      privateKeyEncoding: {
-        type: "pkcs8",
-        format: "pem",
-      },
-    });
-    keyId = crypto.randomBytes(16).toString("hex");
+    try {
+      // Try to load existing keys from storage
+      await fs.mkdir(KEY_STORAGE_PATH, { recursive: true });
+
+      const privateKeyPath = path.join(KEY_STORAGE_PATH, "private.pem");
+      const publicKeyPath = path.join(KEY_STORAGE_PATH, "public.pem");
+      const keyIdPath = path.join(KEY_STORAGE_PATH, "keyid.txt");
+
+      try {
+        const [privateKey, publicKey, storedKeyId] = await Promise.all([
+          fs.readFile(privateKeyPath, "utf8"),
+          fs.readFile(publicKeyPath, "utf8"),
+          fs.readFile(keyIdPath, "utf8"),
+        ]);
+
+        currentKeyPair = { privateKey, publicKey };
+        keyId = storedKeyId.trim();
+
+        console.log("✅ Loaded existing RSA keys from storage");
+      } catch (error) {
+        // Keys don't exist, generate new ones
+        console.log("🔑 Generating new RSA key pair...");
+
+        currentKeyPair = crypto.generateKeyPairSync("rsa", {
+          modulusLength: 2048,
+          publicKeyEncoding: {
+            type: "spki",
+            format: "pem",
+          },
+          privateKeyEncoding: {
+            type: "pkcs8",
+            format: "pem",
+          },
+        });
+
+        keyId = crypto.randomBytes(16).toString("hex");
+
+        // Save keys to storage
+        await Promise.all([
+          fs.writeFile(privateKeyPath, currentKeyPair.privateKey),
+          fs.writeFile(publicKeyPath, currentKeyPair.publicKey),
+          fs.writeFile(keyIdPath, keyId),
+        ]);
+
+        console.log("✅ Generated and saved new RSA keys");
+      }
+    } catch (error) {
+      console.error("❌ Error initializing keys:", error.message);
+      // Fallback to in-memory keys if storage fails
+      currentKeyPair = crypto.generateKeyPairSync("rsa", {
+        modulusLength: 2048,
+        publicKeyEncoding: {
+          type: "spki",
+          format: "pem",
+        },
+        privateKeyEncoding: {
+          type: "pkcs8",
+          format: "pem",
+        },
+      });
+      keyId = crypto.randomBytes(16).toString("hex");
+    }
   }
+
   return {
     privateKey: currentKeyPair.privateKey,
     publicKey: currentKeyPair.publicKey,
@@ -38,7 +93,7 @@ function initializeKeys() {
 }
 
 // Rotate keys (for production)
-function rotateKeys() {
+async function rotateKeys() {
   const newKeyPair = crypto.generateKeyPairSync("rsa", {
     modulusLength: 2048,
     publicKeyEncoding: {
@@ -58,6 +113,22 @@ function rotateKeys() {
   currentKeyPair = newKeyPair;
   keyId = crypto.randomBytes(16).toString("hex");
 
+  // Save new keys
+  try {
+    await fs.mkdir(KEY_STORAGE_PATH, { recursive: true });
+    const privateKeyPath = path.join(KEY_STORAGE_PATH, "private.pem");
+    const publicKeyPath = path.join(KEY_STORAGE_PATH, "public.pem");
+    const keyIdPath = path.join(KEY_STORAGE_PATH, "keyid.txt");
+
+    await Promise.all([
+      fs.writeFile(privateKeyPath, newKeyPair.privateKey),
+      fs.writeFile(publicKeyPath, newKeyPair.publicKey),
+      fs.writeFile(keyIdPath, keyId),
+    ]);
+  } catch (error) {
+    console.error("❌ Error saving rotated keys:", error.message);
+  }
+
   return {
     newKey: {
       privateKey: newKeyPair.privateKey,
@@ -73,8 +144,8 @@ function rotateKeys() {
 }
 
 // Get current keys for JWKS
-function getCurrentKeys() {
-  const keys = initializeKeys();
+async function getCurrentKeys() {
+  const keys = await initializeKeys();
   return {
     privateKey: keys.privateKey,
     publicKey: keys.publicKey,
@@ -83,8 +154,8 @@ function getCurrentKeys() {
 }
 
 // Generate JWKS (JSON Web Key Set)
-function generateJWKS() {
-  const keys = getCurrentKeys();
+async function generateJWKS() {
+  const keys = await getCurrentKeys();
   const jwk = {
     kty: "RSA",
     use: "sig",
@@ -102,8 +173,8 @@ function generateJWKS() {
   };
 }
 
-function signToken(payload, options = {}) {
-  const keys = getCurrentKeys();
+async function signToken(payload, options = {}) {
+  const keys = await getCurrentKeys();
   const opts = {
     expiresIn: options.expiresIn || config.jwtExpiresIn,
     algorithm: "RS256",
@@ -118,17 +189,17 @@ function signToken(payload, options = {}) {
   return token;
 }
 
-function verifyToken(token) {
+async function verifyToken(token) {
   try {
-    const keys = getCurrentKeys();
+    const keys = await getCurrentKeys();
     return jwt.verify(token, keys.publicKey, { algorithms: ["RS256"] });
   } catch (err) {
     throw new ApiError(401, "Invalid or expired access token");
   }
 }
 
-function signRefreshToken(payload, options = {}) {
-  const keys = getCurrentKeys();
+async function signRefreshToken(payload, options = {}) {
+  const keys = await getCurrentKeys();
   const opts = {
     expiresIn: options.expiresIn || config.jwtRefreshExpiresIn,
     algorithm: "RS256",
@@ -138,9 +209,9 @@ function signRefreshToken(payload, options = {}) {
   return jwt.sign(payload, keys.privateKey, opts);
 }
 
-function verifyRefreshToken(token) {
+async function verifyRefreshToken(token) {
   try {
-    const keys = getCurrentKeys();
+    const keys = await getCurrentKeys();
     return jwt.verify(token, keys.publicKey, { algorithms: ["RS256"] });
   } catch (err) {
     throw new ApiError(401, "Invalid or expired refresh token");
@@ -148,7 +219,7 @@ function verifyRefreshToken(token) {
 }
 
 // Initialize keys on module load
-initializeKeys();
+initializeKeys().catch(console.error);
 
 module.exports = {
   signToken,
