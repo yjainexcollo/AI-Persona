@@ -22,7 +22,7 @@ async function listUsers({ skip, take, search, workspaceId }) {
         id: true,
         email: true,
         name: true,
-        isActive: true,
+        status: true,
         role: true,
         workspaceId: true,
         createdAt: true,
@@ -49,7 +49,7 @@ async function getUser(userId, workspaceId) {
       id: true,
       email: true,
       name: true,
-      isActive: true,
+      status: true,
       role: true,
       workspaceId: true,
       createdAt: true,
@@ -74,10 +74,10 @@ async function activateUser(userId, workspaceId) {
 
   const updatedUser = await prisma.user.update({
     where: { id: userId },
-    data: { isActive: true },
+    data: { status: "ACTIVE" },
     select: {
       id: true,
-      isActive: true,
+      status: true,
       role: true,
       workspaceId: true,
     },
@@ -100,10 +100,10 @@ async function deactivateUser(userId, workspaceId) {
 
   const updatedUser = await prisma.user.update({
     where: { id: userId },
-    data: { isActive: false },
+    data: { status: "INACTIVE" },
     select: {
       id: true,
-      isActive: true,
+      status: true,
       role: true,
       workspaceId: true,
     },
@@ -117,7 +117,7 @@ async function deactivateUser(userId, workspaceId) {
 async function getStats(workspaceId) {
   const [userCount, activeUserCount, membersCount] = await Promise.all([
     prisma.user.count({ where: { workspaceId } }),
-    prisma.user.count({ where: { workspaceId, isActive: true } }),
+    prisma.user.count({ where: { workspaceId, status: "ACTIVE" } }),
     prisma.user.count({ where: { workspaceId, role: "MEMBER" } }),
   ]);
 
@@ -141,7 +141,7 @@ async function promoteToAdmin(userId, workspaceId) {
     throw new ApiError(404, "User not found in workspace");
   }
 
-  if (!user.isActive) {
+  if (user.status !== "ACTIVE") {
     throw new ApiError(400, "Cannot promote inactive user");
   }
 
@@ -156,7 +156,7 @@ async function promoteToAdmin(userId, workspaceId) {
       id: true,
       email: true,
       name: true,
-      isActive: true,
+      status: true,
       role: true,
       workspaceId: true,
       createdAt: true,
@@ -183,7 +183,7 @@ async function demoteToMember(userId, workspaceId) {
     throw new ApiError(404, "User not found in workspace");
   }
 
-  if (!user.isActive) {
+  if (user.status !== "ACTIVE") {
     throw new ApiError(400, "Cannot demote inactive user");
   }
 
@@ -196,7 +196,7 @@ async function demoteToMember(userId, workspaceId) {
     where: {
       workspaceId: workspaceId,
       role: "ADMIN",
-      isActive: true,
+      status: "ACTIVE",
     },
   });
 
@@ -211,7 +211,7 @@ async function demoteToMember(userId, workspaceId) {
       id: true,
       email: true,
       name: true,
-      isActive: true,
+      status: true,
       role: true,
       workspaceId: true,
       createdAt: true,

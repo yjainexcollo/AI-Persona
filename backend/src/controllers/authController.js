@@ -128,21 +128,29 @@ const refreshTokens = asyncHandler(async (req, res) => {
 
 // POST /api/auth/logout
 const logout = asyncHandler(async (req, res) => {
-  const { refreshToken } = req.body;
+  const userId = req.user.id;
   const { ipAddress, userAgent, traceId } = getClientInfo(req);
 
-  if (!refreshToken) {
-    throw new ApiError(400, "Refresh token is required");
+  // Get the current session ID from the request headers or token
+  const authHeader = req.headers["authorization"];
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    throw new ApiError(401, "Authorization token required");
   }
 
+  const token = authHeader.split(" ")[1];
+
+  // Revoke the current session
   const result = await authService.logout(
-    { refreshToken },
+    { token },
     ipAddress,
     userAgent,
     traceId
   );
 
-  res.status(200).json(result);
+  res.status(200).json({
+    status: "success",
+    message: "Logged out successfully",
+  });
 });
 
 // GET /api/auth/verify-email

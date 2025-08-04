@@ -14,7 +14,7 @@ async function getProfile(userId) {
       email: true,
       name: true,
       emailVerified: true,
-      isActive: true,
+      status: true,
       role: true,
       workspaceId: true,
       createdAt: true,
@@ -31,14 +31,14 @@ async function getWorkspaceUsers(workspaceId) {
   const users = await prisma.user.findMany({
     where: {
       workspaceId: workspaceId,
-      isActive: true,
+      status: true,
     },
     select: {
       id: true,
       email: true,
       name: true,
       emailVerified: true,
-      isActive: true,
+      status: true,
       role: true,
       workspaceId: true,
       createdAt: true,
@@ -70,7 +70,7 @@ async function updateProfile(userId, { name, email }) {
       email: true,
       name: true,
       emailVerified: true,
-      isActive: true,
+      status: true,
       role: true,
       workspaceId: true,
     },
@@ -119,7 +119,7 @@ async function deactivateAccount(userId) {
 
   await prisma.user.update({
     where: { id: userId },
-    data: { isActive: false },
+    data: { status: "DEACTIVATED" },
   });
 
   logger.info(`User ${userId} deactivated their account`);
@@ -129,7 +129,7 @@ async function deactivateAccount(userId) {
 async function getWorkspaceStats(workspaceId) {
   const [userCount, activeUserCount, membersCount] = await Promise.all([
     prisma.user.count({ where: { workspaceId } }),
-    prisma.user.count({ where: { workspaceId, isActive: true } }),
+    prisma.user.count({ where: { workspaceId, status: "ACTIVE" } }),
     prisma.user.count({ where: { workspaceId, role: "MEMBER" } }),
   ]);
 

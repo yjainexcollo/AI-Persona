@@ -29,7 +29,7 @@ async function authMiddleware(req, res, next) {
     const user = await prisma.user.findUnique({
       where: { id: payload.userId },
     });
-    if (!user || !user.isActive) {
+    if (!user || user.status !== "ACTIVE") {
       throw new ApiError(401, "User not found or inactive");
     }
     if (!user.workspaceId) {

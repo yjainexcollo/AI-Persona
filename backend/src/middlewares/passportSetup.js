@@ -37,10 +37,9 @@ function initializePassport() {
                     profile.emails[0].value,
                   name: profile.displayName,
                   emailVerified: true,
-                  isActive: true,
+                  status: "ACTIVE",
                   workspaceId: workspace ? workspace.id : undefined,
                   role: workspace ? "MEMBER" : "MEMBER",
-                  // No passwordHash for OAuth users
                 },
               });
             }
@@ -53,8 +52,7 @@ function initializePassport() {
       )
     );
   }
-  // Add more strategies here (e.g., Microsoft, GitHub)
-
+  
   // Minimal serialize/deserialize for JWT (not sessions)
   passport.serializeUser((obj, done) =>
     done(null, obj.user ? obj.user.id : obj.id)

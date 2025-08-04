@@ -12,6 +12,7 @@ const ApiError = require("../utils/apiError");
 const config = require("../config");
 const emailService = require("./emailService");
 const breachCheckService = require("./breachCheckService");
+const jwtUtils = require("../utils/jwt");
 
 const prisma = new PrismaClient();
 
@@ -53,16 +54,30 @@ function isAccountLocked(user) {
 
 // Lock account after failed attempts
 async function lockAccount(userId, lockoutMinutes = 15) {
-  const lockedUntil = new Date(Date.now() + lockoutMinutes * 60 * 1000);
-  await prisma.user.update({
-    where: { id: userId },
-    data: {
-      lockedUntil,
-      failedLoginCount: { increment: 1 },
-    },
-  });
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  const newFailedCount = (user.failedLoginCount || 0) + 1;
 
-  logger.warn(`Account locked for user ${userId} until ${lockedUntil}`);
+  if (newFailedCount >= 5) {
+    // Lock account after 5 failed attempts
+    const lockedUntil = new Date(Date.now() + lockoutMinutes * 60 * 1000);
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        lockedUntil,
+        failedLoginCount: newFailedCount,
+      },
+    });
+    logger.warn(
+      `Account locked for user ${userId} until ${lockedUntil} after ${newFailedCount} failed attempts`
+    );
+  } else {
+    // Just increment failed count without locking
+    await prisma.user.update({
+      where: { id: userId },
+      data: { failedLoginCount: newFailedCount },
+    });
+    logger.warn(`Failed login attempt ${newFailedCount}/5 for user ${userId}`);
+  }
 }
 
 // Unlock account
@@ -322,33 +337,51 @@ async function login(
 
   // Check if account is locked
   if (isAccountLocked(user)) {
+    const lockoutEnd = user.lockedUntil;
+    const now = new Date();
+    const remainingMinutes = Math.ceil((lockoutEnd - now) / (1000 * 60));
+
     await createAuditEvent(
       user.id,
       "LOGIN_FAILED",
-      { reason: "Account locked" },
+      { reason: "Account locked", remainingMinutes },
       ipAddress,
       userAgent,
       traceId
     );
     throw new ApiError(
       423,
-      "Account is temporarily locked due to too many failed attempts"
+      `Account is temporarily locked due to too many failed attempts. Please try again in ${remainingMinutes} minutes.`
     );
   }
 
   // Verify password
   const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
   if (!isPasswordValid) {
+    const currentFailedCount = user.failedLoginCount || 0;
+    const remainingAttempts = 5 - currentFailedCount - 1;
+
     await lockAccount(user.id);
     await createAuditEvent(
       user.id,
       "LOGIN_FAILED",
-      { reason: "Invalid password" },
+      { reason: "Invalid password", failedAttempts: currentFailedCount + 1 },
       ipAddress,
       userAgent,
       traceId
     );
-    throw new ApiError(401, "Invalid email or password");
+
+    if (remainingAttempts <= 0) {
+      throw new ApiError(
+        423,
+        "Account is temporarily locked due to too many failed attempts. Please try again in 15 minutes."
+      );
+    } else {
+      throw new ApiError(
+        401,
+        `Invalid email or password. ${remainingAttempts} attempts remaining before account lockout.`
+      );
+    }
   }
 
   // Reset failed login count and unlock account
@@ -361,16 +394,12 @@ async function login(
   });
 
   // Generate tokens
-  const accessToken = jwt.sign(
-    {
-      userId: user.id,
-      email: user.email,
-      role: user.role,
-      workspaceId: user.workspaceId,
-    },
-    config.jwtSecret,
-    { expiresIn: config.jwtExpiresIn }
-  );
+  const accessToken = jwtUtils.signToken({
+    userId: user.id,
+    email: user.email,
+    role: user.role,
+    workspaceId: user.workspaceId,
+  });
 
   const refreshToken = crypto.randomBytes(32).toString("hex");
   const deviceId = crypto.randomBytes(16).toString("hex");
@@ -433,16 +462,12 @@ async function refreshTokens(
   }
 
   // Generate new tokens
-  const newAccessToken = jwt.sign(
-    {
-      userId: session.user.id,
-      email: session.user.email,
-      role: session.user.role,
-      workspaceId: session.user.workspaceId,
-    },
-    config.jwtSecret,
-    { expiresIn: config.jwtExpiresIn }
-  );
+  const newAccessToken = jwtUtils.signToken({
+    userId: session.user.id,
+    email: session.user.email,
+    role: session.user.role,
+    workspaceId: session.user.workspaceId,
+  });
 
   const newRefreshToken = crypto.randomBytes(32).toString("hex");
 
@@ -481,37 +506,55 @@ async function refreshTokens(
 
 // Enhanced logout
 async function logout(
-  { refreshToken },
+  { token },
   ipAddress = null,
   userAgent = null,
   traceId = null
 ) {
-  const session = await prisma.session.findUnique({
-    where: { refreshToken },
-    include: { user: true },
-  });
+  try {
+    // Verify the access token to get user information
+    const payload = jwtUtils.verifyToken(token);
+    const userId = payload.userId;
 
-  if (session) {
-    await prisma.session.update({
-      where: { id: session.id },
-      data: { isActive: false },
+    // Find and revoke the current session for this user
+    const session = await prisma.session.findFirst({
+      where: {
+        userId,
+        isActive: true,
+        expiresAt: { gt: new Date() },
+      },
+      orderBy: { lastUsedAt: "desc" },
     });
 
-    await createAuditEvent(
-      session.user.id,
-      "LOGOUT",
-      { deviceId: session.deviceId },
-      ipAddress,
-      userAgent,
-      traceId
-    );
-    logger.info(`User logged out: ${session.user.id}`);
-  }
+    if (session) {
+      await prisma.session.update({
+        where: { id: session.id },
+        data: { isActive: false },
+      });
 
-  return {
-    status: "success",
-    message: "Logout successful",
-  };
+      await createAuditEvent(
+        userId,
+        "LOGOUT",
+        { deviceId: session.deviceId },
+        ipAddress,
+        userAgent,
+        traceId
+      );
+      logger.info(`User logged out: ${userId}`);
+    }
+
+    return {
+      status: "success",
+      message: "Logout successful",
+    };
+  } catch (error) {
+    // If token verification fails, still return success to prevent token enumeration
+    logger.warn(`Logout with invalid token: ${error.message}`);
+    return {
+      status: "success",
+      message: "Logout successful",
+    };
+  }
 }
 
 // Get user sessions

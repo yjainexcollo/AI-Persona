@@ -11,12 +11,11 @@ const authMiddleware = require("../middlewares/authMiddleware");
 const {
   validateRegistration,
   validateLogin,
-  validatePasswordResetRequest,
-  validatePasswordReset,
+  validateTokenRefresh,
   validateEmailVerification,
   validateResendVerification,
-  validateTokenRefresh,
-  validateLogout,
+  validatePasswordResetRequest,
+  validatePasswordReset,
   validateSessionRevocation,
 } = require("../middlewares/validationMiddleware");
 const rateLimit = require("express-rate-limit");
@@ -63,7 +62,6 @@ router.post(
 );
 router.post("/login", loginLimiter, validateLogin, authController.login);
 router.post("/refresh", validateTokenRefresh, authController.refreshTokens);
-router.post("/logout", validateLogout, authController.logout);
 
 // Email verification routes
 router.get(
@@ -108,6 +106,9 @@ router.delete(
   validateSessionRevocation,
   authController.revokeSession
 );
+
+// Authentication management
+router.post("/logout", ...authenticatedOnly, authController.logout);
 
 // Account management
 router.post(

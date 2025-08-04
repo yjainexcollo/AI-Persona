@@ -3,18 +3,19 @@ info:
   title: AI-Persona Backend API
   version: 1.0.0
   description: |
-    # AI-Persona SaaS Backend API - Auth & User-Management Module
+    # AI-Persona SaaS Backend API - Core Authentication & User Management
 
     ## **Overview**
-    This API provides comprehensive, enterprise-grade authentication and user management for the AI-Persona SaaS platform. The Auth & User-Management module is designed for production environments with advanced security features, compliance, and scalability.
+    This API provides enterprise-grade authentication and user management for the AI-Persona SaaS platform. The core module is designed for production environments with advanced security features and compliance.
 
-    ## **Production Features**
-    - **Enterprise Security**: RSA key rotation, HIBP breach detection, account lockout
-    - **Multi-Tenancy**: Workspace-scoped operations with strict isolation
-    - **Compliance**: GDPR support, audit logging, data retention policies
-    - **Scalability**: Rate limiting, automated cleanup, monitoring
-    - **OAuth Integration**: Google OAuth with automatic account provisioning
-    - **Session Management**: Device tracking, token rotation, session revocation
+    ## **Core Features**
+    - **Authentication**: Local (email/password) and Google OAuth authentication
+    - **Account Lifecycle**: PENDING_VERIFY → ACTIVE → DEACTIVATED → PENDING_DELETION
+    - **Email Verification**: 24-hour TTL verification tokens with resend capability
+    - **Password Reset**: Secure token-based password reset with 1-hour TTL
+    - **Session Management**: Device tracking, session revocation, and token rotation
+    - **Account Lockout**: Automatic lockout after failed login attempts (5 attempts → 15 min)
+    - **GDPR Compliance**: Account deletion with 30-day grace period
 
     ## **Security Architecture**
     - **JWT Security**: RSA-256 signing with key rotation and JWKS endpoint
@@ -44,7 +45,7 @@ info:
 
     3. **Login**: `POST /api/auth/login`
        - Email + password authentication
-       - Account lockout after 10 failed attempts (15 min)
+       - Account lockout after 5 failed attempts (15 min)
        - Session creation with device tracking
        - Rate limited (10 requests/15min per IP)
 
@@ -98,75 +99,96 @@ info:
        - Revokes current refresh token
        - Idempotent operation
 
-    ### **JWT Key Management**
+    ### **Admin Operations**
+    1. **User Management**: `GET /api/admin/users`
+       - List workspace users
+       - Role management
+       - Account status management
+
+    2. **Workspace Management**: `GET /api/admin/workspace`
+       - Workspace statistics
+       - User counts and activity
+
+    ### **Security Endpoints**
     1. **JWKS Endpoint**: `GET /api/auth/.well-known/jwks.json`
-       - Public keys for JWT verification
+       - Public key set for JWT verification
        - Supports key rotation
        - Standard JWKS format
 
     2. **Key Rotation**: `POST /api/auth/rotate-keys`
-       - Admin-only operation
-       - Creates new RSA key pair
-       - Keeps old keys for transition
-       - Returns new and old key IDs
+       - Rotates RSA key pair (Admin only)
+       - Zero-downtime key rotation
+       - Maintains backward compatibility
 
-    ## **Role-Based Access Control (RBAC)**
-    - **ADMIN**: Full workspace management, user management, key rotation
-    - **MEMBER**: Basic user access, profile management
-    - **Workspace Scoped**: Admins only see their workspace users
+    ## **Rate Limiting**
+    - **Registration**: 5 requests/hour per IP
+    - **Login**: 10 requests/15min per IP
+    - **Password Reset**: 3 requests/hour per IP
+    - **Email Verification**: 5 requests/hour per IP
 
-    ## **Monitoring & Observability**
-    - **Health Check**: `GET /api/auth/health`
-    - **Prometheus Metrics**: `GET /metrics`
-    - **JSON Metrics**: `GET /metrics/json`
-    - **Structured Logging**: Winston with trace IDs
+    ## **Error Handling**
+    - **400**: Bad Request (validation errors)
+    - **401**: Unauthorized (invalid credentials)
+    - **403**: Forbidden (insufficient permissions)
+    - **404**: Not Found (resource not found)
+    - **409**: Conflict (resource already exists)
+    - **423**: Locked (account temporarily locked)
+    - **429**: Too Many Requests (rate limit exceeded)
+    - **500**: Internal Server Error
 
-    ## **Automated Cleanup**
-    - **Unverified Users**: Hourly cleanup (7 days)
-    - **Pending Deletion**: Daily cleanup (30 days)
-    - **Expired Sessions**: Every 6 hours
-    - **Expired Tokens**: Every 2 hours
-
-    **Base URLs:** `/api/auth`, `/api/users`, `/api/admin`, `/metrics`
-  contact:
-    name: AI-Persona Support
-    email: support@ai-persona.com
-    url: https://ai-persona.com/support
-  license:
-    name: Proprietary
-    url: https://ai-persona.com/license
-  servers:
-    - url: https://api.ai-persona.com
-      description: Production server
-    - url: https://staging-api.ai-persona.com
-      description: Staging server
-    - url: http://localhost:3000
-      description: Local development server
+    ## **Response Format**
+    ```json
+    {
+      "status": "success|error",
+      "message": "Human readable message",
+      "data": { ... },
+      "errors": [ ... ]
+    }
+    ```
 
 servers:
   - url: http://localhost:3000
-    description: Local development server
+    description: Development server
+  - url: https://api.ai-persona.com
+    description: Production server
+
+tags:
+  - name: Authentication
+    description: User authentication and authorization
+  - name: User Management
+    description: User profile and account management
+  - name: Admin
+    description: Administrative operations
+  - name: Security
+    description: Security and key management
 
 paths:
-  # ===================================
-  # AUTHENTICATION ENDPOINTS
-  # ===================================
+  # Health Check
+  /health:
+    get:
+      tags:
+        - System
+      summary: Health check
+      description: Check if the service is running
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
 
+  # Authentication Endpoints
   /api/auth/register:
     post:
-      summary: Register a new user or reactivate deactivated account
-      tags: [Auth]
-      description: |
-        Registers a new user or reactivates a deactivated account. After registration/reactivation, a verification email is sent to the provided email address.
-
-        **Security Features:**
-        - Password strength validation (minimum 8 characters, uppercase, lowercase, number, special character)
-        - HIBP (Have I Been Pwned) breach detection - rejects passwords found in data breaches
-        - Rate limiting (5 requests per hour per IP)
-
-        **Note:** The user must verify their email before they can log in.
-
-        **Reactivation:** If a user with the provided email exists but is deactivated, the account will be reactivated with the new password and name. The user will need to verify their email again.
+      tags:
+        - Authentication
+      summary: Register new user
+      description: Create a new user account with email verification
       requestBody:
         required: true
         content:
@@ -176,106 +198,52 @@ paths:
               required:
                 - email
                 - password
+                - name
               properties:
                 email:
                   type: string
                   format: email
-                  example: newuser@company.com
+                  example: "user@example.com"
                 password:
                   type: string
-                  format: password
-                  example: StrongPassword!2025
+                  minLength: 8
+                  example: "SecurePass123!"
                 name:
                   type: string
-                  example: Alice Smith
-            example:
-              email: newuser@company.com
-              password: StrongPassword!2025
-              name: Alice Smith
+                  minLength: 2
+                  example: "John Doe"
       responses:
         "201":
-          description: Registration successful. Verification email sent.
+          description: User registered successfully
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/AuthSuccessResponse"
-              example:
-                status: success
-                message: Registration successful. Verification email sent.
-                data:
-                  user:
-                    id: cluser_abc123
-                    email: newuser@company.com
-                    name: Alice Smith
-                    role: ADMIN
-                    workspaceId: clworkspace_123xyz
-                  workspace:
-                    id: clworkspace_123xyz
-                    domain: company.com
-        "200":
-          description: Account reactivated. Verification email sent.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuthSuccessResponse"
-              example:
-                status: success
-                message: Account reactivated. Verification email sent.
-                data:
-                  user:
-                    id: cluser_abc123
-                    email: reactivated@company.com
-                    name: John Doe
-                    role: MEMBER
-                    workspaceId: clworkspace_123xyz
-                  workspace:
-                    id: clworkspace_123xyz
-                    domain: company.com
-        "409":
-          description: Email already registered (active account)
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
         "400":
-          description: Invalid input (weak password, breached password, or validation error)
+          description: Validation error
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-              examples:
-                weak_password:
-                  summary: Weak password
-                  value:
-                    error:
-                      message: "Validation failed: Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character"
-                breached_password:
-                  summary: Breached password
-                  value:
-                    error:
-                      message: "Password has been breached 176566 times"
-                validation_error:
-                  summary: Other validation error
-                  value:
-                    error:
-                      message: "Validation failed: Please provide a valid email address"
+        "409":
+          description: Email already registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "429":
-          description: Too many registration attempts
+          description: Rate limit exceeded
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-              example:
-                error:
-                  message: "Too many registration attempts, please try again later"
 
   /api/auth/login:
     post:
-      summary: Login with email and password
-      tags: [Auth]
-      description: |
-        Logs in a user with email and password. Only users with verified emails can log in.
-        If the email is not verified, an error is returned and the user should check their inbox or request a new verification email.
+      tags:
+        - Authentication
+      summary: User login
+      description: Authenticate user with email and password
       requestBody:
         required: true
         content:
@@ -289,67 +257,48 @@ paths:
                 email:
                   type: string
                   format: email
-                  example: alice@company.com
+                  example: "user@example.com"
                 password:
                   type: string
-                  format: password
-                  example: StrongPassword!2025
-            example:
-              email: alice@company.com
-              password: StrongPassword!2025
+                  example: "SecurePass123!"
       responses:
         "200":
           description: Login successful
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AuthSuccessResponse"
-              example:
-                status: success
-                message: Login successful
-                data:
-                  user:
-                    id: cluser_abc123
-                    email: alice@company.com
-                    name: Alice Smith
-                    role: ADMIN
-                    workspaceId: clworkspace_123xyz
-                  workspaceId: clworkspace_123xyz
-                  workspaceName: Company Workspace
-                  accessToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...abc123
-                  refreshToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...xyz789
+                $ref: "#/components/schemas/LoginSuccessResponse"
         "401":
-          description: Invalid email or password
+          description: Invalid credentials
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
-          description: Email not verified or user account is inactive
+          description: Account not verified or deactivated
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "400":
-          description: Invalid input
+        "423":
+          description: Account temporarily locked
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "429":
-          description: Too many login attempts
+          description: Rate limit exceeded
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-              example:
-                error:
-                  message: "Too many login attempts, please try again later"
 
   /api/auth/refresh:
     post:
-      summary: Refresh access and refresh tokens
-      tags: [Auth]
+      tags:
+        - Authentication
+      summary: Refresh access token
+      description: Get new access token using refresh token
       requestBody:
         required: true
         content:
@@ -361,30 +310,16 @@ paths:
               properties:
                 refreshToken:
                   type: string
-                  example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...xyz789
-            example:
-              refreshToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...xyz789
+                  example: "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
       responses:
         "200":
-          description: Tokens refreshed
+          description: Token refreshed successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/RefreshSuccessResponse"
-              example:
-                status: success
-                message: Tokens refreshed
-                data:
-                  accessToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...abc123
-                  refreshToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...xyz789
+                $ref: "#/components/schemas/TokenRefreshResponse"
         "401":
-          description: Invalid or expired refresh token
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "400":
-          description: Invalid input
+          description: Invalid refresh token
           content:
             application/json:
               schema:
@@ -392,11 +327,59 @@ paths:
 
   /api/auth/logout:
     post:
-      summary: Logout user
-      tags: [Auth]
-      description: |
-        Logs out a user by invalidating their refresh token. The session will be marked as inactive.
-        This endpoint does not require authentication - users can logout even if their token is expired.
+      tags:
+        - Authentication
+      summary: User logout
+      description: Logout user and revoke current session (requires authentication)
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Logout successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/auth/verify-email:
+    get:
+      tags:
+        - Authentication
+      summary: Verify email address
+      description: Verify user email with token from verification email
+      parameters:
+        - name: token
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Email verification token
+      responses:
+        "200":
+          description: Email verified successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          description: Invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/auth/resend-verification:
+    post:
+      tags:
+        - Authentication
+      summary: Resend verification email
+      description: Send new verification email to user
       requestBody:
         required: true
         content:
@@ -404,106 +387,113 @@ paths:
             schema:
               type: object
               required:
-                - refreshToken
+                - email
               properties:
-                refreshToken:
+                email:
                   type: string
-                  example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...xyz789
-            example:
-              refreshToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...xyz789
+                  format: email
+                  example: "user@example.com"
       responses:
         "200":
-          description: Logout successful
+          description: Verification email sent
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  message:
-                    type: string
-                    example: Logout successful
-              example:
-                status: success
-                message: Logout successful
-        "400":
-          description: Invalid input
+                $ref: "#/components/schemas/SuccessResponse"
+        "429":
+          description: Rate limit exceeded
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  # ===================================
-  # ENHANCED AUTHENTICATION ENDPOINTS
-  # ===================================
-
-  /api/auth/sessions:
-    get:
-      summary: Get user sessions
-      tags: [Auth]
-      description: |
-        **RBAC:** Any authenticated user can access this endpoint.
-        Returns a list of all active sessions for the authenticated user.
-        Includes device information and last used timestamps.
-      security:
-        - bearerAuth: []
+  /api/auth/request-password-reset:
+    post:
+      tags:
+        - Authentication
+      summary: Request password reset
+      description: Send password reset email to user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: "user@example.com"
       responses:
         "200":
-          description: User sessions retrieved successfully
+          description: Password reset email sent
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  message:
-                    type: string
-                    example: User sessions retrieved
-                  data:
-                    type: object
-                    properties:
-                      sessions:
-                        type: array
-                        items:
-                          type: object
-                          properties:
-                            id:
-                              type: string
-                              example: session_123
-                            deviceId:
-                              type: string
-                              example: device_abc123
-                            userAgent:
-                              type: string
-                              example: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)
-                            ipAddress:
-                              type: string
-                              example: 192.168.1.100
-                            lastUsedAt:
-                              type: string
-                              format: date-time
-                              example: "2025-01-15T10:30:00Z"
-                            createdAt:
-                              type: string
-                              format: date-time
-                              example: "2025-01-15T09:00:00Z"
-                example:
-                  status: success
-                  message: User sessions retrieved
-                  data:
-                    sessions:
-                      - id: session_123
-                        deviceId: device_abc123
-                        userAgent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)
-                        ipAddress: 192.168.1.100
-                        lastUsedAt: "2025-01-15T10:30:00Z"
-                        createdAt: "2025-01-15T09:00:00Z"
+                $ref: "#/components/schemas/SuccessResponse"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/auth/reset-password:
+    post:
+      tags:
+        - Authentication
+      summary: Reset password
+      description: Reset password using token from email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - token
+                - newPassword
+              properties:
+                token:
+                  type: string
+                  example: "reset_token_here"
+                newPassword:
+                  type: string
+                  minLength: 8
+                  example: "NewSecurePass123!"
+      responses:
+        "200":
+          description: Password reset successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          description: Invalid token or weak password
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/auth/sessions:
+    get:
+      tags:
+        - Authentication
+      summary: Get user sessions
+      description: Get all active sessions for the authenticated user
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: User sessions retrieved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionsResponse"
         "401":
-          description: Authentication required
+          description: Unauthorized
           content:
             application/json:
               schema:
@@ -511,41 +501,28 @@ paths:
 
   /api/auth/sessions/{sessionId}:
     delete:
-      summary: Revoke specific session
-      tags: [Auth]
-      description: |
-        **RBAC:** Any authenticated user can access this endpoint.
-        Revokes a specific session by its ID. The session will be marked as inactive.
-        Users can only revoke their own sessions.
+      tags:
+        - Authentication
+      summary: Revoke session
+      description: Revoke a specific user session
       security:
-        - bearerAuth: []
+        - BearerAuth: []
       parameters:
-        - in: path
-          name: sessionId
+        - name: sessionId
+          in: path
           required: true
           schema:
             type: string
-            example: session_123
-          description: The ID of the session to revoke
+          description: Session ID to revoke
       responses:
         "200":
           description: Session revoked successfully
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  message:
-                    type: string
-                    example: Session revoked successfully
-              example:
-                status: success
-                message: Session revoked successfully
+                $ref: "#/components/schemas/SuccessResponse"
         "401":
-          description: Authentication required
+          description: Unauthorized
           content:
             application/json:
               schema:
@@ -559,34 +536,21 @@ paths:
 
   /api/auth/deactivate:
     post:
+      tags:
+        - Authentication
       summary: Deactivate account
-      tags: [Auth]
-      description: |
-        **RBAC:** Any authenticated user can access this endpoint.
-        Deactivates the authenticated user's account. The account will be marked as DEACTIVATED.
-        All active sessions will be revoked immediately.
-        The user will not be able to log in until the account is reactivated by an admin.
+      description: Deactivate user account (requires authentication)
       security:
-        - bearerAuth: []
+        - BearerAuth: []
       responses:
         "200":
           description: Account deactivated successfully
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  message:
-                    type: string
-                    example: Account deactivated successfully
-              example:
-                status: success
-                message: Account deactivated successfully
+                $ref: "#/components/schemas/SuccessResponse"
         "401":
-          description: Authentication required
+          description: Unauthorized
           content:
             application/json:
               schema:
@@ -594,99 +558,71 @@ paths:
 
   /api/auth/delete-account:
     post:
-      summary: Request account deletion (GDPR)
-      tags: [Auth]
-      description: |
-        **RBAC:** Any authenticated user can access this endpoint.
-        Requests deletion of the authenticated user's account for GDPR compliance.
-        The account will be marked as PENDING_DELETION.
-        All active sessions will be revoked immediately.
-        The account will be permanently deleted after 30 days.
-        Users can reactivate their account by logging in within the 30-day period.
+      tags:
+        - Authentication
+      summary: Request account deletion
+      description: Request account deletion (GDPR compliance)
       security:
-        - bearerAuth: []
+        - BearerAuth: []
       responses:
         "200":
-          description: Account deletion requested successfully
+          description: Account deletion requested
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  message:
-                    type: string
-                    example: Account deletion requested. Your account will be permanently deleted in 30 days.
-              example:
-                status: success
-                message: Account deletion requested. Your account will be permanently deleted in 30 days.
+                $ref: "#/components/schemas/SuccessResponse"
         "401":
-          description: Authentication required
+          description: Unauthorized
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  /api/auth/health:
+  # OAuth Endpoints
+  /api/auth/google:
     get:
-      summary: Health check
-      tags: [System]
-      description: |
-        **Public endpoint** - No authentication required.
-        Checks the health of the application and database connectivity.
-        Returns system status, uptime, and environment information.
+      tags:
+        - Authentication
+      summary: Google OAuth login
+      description: Redirect to Google OAuth for authentication
+      responses:
+        "302":
+          description: Redirect to Google OAuth
+
+  /api/auth/google/callback:
+    get:
+      tags:
+        - Authentication
+      summary: Google OAuth callback
+      description: Handle Google OAuth callback and create user session
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Authorization code from Google
       responses:
         "200":
-          description: Service is healthy
+          description: OAuth login successful
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  message:
-                    type: string
-                    example: Service is healthy
-                  data:
-                    type: object
-                    properties:
-                      timestamp:
-                        type: string
-                        format: date-time
-                        example: "2025-01-15T10:30:00Z"
-                      uptime:
-                        type: number
-                        example: 3600.5
-                      environment:
-                        type: string
-                        example: production
-                example:
-                  status: success
-                  message: Service is healthy
-                  data:
-                    timestamp: "2025-01-15T10:30:00Z"
-                    uptime: 3600.5
-                    environment: production
-        "503":
-          description: Service is unhealthy
+                $ref: "#/components/schemas/LoginSuccessResponse"
+        "400":
+          description: OAuth error
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  # Security Endpoints
   /api/auth/.well-known/jwks.json:
     get:
+      tags:
+        - Security
       summary: Get JSON Web Key Set (JWKS)
-      tags: [System]
-      description: |
-        **Public endpoint** - No authentication required.
-        Returns the JSON Web Key Set (JWKS) containing public keys for JWT verification.
-        Used by clients to verify JWT tokens without needing to contact the server for each verification.
-        Supports key rotation with multiple keys and kid (key ID) headers.
+      description: Returns the JSON Web Key Set (JWKS) containing public keys for JWT verification
       responses:
         "200":
           description: JWKS in standard format
@@ -702,42 +638,28 @@ paths:
                       properties:
                         kty:
                           type: string
-                          example: RSA
+                          example: "RSA"
                         use:
                           type: string
-                          example: sig
+                          example: "sig"
                         kid:
                           type: string
-                          example: "3907adeee32f00f7a09f5330fa3c0727"
-                        x5t:
-                          type: string
-                          example: "3907adeee32f00f7a09f5330fa3c0727"
+                          example: "abc123"
                         n:
                           type: string
-                          example: "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA..."
+                          example: "modulus"
                         e:
                           type: string
                           example: "AQAB"
-              example:
-                keys:
-                  - kty: RSA
-                    use: sig
-                    kid: "3907adeee32f00f7a09f5330fa3c0727"
-                    x5t: "3907adeee32f00f7a09f5330fa3c0727"
-                    n: "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA..."
-                    e: "AQAB"
 
   /api/auth/rotate-keys:
     post:
+      tags:
+        - Security
       summary: Rotate JWT keys (Admin only)
-      tags: [System]
-      description: |
-        **Admin only** - Requires authentication and ADMIN role.
-        Rotates the RSA key pair used for JWT signing and verification.
-        Creates new keys while keeping old keys for token verification during transition.
-        Returns the new and old key IDs for tracking.
+      description: Rotates the RSA key pair used for JWT signing and verification
       security:
-        - bearerAuth: []
+        - BearerAuth: []
       responses:
         "200":
           description: Keys rotated successfully
@@ -748,496 +670,61 @@ paths:
                 properties:
                   status:
                     type: string
-                    example: success
+                    example: "success"
                   message:
                     type: string
-                    example: Keys rotated successfully
+                    example: "Keys rotated successfully"
                   data:
                     type: object
                     properties:
                       newKid:
                         type: string
-                        description: Key ID of the new key
-                        example: "new_key_id_123"
+                        example: "def456"
                       oldKid:
                         type: string
-                        description: Key ID of the old key
-                        example: "old_key_id_456"
-              example:
-                status: success
-                message: Keys rotated successfully
-                data:
-                  newKid: "new_key_id_123"
-                  oldKid: "old_key_id_456"
+                        example: "abc123"
         "401":
-          description: Authentication required
+          description: Unauthorized
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
-          description: Admin role required
+          description: Forbidden (admin only)
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  # ===================================
-  # METRICS ENDPOINTS
-  # ===================================
-
-  /metrics:
+  # User Management Endpoints
+  /api/users/profile:
     get:
-      summary: Get Prometheus metrics
-      tags: [System]
-      description: |
-        **Public endpoint** - No authentication required.
-        Returns application metrics in Prometheus format.
-        Includes authentication events, performance metrics, and business KPIs.
-      responses:
-        "200":
-          description: Metrics in Prometheus format
-          content:
-            text/plain:
-              schema:
-                type: string
-              example: |
-                # HELP app_uptime_seconds Application uptime in seconds
-                # TYPE app_uptime_seconds gauge
-                app_uptime_seconds 3600.5
-                # HELP auth_register_total Total number of user registrations
-                # TYPE auth_register_total counter
-                auth_register_total 42
-
-  /metrics/json:
-    get:
-      summary: Get metrics in JSON format
-      tags: [System]
-      description: |
-        **Public endpoint** - No authentication required.
-        Returns application metrics in JSON format.
-        Includes counters and histograms for various metrics.
-      responses:
-        "200":
-          description: Metrics in JSON format
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  data:
-                    type: object
-                    properties:
-                      uptime:
-                        type: number
-                        example: 3600.5
-                      counters:
-                        type: object
-                        example:
-                          auth_register_total: 42
-                          auth_login_success_total: 156
-                          auth_login_failed_total: 23
-                      histograms:
-                        type: object
-                        example:
-                          request_duration_ms:
-                            count: 1000
-                            sum: 50000
-                            avg: 50
-                            min: 10
-                            max: 200
-                            p50: 45
-                            p95: 120
-                            p99: 180
-                      timestamp:
-                        type: string
-                        format: date-time
-                        example: "2025-01-15T10:30:00Z"
-              example:
-                status: success
-                data:
-                  uptime: 3600.5
-                  counters:
-                    auth_register_total: 42
-                    auth_login_success_total: 156
-                    auth_login_failed_total: 23
-                  histograms:
-                    request_duration_ms:
-                      count: 1000
-                      sum: 50000
-                      avg: 50
-                      min: 10
-                      max: 200
-                      p50: 45
-                      p95: 120
-                      p99: 180
-                  timestamp: "2025-01-15T10:30:00Z"
-
-  /metrics/reset:
-    post:
-      summary: Reset metrics (Admin only)
-      tags: [System]
-      description: |
-        **RBAC:** ADMIN role required.
-        Resets all application metrics to zero.
-        Useful for testing or when starting fresh monitoring.
+      tags:
+        - User Management
+      summary: Get user profile
+      description: Get current user profile information
       security:
-        - bearerAuth: []
+        - BearerAuth: []
       responses:
         "200":
-          description: Metrics reset successfully
+          description: User profile retrieved
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  message:
-                    type: string
-                    example: Metrics reset successfully
-              example:
-                status: success
-                message: Metrics reset successfully
+                $ref: "#/components/schemas/UserProfileResponse"
         "401":
-          description: Authentication required
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "403":
-          description: Insufficient permissions
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  # --- OAuth Routes ---
-  /api/auth/google:
-    get:
-      summary: Initiate Google OAuth login
-      tags: [OAuth]
-      description: |
-        Redirects the user to Google for authentication. This is a public endpoint.
-
-        On success, Google will redirect the user to `/api/auth/google/callback`.
-      responses:
-        "302":
-          description: Redirects to Google OAuth login page
-
-  /api/auth/google/callback:
-    get:
-      summary: Google OAuth callback
-      tags: [OAuth]
-      description: |
-        Handles the callback from Google after user authentication.
-
-        On success, redirects to frontend with token and workspace info.
-        On failure, redirects to `/login` or returns an error.
-      responses:
-        "302":
-          description: Redirects to frontend with OAuth tokens
-        "500":
-          description: OAuth login failed
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  /api/auth/verify-email:
-    get:
-      summary: Verify user email with a token
-      tags: [Auth]
-      description: |
-        Verifies a user's email address using a verification token sent via email.
-        The token is provided as a query parameter.
-      parameters:
-        - in: query
-          name: token
-          schema:
-            type: string
-            example: 1234567890abcdef
-          required: true
-          description: The email verification token sent to the user's email.
-      responses:
-        "200":
-          description: Email verified successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  message:
-                    type: string
-                    example: Email verified
-                  data:
-                    type: object
-                    properties:
-                      user:
-                        $ref: "#/components/schemas/AuthSuccessResponse/properties/data/properties/user"
-              example:
-                status: success
-                message: Email verified
-                data:
-                  user:
-                    id: cluser_abc123
-                    email: alice@company.com
-                    name: Alice Smith
-                    role: ADMIN
-                    workspaceId: clworkspace_123xyz
-        "400":
-          description: Invalid or expired verification token
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  /api/auth/resend-verification:
-    post:
-      summary: Resend email verification link
-      tags: [Auth]
-      description: |
-        Resends the email verification link to the user. Accepts the user's email in the POST body.
-        No authentication is required. Rate limited to 5 requests per hour per IP.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - email
-              properties:
-                email:
-                  type: string
-                  format: email
-                  example: alice@company.com
-            example:
-              email: alice@company.com
-      responses:
-        "200":
-          description: Verification email resent
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  message:
-                    type: string
-                    example: Verification email resent
-              example:
-                status: success
-                message: Verification email resent
-        "400":
-          description: Email already verified or invalid input
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: User not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "429":
-          description: Too many requests (rate limit exceeded)
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  /api/auth/request-password-reset:
-    post:
-      summary: Request password reset
-      tags: [Auth]
-      description: |
-        Allows a user who forgot their password to request a password reset link to be sent to their email address. This endpoint is public and does not require authentication.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - email
-              properties:
-                email:
-                  type: string
-                  format: email
-                  example: alice@company.com
-            example:
-              email: alice@company.com
-      responses:
-        "200":
-          description: If an account with that email exists, a password reset link has been sent.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  message:
-                    type: string
-                    example: If an account with that email exists, a password reset link has been sent.
-              example:
-                status: success
-                message: If an account with that email exists, a password reset link has been sent.
-        "400":
-          description: Email is required or invalid input
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  /api/auth/reset-password:
-    post:
-      summary: Reset password
-      tags: [Auth]
-      description: |
-        Allows a user to reset their password using a valid reset token and a new password. This endpoint is public and does not require authentication.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - token
-                - newPassword
-              properties:
-                token:
-                  type: string
-                  example: 1234567890abcdef
-                newPassword:
-                  type: string
-                  format: password
-                  example: NewStrongPassword!2025
-            example:
-              token: 1234567890abcdef
-              newPassword: NewStrongPassword!2025
-      responses:
-        "200":
-          description: Password has been reset successfully.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  message:
-                    type: string
-                    example: Password has been reset successfully.
-              example:
-                status: success
-                message: Password has been reset successfully.
-        "400":
-          description: Token and new password are required, or invalid/expired token
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: User not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  # ===================================
-  # USER ENDPOINTS
-  # ===================================
-
-  /api/users/me:
-    get:
-      summary: Get current user profile
-      tags: [User]
-      description: |
-        **RBAC:** Any authenticated user can access this endpoint.
-        Returns the current user's profile, including workspace and role.
-
-        **Note:** This endpoint does not require the `x-workspace-id` header as users can access their own profile data.
-      security:
-        - bearerAuth: []
-      responses:
-        "200":
-          description: User profile retrieved successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  data:
-                    type: object
-                    properties:
-                      user:
-                        type: object
-                        properties:
-                          id:
-                            type: string
-                            example: cluser_abc123
-                          email:
-                            type: string
-                            example: alice@company.com
-                          name:
-                            type: string
-                            example: Alice Smith
-                          emailVerified:
-                            type: boolean
-                            example: true
-                          isActive:
-                            type: boolean
-                            example: true
-                          role:
-                            type: string
-                            example: ADMIN
-                          workspaceId:
-                            type: string
-                            example: clworkspace_123xyz
-              example:
-                status: success
-                data:
-                  user:
-                    id: cluser_abc123
-                    email: alice@company.com
-                    name: Alice Smith
-                    emailVerified: true
-                    isActive: true
-                    role: ADMIN
-                    workspaceId: clworkspace_123xyz
-        "401":
-          description: Authentication required
+          description: Unauthorized
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
     put:
-      summary: Update current user profile
-      tags: [User]
-      description: |
-        **RBAC:** Any authenticated user can update their own profile.
-        Updates the user's name and email.
-
-        **Note:** This endpoint does not require the `x-workspace-id` header as users can update their own profile.
+      tags:
+        - User Management
+      summary: Update user profile
+      description: Update current user profile information
       security:
-        - bearerAuth: []
+        - BearerAuth: []
       requestBody:
         required: true
         content:
@@ -1247,3410 +734,488 @@ paths:
               properties:
                 name:
                   type: string
-                  example: Alice Johnson
-                email:
-                  type: string
-                  format: email
-                  example: alice.johnson@company.com
-            example:
-              name: Alice Johnson
-              email: alice.johnson@company.com
+                  minLength: 2
+                  example: "John Doe"
       responses:
         "200":
           description: Profile updated successfully
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  message:
-                    type: string
-                    example: Profile updated
-                  data:
-                    type: object
-                    properties:
-                      user:
-                        $ref: "#/components/schemas/AuthSuccessResponse/properties/data/properties/user"
-              example:
-                status: success
-                message: Profile updated
-                data:
-                  user:
-                    id: cluser_abc123
-                    email: alice.johnson@company.com
-                    name: Alice Johnson
-                    role: ADMIN
-                    workspaceId: clworkspace_123xyz
+                $ref: "#/components/schemas/UserProfileResponse"
         "400":
-          description: Invalid input
+          description: Validation error
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "401":
-          description: Authentication required
+          description: Unauthorized
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  /api/users/me/password:
-    put:
-      summary: Change password
-      tags: [User]
-      description: |
-        **RBAC:** Any authenticated user can change their password.
-        Requires the current password and a new password.
-
-        **Note:** This endpoint does not require the `x-workspace-id` header as users can change their own password.
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - currentPassword
-                - newPassword
-              properties:
-                currentPassword:
-                  type: string
-                  format: password
-                  example: OldPassword!2024
-                newPassword:
-                  type: string
-                  format: password
-                  example: NewStrongPassword!2025
-            example:
-              currentPassword: OldPassword!2024
-              newPassword: NewStrongPassword!2025
-      responses:
-        "200":
-          description: Password changed successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  message:
-                    type: string
-                    example: Password changed successfully
-              example:
-                status: success
-                message: Password changed successfully
-        "400":
-          description: Current and new password are required
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "401":
-          description: Authentication required or current password incorrect
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  /api/users/me/deactivate:
-    post:
-      summary: Deactivate (soft delete) account
-      tags: [User]
-      description: |
-        **RBAC:** Any authenticated user can deactivate their own account.
-        This will set the user's account as inactive (soft delete).
-
-        **Note:** This endpoint does not require the `x-workspace-id` header as users can deactivate their own account.
-      security:
-        - bearerAuth: []
-      responses:
-        "200":
-          description: Account deactivated successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  message:
-                    type: string
-                    example: Account deactivated
-              example:
-                status: success
-                message: Account deactivated
-        "401":
-          description: Authentication required
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  /api/users/workspace:
-    get:
-      summary: Get workspace users
-      tags: [User]
-      description: |
-        **RBAC:** Any authenticated user can access this endpoint.
-        Returns a list of all active users in the current user's workspace.
-
-        **Note:** This endpoint does not require the `x-workspace-id` header as users can access their own workspace data.
-      security:
-        - bearerAuth: []
-      responses:
-        "200":
-          description: Workspace users retrieved successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  data:
-                    type: object
-                    properties:
-                      users:
-                        type: array
-                        items:
-                          type: object
-                          properties:
-                            id:
-                              type: string
-                              example: cluser_abc123
-                            email:
-                              type: string
-                              example: alice@company.com
-                            name:
-                              type: string
-                              example: Alice Smith
-                            emailVerified:
-                              type: boolean
-                              example: true
-                            isActive:
-                              type: boolean
-                              example: true
-                            role:
-                              type: string
-                              example: MEMBER
-                            workspaceId:
-                              type: string
-                              example: clworkspace_123xyz
-                            createdAt:
-                              type: string
-                              format: date-time
-                              example: "2025-01-15T10:30:00Z"
-              example:
-                status: success
-                data:
-                  users:
-                    - id: cluser_abc123
-                      email: alice@company.com
-                      name: Alice Smith
-                      emailVerified: true
-                      isActive: true
-                      role: MEMBER
-                      workspaceId: clworkspace_123xyz
-                      createdAt: "2025-01-15T10:30:00Z"
-                    - id: cluser_def456
-                      email: bob@company.com
-                      name: Bob Johnson
-                      emailVerified: true
-                      isActive: true
-                      role: ADMIN
-                      workspaceId: clworkspace_123xyz
-                      createdAt: "2025-01-10T09:15:00Z"
-        "400":
-          description: Workspace not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "401":
-          description: Authentication required
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  /api/users/stats:
-    get:
-      summary: Get workspace statistics
-      tags: [User]
-      description: |
-        **RBAC:** Any authenticated user can access this endpoint.
-        Returns workspace usage statistics including user counts and member counts.
-
-        **Note:** This endpoint does not require the `x-workspace-id` header as users can access their own workspace data.
-      security:
-        - bearerAuth: []
-      responses:
-        "200":
-          description: Workspace statistics retrieved successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  data:
-                    type: object
-                    properties:
-                      users:
-                        type: integer
-                        example: 5
-                        description: Total users in the workspace
-                      activeUsers:
-                        type: integer
-                        example: 4
-                        description: Active users in the workspace
-                      members:
-                        type: integer
-                        example: 3
-                        description: Users with MEMBER role in the workspace
-              example:
-                status: success
-                data:
-                  users: 5
-                  activeUsers: 4
-                  members: 3
-        "400":
-          description: Workspace not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "401":
-          description: Authentication required
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  # ===================================
-  # ADMIN ENDPOINTS
-  # ===================================
-
+  # Admin Endpoints
   /api/admin/users:
     get:
-      summary: List workspace users
-      tags: [Admin]
-      description: |
-        **RBAC:** Only users with the `ADMIN` role can access this endpoint.
-        Returns a paginated list of users in the admin's workspace only. Supports optional search, skip, and take query parameters.
-
-        **Workspace Scoped:** This endpoint only returns users from the admin's own workspace for security.
+      tags:
+        - Admin
+      summary: Get workspace users
+      description: Get all users in the current workspace (admin only)
       security:
-        - bearerAuth: []
+        - BearerAuth: []
       parameters:
-        - in: query
-          name: skip
+        - name: page
+          in: query
           schema:
             type: integer
-            example: 0
-          description: Number of users to skip (for pagination)
-        - in: query
-          name: take
+            minimum: 1
+            default: 1
+          description: Page number
+        - name: limit
+          in: query
           schema:
             type: integer
-            example: 20
-          description: Number of users to return (for pagination)
-        - in: query
-          name: search
+            minimum: 1
+            maximum: 100
+            default: 20
+          description: Number of users per page
+        - name: status
+          in: query
           schema:
             type: string
-            example: alice
-          description: Search by email or name
+            enum: [ACTIVE, PENDING_VERIFY, DEACTIVATED, PENDING_DELETION]
+          description: Filter by user status
       responses:
         "200":
-          description: List of users
+          description: Users retrieved successfully
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  users:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        id:
-                          type: string
-                          example: cluser_abc123
-                        email:
-                          type: string
-                          example: alice@company.com
-                        name:
-                          type: string
-                          example: Alice Smith
-                        isActive:
-                          type: boolean
-                          example: true
-                              role:
-                                type: string
-                                example: MEMBER
-                        workspaceId:
-                          type: string
-                          example: clworkspace_123xyz
-                  total:
-                    type: integer
-                    example: 1
-              example:
-                status: success
-                users:
-                  - id: cluser_abc123
-                    email: alice@company.com
-                    name: Alice Smith
-                    isActive: true
-                        role: MEMBER
-                    workspaceId: clworkspace_123xyz
-                total: 1
+                $ref: "#/components/schemas/UsersListResponse"
         "401":
-          description: Authentication required or insufficient permissions
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  /api/admin/users/{id}:
-    get:
-      summary: Get workspace user details
-      tags: [Admin]
-      description: |
-        **RBAC:** Only users with the `ADMIN` role can access this endpoint.
-        Returns details for a specific user in the admin's workspace only.
-
-        **Workspace Scoped:** This endpoint only returns users from the admin's own workspace for security.
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-          description: The user ID
-      responses:
-        "200":
-          description: User details
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  user:
-                    type: object
-                    properties:
-                      id:
-                        type: string
-                        example: cluser_abc123
-                      email:
-                        type: string
-                        example: alice@company.com
-                      name:
-                        type: string
-                        example: Alice Smith
-                      isActive:
-                        type: boolean
-                        example: true
-                            role:
-                              type: string
-                              example: MEMBER
-                      workspaceId:
-                        type: string
-                        example: clworkspace_123xyz
-              example:
-                status: success
-                user:
-                  id: cluser_abc123
-                  email: alice@company.com
-                  name: Alice Smith
-                  isActive: true
-                      role: MEMBER
-                  workspaceId: clworkspace_123xyz
-        "401":
-          description: Authentication required or insufficient permissions
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: User not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  /api/admin/users/{id}/activate:
-    post:
-      summary: Activate workspace user
-      tags: [Admin]
-      description: |
-        **RBAC:** Only users with the `ADMIN` role can access this endpoint.
-        Activates the specified user in the admin's workspace only.
-
-        **Workspace Scoped:** This endpoint only affects users from the admin's own workspace for security.
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-          description: The user ID
-      responses:
-        "200":
-          description: User activated
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  message:
-                    type: string
-                    example: User activated
-                  user:
-                    type: object
-                    properties:
-                      id:
-                        type: string
-                        example: cluser_abc123
-                      isActive:
-                        type: boolean
-                        example: true
-              example:
-                status: success
-                message: User activated
-                user:
-                  id: cluser_abc123
-                  isActive: true
-        "401":
-          description: Authentication required or insufficient permissions
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: User not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  /api/admin/users/{id}/deactivate:
-    post:
-      summary: Deactivate workspace user
-      tags: [Admin]
-      description: |
-        **RBAC:** Only users with the `ADMIN` role can access this endpoint.
-        Deactivates the specified user in the admin's workspace only.
-
-        **Workspace Scoped:** This endpoint only affects users from the admin's own workspace for security.
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-          description: The user ID
-      responses:
-        "200":
-          description: User deactivated
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  message:
-                    type: string
-                    example: User deactivated
-                  user:
-                    type: object
-                    properties:
-                      id:
-                        type: string
-                        example: cluser_abc123
-                      isActive:
-                        type: boolean
-                        example: false
-              example:
-                status: success
-                message: User deactivated
-                user:
-                  id: cluser_abc123
-                  isActive: false
-        "401":
-          description: Authentication required or insufficient permissions
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: User not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  /api/admin/users/{id}/promote:
-    post:
-      summary: Promote user to admin
-      tags: [Admin]
-      description: |
-        **RBAC:** Only users with the `ADMIN` role can access this endpoint.
-        Promotes a user from MEMBER to ADMIN role in the admin's workspace only.
-
-        **Workspace Scoped:** This endpoint only affects users from the admin's own workspace for security.
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-          description: The user ID to promote
-      responses:
-        "200":
-          description: User promoted to admin
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  message:
-                    type: string
-                    example: User promoted to admin
-                  user:
-                    type: object
-                    properties:
-                      id:
-                        type: string
-                        example: cluser_abc123
-                      email:
-                        type: string
-                        example: alice@company.com
-                      name:
-                        type: string
-                        example: Alice Smith
-                      isActive:
-                        type: boolean
-                        example: true
-                      role:
-                        type: string
-                        example: ADMIN
-                      workspaceId:
-                        type: string
-                        example: clworkspace_123xyz
-              example:
-                status: success
-                message: User promoted to admin
-                user:
-                  id: cluser_abc123
-                  email: alice@company.com
-                  name: Alice Smith
-                  isActive: true
-                  role: ADMIN
-                  workspaceId: clworkspace_123xyz
-        "400":
-          description: User is already an admin or user is inactive
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "401":
-          description: Authentication required or insufficient permissions
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: User not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  /api/admin/users/{id}/demote:
-    post:
-      summary: Demote admin to member
-      tags: [Admin]
-      description: |
-        **RBAC:** Only users with the `ADMIN` role can access this endpoint.
-        Demotes a user from ADMIN to MEMBER role in the admin's workspace only.
-
-        **Workspace Scoped:** This endpoint only affects users from the admin's own workspace for security.
-        **Safety Check:** Cannot demote the last admin in the workspace.
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-          description: The user ID to demote
-      responses:
-        "200":
-          description: User demoted to member
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  message:
-                    type: string
-                    example: User demoted to member
-                  user:
-                    type: object
-                    properties:
-                      id:
-                        type: string
-                        example: cluser_abc123
-                      email:
-                        type: string
-                        example: alice@company.com
-                      name:
-                        type: string
-                        example: Alice Smith
-                      isActive:
-                        type: boolean
-                        example: true
-                      role:
-                        type: string
-                        example: MEMBER
-                      workspaceId:
-                        type: string
-                        example: clworkspace_123xyz
-              example:
-                status: success
-                message: User demoted to member
-                user:
-                  id: cluser_abc123
-                  email: alice@company.com
-                  name: Alice Smith
-                  isActive: true
-                  role: MEMBER
-                  workspaceId: clworkspace_123xyz
-        "400":
-          description: User is already a member, user is inactive, or cannot demote last admin
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "401":
-          description: Authentication required or insufficient permissions
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: User not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  /api/admin/stats:
-    get:
-      summary: Get workspace stats
-      tags: [Admin]
-      description: |
-        **RBAC:** Only users with the `ADMIN` role can access this endpoint.
-        Returns workspace usage statistics including user counts and member counts for the admin's workspace only.
-
-        **Workspace Scoped:** This endpoint only returns stats for the admin's own workspace for security.
-      security:
-        - bearerAuth: []
-      responses:
-        "200":
-          description: System stats
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  data:
-                    type: object
-                    properties:
-                      users:
-                        type: integer
-                        example: 5
-                        description: Total users in the workspace
-                      activeUsers:
-                        type: integer
-                        example: 4
-                        description: Active users in the workspace
-                      members:
-                        type: integer
-                        example: 3
-                        description: Users with MEMBER role in the workspace
-              example:
-                status: success
-                data:
-                  users: 5
-                  activeUsers: 4
-                  members: 3
-        "401":
-          description: Authentication required or insufficient permissions
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  /api/admin/workspace/{id}:
-    delete:
-      summary: Delete a workspace (admin only)
-      tags: [Admin]
-      description: |
-        Only users with the ADMIN role can access this endpoint.
-        Deletes the specified workspace and all its users.
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-          description: The workspace ID to delete
-      responses:
-        "200":
-          description: Workspace deleted successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  message:
-                    type: string
-                    example: Workspace deleted
-        "401":
-          description: Authentication required
+          description: Unauthorized
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
-          description: Admin role required or insufficient permissions
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Workspace not found
+          description: Forbidden (admin only)
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  # ===================================
-  # PERSONA ENDPOINTS
-  # ===================================
-
-  /api/personas:
-    get:
-      summary: Get all personas
-      tags: [Persona]
-      description: |
-        **RBAC:** Any authenticated user can access this endpoint.
-        Returns a list of all active personas (global, not workspace-scoped).
-        Personas are read-only and managed externally.
-      security:
-        - bearerAuth: []
-      responses:
-        "200":
-          description: List of personas retrieved successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  message:
-                    type: string
-                    example: Personas retrieved successfully
-                  data:
-                    type: object
-                    properties:
-                      personas:
-                        type: array
-                        items:
-                          type: object
-                          properties:
-                            id:
-                              type: string
-                              example: persona_123
-                            name:
-                              type: string
-                              example: Chief Financial Officer
-                            description:
-                              type: string
-                              example: Expert in financial planning and analysis
-                            persona_id:
-                              type: string
-                              example: Chief-Financial-Officer
-                            traits:
-                              type: object
-                              example:
-                                tone: formal
-                                expertise: ["finance", "accounting"]
-                                domains: ["budgeting", "investment"]
-                            isActive:
-                              type: boolean
-                              example: true
-                            createdAt:
-                              type: string
-                              format: date-time
-                              example: "2025-01-15T10:30:00Z"
-                            updatedAt:
-                              type: string
-                              format: date-time
-                              example: "2025-01-15T10:30:00Z"
-              example:
-                status: success
-                message: Personas retrieved successfully
-                data:
-                  personas:
-                    - id: persona_123
-                      name: Chief Financial Officer
-                      description: Expert in financial planning and analysis
-                      persona_id: Chief-Financial-Officer
-                      traits:
-                        tone: formal
-                        expertise: ["finance", "accounting"]
-                        domains: ["budgeting", "investment"]
-                      isActive: true
-                      createdAt: "2025-01-15T10:30:00Z"
-                      updatedAt: "2025-01-15T10:30:00Z"
-        "401":
-          description: Authentication required
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  /api/personas/{id}:
-    get:
-      summary: Get persona by ID
-      tags: [Persona]
-      description: |
-        **RBAC:** Any authenticated user can access this endpoint.
-        Returns details for a specific persona by ID.
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-          description: The persona ID
-      responses:
-        "200":
-          description: Persona details retrieved successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  message:
-                    type: string
-                    example: Persona retrieved successfully
-                  data:
-                    type: object
-                    properties:
-                      persona:
-                        type: object
-                        properties:
-                          id:
-                            type: string
-                            example: persona_123
-                          name:
-                            type: string
-                            example: Chief Financial Officer
-                          description:
-                            type: string
-                            example: Expert in financial planning and analysis
-                          persona_id:
-                            type: string
-                            example: Chief-Financial-Officer
-                          traits:
-                            type: object
-                            example:
-                              tone: formal
-                              expertise: ["finance", "accounting"]
-                              domains: ["budgeting", "investment"]
-                          isActive:
-                            type: boolean
-                            example: true
-                          createdAt:
-                            type: string
-                            format: date-time
-                            example: "2025-01-15T10:30:00Z"
-                          updatedAt:
-                            type: string
-                            format: date-time
-                            example: "2025-01-15T10:30:00Z"
-              example:
-                status: success
-                message: Persona retrieved successfully
-                data:
-                  persona:
-                    id: persona_123
-                    name: Chief Financial Officer
-                    description: Expert in financial planning and analysis
-                    persona_id: Chief-Financial-Officer
-                    traits:
-                      tone: formal
-                      expertise: ["finance", "accounting"]
-                      domains: ["budgeting", "investment"]
-                    isActive: true
-                    createdAt: "2025-01-15T10:30:00Z"
-                    updatedAt: "2025-01-15T10:30:00Z"
-        "401":
-          description: Authentication required
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Persona not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  /api/personas/stats:
-    get:
-      summary: Get persona statistics
-      tags: [Persona]
-      description: |
-        **RBAC:** Any authenticated user can access this endpoint.
-        Returns statistics about personas.
-      security:
-        - bearerAuth: []
-      responses:
-        "200":
-          description: Persona statistics retrieved successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  message:
-                    type: string
-                    example: Persona statistics retrieved successfully
-                  data:
-                    type: object
-                    properties:
-                      stats:
-                        type: object
-                        properties:
-                          totalPersonas:
-                            type: integer
-                            example: 10
-                          activePersonas:
-                            type: integer
-                            example: 8
-              example:
-                status: success
-                message: Persona statistics retrieved successfully
-                data:
-                  stats:
-                    totalPersonas: 10
-                    activePersonas: 8
-        "401":
-          description: Authentication required
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  # ===================================
-  # CONVERSATION ENDPOINTS
-  # ===================================
-
-  /api/conversations:
-    post:
-      summary: Create a new conversation
-      tags: [Conversation]
-      description: |
-        **RBAC:** Any authenticated user can access this endpoint.
-        Creates a new conversation between the user and a persona.
-        Workspace-scoped: conversations belong to the user's workspace.
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - personaId
-              properties:
-                personaId:
-                  type: string
-                  example: persona_123
-                  description: The ID of the persona to start a conversation with
-            example:
-              personaId: persona_123
-      responses:
-        "201":
-          description: Conversation created successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  message:
-                    type: string
-                    example: Conversation created successfully
-                  data:
-                    type: object
-                    properties:
-                      conversation:
-                        type: object
-                        properties:
-                          id:
-                            type: string
-                            example: conversation_456
-                          userId:
-                            type: string
-                            example: user_789
-                          personaId:
-                            type: string
-                            example: persona_123
-                          workspaceId:
-                            type: string
-                            example: workspace_101
-                          isPublic:
-                            type: boolean
-                            example: false
-                          messageCount:
-                            type: integer
-                            example: 0
-                          createdAt:
-                            type: string
-                            format: date-time
-                            example: "2025-01-15T10:30:00Z"
-                          updatedAt:
-                            type: string
-                            format: date-time
-                            example: "2025-01-15T10:30:00Z"
-                          persona:
-                            type: object
-                            properties:
-                              id:
-                                type: string
-                                example: persona_123
-                              name:
-                                type: string
-                                example: Chief Financial Officer
-                              description:
-                                type: string
-                                example: Expert in financial planning
-                              persona_id:
-                                type: string
-                                example: Chief-Financial-Officer
-              example:
-                status: success
-                message: Conversation created successfully
-                data:
-                  conversation:
-                    id: conversation_456
-                    userId: user_789
-                    personaId: persona_123
-                    workspaceId: workspace_101
-                    isPublic: false
-                    messageCount: 0
-                    createdAt: "2025-01-15T10:30:00Z"
-                    updatedAt: "2025-01-15T10:30:00Z"
-                    persona:
-                      id: persona_123
-                      name: Chief Financial Officer
-                      description: Expert in financial planning
-                      persona_id: Chief-Financial-Officer
-        "400":
-          description: Invalid input or persona not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "401":
-          description: Authentication required
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Conversation already exists between user and persona
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-    get:
-      summary: Get user's conversations
-      tags: [Conversation]
-      description: |
-        **RBAC:** Any authenticated user can access this endpoint.
-        Returns a list of the user's conversations in their workspace.
-        Supports optional filtering by public/private status.
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: query
-          name: isPublic
-          schema:
-            type: boolean
-          description: Filter by public/private status (optional)
-      responses:
-        "200":
-          description: User's conversations retrieved successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  message:
-                    type: string
-                    example: Conversations retrieved successfully
-                  data:
-                    type: object
-                    properties:
-                      conversations:
-                        type: array
-                        items:
-                          type: object
-                          properties:
-                            id:
-                              type: string
-                              example: conversation_456
-                            userId:
-                              type: string
-                              example: user_789
-                            personaId:
-                              type: string
-                              example: persona_123
-                            workspaceId:
-                              type: string
-                              example: workspace_101
-                            isPublic:
-                              type: boolean
-                              example: false
-                            messageCount:
-                              type: integer
-                              example: 5
-                            createdAt:
-                              type: string
-                              format: date-time
-                              example: "2025-01-15T10:30:00Z"
-                            updatedAt:
-                              type: string
-                              format: date-time
-                              example: "2025-01-15T10:35:00Z"
-                            persona:
-                              type: object
-                              properties:
-                                id:
-                                  type: string
-                                  example: persona_123
-                                name:
-                                  type: string
-                                  example: Chief Financial Officer
-                                description:
-                                  type: string
-                                  example: Expert in financial planning
-                                persona_id:
-                                  type: string
-                                  example: Chief-Financial-Officer
-              example:
-                status: success
-                message: Conversations retrieved successfully
-                data:
-                  conversations:
-                    - id: conversation_456
-                      userId: user_789
-                      personaId: persona_123
-                      workspaceId: workspace_101
-                      isPublic: false
-                      messageCount: 5
-                      createdAt: "2025-01-15T10:30:00Z"
-                      updatedAt: "2025-01-15T10:35:00Z"
-                      persona:
-                        id: persona_123
-                        name: Chief Financial Officer
-                        description: Expert in financial planning
-                        persona_id: Chief-Financial-Officer
-        "401":
-          description: Authentication required
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  /api/conversations/public:
-    get:
-      summary: Get public conversations
-      tags: [Conversation]
-      description: |
-        **RBAC:** Any authenticated user can access this endpoint.
-        Returns a list of public conversations in the user's workspace.
-        Supports pagination with skip and take parameters.
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: query
-          name: skip
-          schema:
-            type: integer
-            example: 0
-          description: Number of conversations to skip (for pagination)
-        - in: query
-          name: take
-          schema:
-            type: integer
-            example: 20
-          description: Number of conversations to return (for pagination)
-      responses:
-        "200":
-          description: Public conversations retrieved successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  message:
-                    type: string
-                    example: Public conversations retrieved successfully
-                  data:
-                    type: object
-                    properties:
-                      conversations:
-                        type: array
-                        items:
-                          type: object
-                          properties:
-                            id:
-                              type: string
-                              example: conversation_456
-                            userId:
-                              type: string
-                              example: user_789
-                            personaId:
-                              type: string
-                              example: persona_123
-                            workspaceId:
-                              type: string
-                              example: workspace_101
-                            isPublic:
-                              type: boolean
-                              example: true
-                            messageCount:
-                              type: integer
-                              example: 10
-                            createdAt:
-                              type: string
-                              format: date-time
-                              example: "2025-01-15T10:30:00Z"
-                            updatedAt:
-                              type: string
-                              format: date-time
-                              example: "2025-01-15T10:35:00Z"
-                            persona:
-                              type: object
-                              properties:
-                                id:
-                                  type: string
-                                  example: persona_123
-                                name:
-                                  type: string
-                                  example: Chief Financial Officer
-                                description:
-                                  type: string
-                                  example: Expert in financial planning
-                                persona_id:
-                                  type: string
-                                  example: Chief-Financial-Officer
-                      total:
-                        type: integer
-                        example: 25
-              example:
-                status: success
-                message: Public conversations retrieved successfully
-                data:
-                  conversations:
-                    - id: conversation_456
-                      userId: user_789
-                      personaId: persona_123
-                      workspaceId: workspace_101
-                      isPublic: true
-                      messageCount: 10
-                      createdAt: "2025-01-15T10:30:00Z"
-                      updatedAt: "2025-01-15T10:35:00Z"
-                      persona:
-                        id: persona_123
-                        name: Chief Financial Officer
-                        description: Expert in financial planning
-                        persona_id: Chief-Financial-Officer
-                  total: 25
-        "401":
-          description: Authentication required
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  /api/conversations/{id}:
-    get:
-      summary: Get conversation by ID
-      tags: [Conversation]
-      description: |
-        **RBAC:** Any authenticated user can access this endpoint.
-        Returns details for a specific conversation by ID.
-        Users can only access conversations in their workspace.
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-          description: The conversation ID
-      responses:
-        "200":
-          description: Conversation details retrieved successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  message:
-                    type: string
-                    example: Conversation retrieved successfully
-                  data:
-                    type: object
-                    properties:
-                      conversation:
-                        type: object
-                        properties:
-                          id:
-                            type: string
-                            example: conversation_456
-                          userId:
-                            type: string
-                            example: user_789
-                          personaId:
-                            type: string
-                            example: persona_123
-                          workspaceId:
-                            type: string
-                            example: workspace_101
-                          isPublic:
-                            type: boolean
-                            example: false
-                          messageCount:
-                            type: integer
-                            example: 5
-                          createdAt:
-                            type: string
-                            format: date-time
-                            example: "2025-01-15T10:30:00Z"
-                          updatedAt:
-                            type: string
-                            format: date-time
-                            example: "2025-01-15T10:35:00Z"
-                          persona:
-                            type: object
-                            properties:
-                              id:
-                                type: string
-                                example: persona_123
-                              name:
-                                type: string
-                                example: Chief Financial Officer
-                              description:
-                                type: string
-                                example: Expert in financial planning
-                              persona_id:
-                                type: string
-                                example: Chief-Financial-Officer
-              example:
-                status: success
-                message: Conversation retrieved successfully
-                data:
-                  conversation:
-                    id: conversation_456
-                    userId: user_789
-                    personaId: persona_123
-                    workspaceId: workspace_101
-                    isPublic: false
-                    messageCount: 5
-                    createdAt: "2025-01-15T10:30:00Z"
-                    updatedAt: "2025-01-15T10:35:00Z"
-                    persona:
-                      id: persona_123
-                      name: Chief Financial Officer
-                      description: Expert in financial planning
-                      persona_id: Chief-Financial-Officer
-        "401":
-          description: Authentication required
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Conversation not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-    delete:
-      summary: Delete conversation
-      tags: [Conversation]
-      description: |
-        **RBAC:** Any authenticated user can access this endpoint.
-        Deletes a conversation and all its messages.
-        Users can only delete conversations they own.
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-          description: The conversation ID
-      responses:
-        "200":
-          description: Conversation deleted successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  message:
-                    type: string
-                    example: Conversation deleted successfully
-              example:
-                status: success
-                message: Conversation deleted successfully
-        "401":
-          description: Authentication required
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Conversation not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  /api/conversations/{id}/toggle-visibility:
+  /api/admin/users/{userId}:
     put:
-      summary: Toggle conversation visibility
-      tags: [Conversation]
-      description: |
-        **RBAC:** Any authenticated user can access this endpoint.
-        Toggles the conversation between public and private visibility.
-        Users can only toggle conversations they own.
+      tags:
+        - Admin
+      summary: Update user (admin only)
+      description: Update user status or role (admin only)
       security:
-        - bearerAuth: []
+        - BearerAuth: []
       parameters:
-        - in: path
-          name: id
+        - name: userId
+          in: path
           required: true
           schema:
             type: string
-          description: The conversation ID
+          description: User ID to update
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [ACTIVE, DEACTIVATED]
+                  example: "ACTIVE"
+                role:
+                  type: string
+                  enum: [ADMIN, MEMBER]
+                  example: "MEMBER"
       responses:
         "200":
-          description: Conversation visibility toggled successfully
+          description: User updated successfully
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  message:
-                    type: string
-                    example: Conversation visibility toggled successfully
-                  data:
-                    type: object
-                    properties:
-                      conversation:
-                        type: object
-                        properties:
-                          id:
-                            type: string
-                            example: conversation_456
-                          isPublic:
-                            type: boolean
-                            example: true
-              example:
-                status: success
-                message: Conversation visibility toggled successfully
-                data:
-                  conversation:
-                    id: conversation_456
-                    isPublic: true
+                $ref: "#/components/schemas/UserResponse"
         "401":
-          description: Authentication required
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Conversation not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  # ===================================
-  # MESSAGE ENDPOINTS
-  # ===================================
-
-  /api/messages:
-    post:
-      summary: Send user message
-      tags: [Message]
-      description: |
-        **RBAC:** Any authenticated user can access this endpoint.
-        Sends a user message in a conversation.
-        Workspace-scoped: users can only send messages in conversations they own.
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - conversationId
-                - content
-              properties:
-                conversationId:
-                  type: string
-                  example: conversation_456
-                  description: The conversation ID to send the message in
-                content:
-                  type: string
-                  example: "Hello, I need help with budgeting"
-                  description: The message content
-            example:
-              conversationId: conversation_456
-              content: "Hello, I need help with budgeting"
-      responses:
-        "201":
-          description: Message sent successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  message:
-                    type: string
-                    example: Message sent successfully
-                  data:
-                    type: object
-                    properties:
-                      message:
-                        type: object
-                        properties:
-                          id:
-                            type: string
-                            example: message_789
-                          conversationId:
-                            type: string
-                            example: conversation_456
-                          content:
-                            type: string
-                            example: "Hello, I need help with budgeting"
-                          isFromUser:
-                            type: boolean
-                            example: true
-                          createdAt:
-                            type: string
-                            format: date-time
-                            example: "2025-01-15T10:30:00Z"
-              example:
-                status: success
-                message: Message sent successfully
-                data:
-                  message:
-                    id: message_789
-                    conversationId: conversation_456
-                    content: "Hello, I need help with budgeting"
-                    isFromUser: true
-                    createdAt: "2025-01-15T10:30:00Z"
-        "400":
-          description: Invalid input or conversation not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "401":
-          description: Authentication required
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  /api/messages/response:
-    post:
-      summary: Send persona response
-      tags: [Message]
-      description: |
-        **RBAC:** Any authenticated user can access this endpoint.
-        Sends a persona response in a conversation.
-        This simulates the persona's side of the conversation.
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - conversationId
-                - content
-              properties:
-                conversationId:
-                  type: string
-                  example: conversation_456
-                  description: The conversation ID to send the response in
-                content:
-                  type: string
-                  example: "I'd be happy to help you with budgeting! Let me ask a few questions to understand your situation better."
-                  description: The persona's response content
-            example:
-              conversationId: conversation_456
-              content: "I'd be happy to help you with budgeting! Let me ask a few questions to understand your situation better."
-      responses:
-        "201":
-          description: Persona response sent successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  message:
-                    type: string
-                    example: Persona response sent successfully
-                  data:
-                    type: object
-                    properties:
-                      message:
-                        type: object
-                        properties:
-                          id:
-                            type: string
-                            example: message_790
-                          conversationId:
-                            type: string
-                            example: conversation_456
-                          content:
-                            type: string
-                            example: "I'd be happy to help you with budgeting! Let me ask a few questions to understand your situation better."
-                          isFromUser:
-                            type: boolean
-                            example: false
-                          createdAt:
-                            type: string
-                            format: date-time
-                            example: "2025-01-15T10:31:00Z"
-              example:
-                status: success
-                message: Persona response sent successfully
-                data:
-                  message:
-                    id: message_790
-                    conversationId: conversation_456
-                    content: "I'd be happy to help you with budgeting! Let me ask a few questions to understand your situation better."
-                    isFromUser: false
-                    createdAt: "2025-01-15T10:31:00Z"
-        "400":
-          description: Invalid input or conversation not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "401":
-          description: Authentication required
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  /api/messages/{messageId}/reactions:
-    post:
-      summary: Add reaction to message
-      tags: [Message]
-      description: |
-        **RBAC:** Any authenticated user can access this endpoint.
-        Adds a reaction (like/dislike) to a persona message.
-        Only persona messages (isFromUser: false) can have reactions.
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: messageId
-          required: true
-          schema:
-            type: string
-          description: The message ID
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - type
-              properties:
-                type:
-                  type: string
-                  enum: [LIKE, DISLIKE]
-                  example: LIKE
-                  description: The reaction type
-            example:
-              type: LIKE
-      responses:
-        "201":
-          description: Reaction added successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  message:
-                    type: string
-                    example: Reaction added successfully
-                  data:
-                    type: object
-                    properties:
-                      reaction:
-                        type: object
-                        properties:
-                          id:
-                            type: string
-                            example: reaction_123
-                          messageId:
-                            type: string
-                            example: message_790
-                          userId:
-                            type: string
-                            example: user_789
-                          type:
-                            type: string
-                            example: LIKE
-                          createdAt:
-                            type: string
-                            format: date-time
-                            example: "2025-01-15T10:32:00Z"
-              example:
-                status: success
-                message: Reaction added successfully
-                data:
-                  reaction:
-                    id: reaction_123
-                    messageId: message_790
-                    userId: user_789
-                    type: LIKE
-                    createdAt: "2025-01-15T10:32:00Z"
-        "400":
-          description: Invalid input or message not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "401":
-          description: Authentication required
+          description: Unauthorized
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
-          description: Cannot add reaction to user message
+          description: Forbidden (admin only)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: User not found
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-    delete:
-      summary: Remove reaction from message
-      tags: [Message]
-      description: |
-        **RBAC:** Any authenticated user can access this endpoint.
-        Removes a user's reaction from a message.
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: messageId
-          required: true
-          schema:
-            type: string
-          description: The message ID
-      responses:
-        "200":
-          description: Reaction removed successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  message:
-                    type: string
-                    example: Reaction removed successfully
-              example:
-                status: success
-                message: Reaction removed successfully
-        "400":
-          description: Invalid input or message not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "401":
-          description: Authentication required
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  # ===================================
-  # FOLDER ENDPOINTS
-  # ===================================
-
-  /api/folders:
-    post:
-      summary: Create a new folder
-      tags: [Folder]
-      description: |
-        **RBAC:** Any authenticated user can access this endpoint.
-        Creates a new folder for organizing conversations and personas.
-        Workspace-scoped: folders belong to the user's workspace.
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - name
-              properties:
-                name:
-                  type: string
-                  example: "Financial Planning"
-                  description: The folder name
-            example:
-              name: "Financial Planning"
-      responses:
-        "201":
-          description: Folder created successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  message:
-                    type: string
-                    example: Folder created successfully
-                  data:
-                    type: object
-                    properties:
-                      folder:
-                        type: object
-                        properties:
-                          id:
-                            type: string
-                            example: folder_123
-                          name:
-                            type: string
-                            example: "Financial Planning"
-                          ownerId:
-                            type: string
-                            example: user_789
-                          workspaceId:
-                            type: string
-                            example: workspace_101
-                          itemCount:
-                            type: integer
-                            example: 0
-                          createdAt:
-                            type: string
-                            format: date-time
-                            example: "2025-01-15T10:30:00Z"
-                          updatedAt:
-                            type: string
-                            format: date-time
-                            example: "2025-01-15T10:30:00Z"
-              example:
-                status: success
-                message: Folder created successfully
-                data:
-                  folder:
-                    id: folder_123
-                    name: "Financial Planning"
-                    ownerId: user_789
-                    workspaceId: workspace_101
-                    itemCount: 0
-                    createdAt: "2025-01-15T10:30:00Z"
-                    updatedAt: "2025-01-15T10:30:00Z"
-        "400":
-          description: Invalid input
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "401":
-          description: Authentication required
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Folder with this name already exists
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
+  /api/admin/workspace:
     get:
-      summary: Get user's folders
-      tags: [Folder]
-      description: |
-        **RBAC:** Any authenticated user can access this endpoint.
-        Returns a list of the user's folders in their workspace.
+      tags:
+        - Admin
+      summary: Get workspace statistics
+      description: Get workspace statistics and user counts (admin only)
       security:
-        - bearerAuth: []
+        - BearerAuth: []
       responses:
         "200":
-          description: User's folders retrieved successfully
+          description: Workspace statistics retrieved
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  message:
-                    type: string
-                    example: Folders retrieved successfully
-                  data:
-                    type: object
-                    properties:
-                      folders:
-                        type: array
-                        items:
-                          type: object
-                          properties:
-                            id:
-                              type: string
-                              example: folder_123
-                            name:
-                              type: string
-                              example: "Financial Planning"
-                            ownerId:
-                              type: string
-                              example: user_789
-                            workspaceId:
-                              type: string
-                              example: workspace_101
-                            itemCount:
-                              type: integer
-                              example: 3
-                            createdAt:
-                              type: string
-                              format: date-time
-                              example: "2025-01-15T10:30:00Z"
-                            updatedAt:
-                              type: string
-                              format: date-time
-                              example: "2025-01-15T10:30:00Z"
-              example:
-                status: success
-                message: Folders retrieved successfully
-                data:
-                  folders:
-                    - id: folder_123
-                      name: "Financial Planning"
-                      ownerId: user_789
-                      workspaceId: workspace_101
-                      itemCount: 3
-                      createdAt: "2025-01-15T10:30:00Z"
-                      updatedAt: "2025-01-15T10:30:00Z"
+                $ref: "#/components/schemas/WorkspaceStatsResponse"
         "401":
-          description: Authentication required
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  /api/folders/{id}:
-    get:
-      summary: Get folder by ID with contents
-      tags: [Folder]
-      description: |
-        **RBAC:** Any authenticated user can access this endpoint.
-        Returns details for a specific folder with its items.
-        Users can only access folders they own.
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-          description: The folder ID
-      responses:
-        "200":
-          description: Folder details retrieved successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  message:
-                    type: string
-                    example: Folder retrieved successfully
-                  data:
-                    type: object
-                    properties:
-                      folder:
-                        type: object
-                        properties:
-                          id:
-                            type: string
-                            example: folder_123
-                          name:
-                            type: string
-                            example: "Financial Planning"
-                          ownerId:
-                            type: string
-                            example: user_789
-                          workspaceId:
-                            type: string
-                            example: workspace_101
-                          itemCount:
-                            type: integer
-                            example: 3
-                          createdAt:
-                            type: string
-                            format: date-time
-                            example: "2025-01-15T10:30:00Z"
-                          updatedAt:
-                            type: string
-                            format: date-time
-                            example: "2025-01-15T10:30:00Z"
-                          items:
-                            type: array
-                            items:
-                              type: object
-                              properties:
-                                id:
-                                  type: string
-                                  example: item_1
-                                itemType:
-                                  type: string
-                                  enum: [PERSONA, CONVERSATION, FOLDER]
-                                  example: PERSONA
-                                itemId:
-                                  type: string
-                                  example: persona_123
-                                order:
-                                  type: integer
-                                  example: 1
-                                addedAt:
-                                  type: string
-                                  format: date-time
-                                  example: "2025-01-15T10:31:00Z"
-              example:
-                status: success
-                message: Folder retrieved successfully
-                data:
-                  folder:
-                    id: folder_123
-                    name: "Financial Planning"
-                    ownerId: user_789
-                    workspaceId: workspace_101
-                    itemCount: 3
-                    createdAt: "2025-01-15T10:30:00Z"
-                    updatedAt: "2025-01-15T10:30:00Z"
-                    items:
-                      - id: item_1
-                        itemType: PERSONA
-                        itemId: persona_123
-                        order: 1
-                        addedAt: "2025-01-15T10:31:00Z"
-        "401":
-          description: Authentication required
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Folder not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-    put:
-      summary: Update folder name
-      tags: [Folder]
-      description: |
-        **RBAC:** Any authenticated user can access this endpoint.
-        Updates the name of a folder.
-        Users can only update folders they own.
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-          description: The folder ID
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - name
-              properties:
-                name:
-                  type: string
-                  example: "Updated Folder Name"
-                  description: The new folder name
-            example:
-              name: "Updated Folder Name"
-      responses:
-        "200":
-          description: Folder updated successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  message:
-                    type: string
-                    example: Folder updated successfully
-                  data:
-                    type: object
-                    properties:
-                      folder:
-                        type: object
-                        properties:
-                          id:
-                            type: string
-                            example: folder_123
-                          name:
-                            type: string
-                            example: "Updated Folder Name"
-                          ownerId:
-                            type: string
-                            example: user_789
-                          workspaceId:
-                            type: string
-                            example: workspace_101
-                          itemCount:
-                            type: integer
-                            example: 3
-                          createdAt:
-                            type: string
-                            format: date-time
-                            example: "2025-01-15T10:30:00Z"
-                          updatedAt:
-                            type: string
-                            format: date-time
-                            example: "2025-01-15T10:35:00Z"
-              example:
-                status: success
-                message: Folder updated successfully
-                data:
-                  folder:
-                    id: folder_123
-                    name: "Updated Folder Name"
-                    ownerId: user_789
-                    workspaceId: workspace_101
-                    itemCount: 3
-                    createdAt: "2025-01-15T10:30:00Z"
-                    updatedAt: "2025-01-15T10:35:00Z"
-        "400":
-          description: Invalid input
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "401":
-          description: Authentication required
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Folder not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Folder with this name already exists
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-    delete:
-      summary: Delete folder
-      tags: [Folder]
-      description: |
-        **RBAC:** Any authenticated user can access this endpoint.
-        Deletes a folder and all its items.
-        Users can only delete folders they own.
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-          description: The folder ID
-      responses:
-        "200":
-          description: Folder deleted successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  message:
-                    type: string
-                    example: Folder deleted successfully
-              example:
-                status: success
-                message: Folder deleted successfully
-        "401":
-          description: Authentication required
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Folder not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  /api/folders/{id}/items:
-    post:
-      summary: Add item to folder
-      tags: [Folder]
-      description: |
-        **RBAC:** Any authenticated user can access this endpoint.
-        Adds a persona, conversation, or sub-folder to a folder.
-        Users can only add items to folders they own.
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-          description: The folder ID
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - itemType
-                - itemId
-              properties:
-                itemType:
-                  type: string
-                  enum: [PERSONA, CONVERSATION, FOLDER]
-                  example: PERSONA
-                  description: The type of item to add
-                itemId:
-                  type: string
-                  example: persona_123
-                  description: The ID of the item to add
-            example:
-              itemType: PERSONA
-              itemId: persona_123
-      responses:
-        "201":
-          description: Item added to folder successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  message:
-                    type: string
-                    example: Item added to folder successfully
-                  data:
-                    type: object
-                    properties:
-                      folderItem:
-                        type: object
-                        properties:
-                          id:
-                            type: string
-                            example: item_1
-                          folderId:
-                            type: string
-                            example: folder_123
-                          itemType:
-                            type: string
-                            example: PERSONA
-                          itemId:
-                            type: string
-                            example: persona_123
-                          order:
-                            type: integer
-                            example: 1
-                          addedAt:
-                            type: string
-                            format: date-time
-                            example: "2025-01-15T10:31:00Z"
-              example:
-                status: success
-                message: Item added to folder successfully
-                data:
-                  folderItem:
-                    id: item_1
-                    folderId: folder_123
-                    itemType: PERSONA
-                    itemId: persona_123
-                    order: 1
-                    addedAt: "2025-01-15T10:31:00Z"
-        "400":
-          description: Invalid input or item not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "401":
-          description: Authentication required
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Folder not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Item already exists in folder
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-    delete:
-      summary: Remove item from folder
-      tags: [Folder]
-      description: |
-        **RBAC:** Any authenticated user can access this endpoint.
-        Removes an item from a folder.
-        Users can only remove items from folders they own.
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-          description: The folder ID
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - itemType
-                - itemId
-              properties:
-                itemType:
-                  type: string
-                  enum: [PERSONA, CONVERSATION, FOLDER]
-                  example: PERSONA
-                  description: The type of item to remove
-                itemId:
-                  type: string
-                  example: persona_123
-                  description: The ID of the item to remove
-            example:
-              itemType: PERSONA
-              itemId: persona_123
-      responses:
-        "200":
-          description: Item removed from folder successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  message:
-                    type: string
-                    example: Item removed from folder successfully
-              example:
-                status: success
-                message: Item removed from folder successfully
-        "400":
-          description: Invalid input
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "401":
-          description: Authentication required
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Folder not found or item not found in folder
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  /api/folders/{id}/reorder:
-    put:
-      summary: Reorder items in folder
-      tags: [Folder]
-      description: |
-        **RBAC:** Any authenticated user can access this endpoint.
-        Reorders items within a folder.
-        Users can only reorder items in folders they own.
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-          description: The folder ID
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - itemOrders
-              properties:
-                itemOrders:
-                  type: array
-                  items:
-                    type: object
-                    required:
-                      - itemId
-                      - order
-                    properties:
-                      itemId:
-                        type: string
-                        example: persona_123
-                        description: The item ID
-                      order:
-                        type: integer
-                        example: 1
-                        description: The new order position
-                  description: Array of items with their new order positions
-            example:
-              itemOrders:
-                - itemId: persona_123
-                  order: 1
-                - itemId: conversation_456
-                  order: 2
-      responses:
-        "200":
-          description: Items reordered successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  message:
-                    type: string
-                    example: Items reordered successfully
-              example:
-                status: success
-                message: Items reordered successfully
-        "400":
-          description: Invalid input
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "401":
-          description: Authentication required
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Folder not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  # ===================================
-  # SHAREABLE LINK ENDPOINTS
-  # ===================================
-
-  /api/shareable-links:
-    post:
-      summary: Create shareable link
-      tags: [ShareableLink]
-      description: |
-        **RBAC:** Any authenticated user can access this endpoint.
-        Creates a shareable link for a conversation.
-        Users can only create links for conversations they own.
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - conversationId
-              properties:
-                conversationId:
-                  type: string
-                  example: conversation_456
-                  description: The conversation ID to create a link for
-            example:
-              conversationId: conversation_456
-      responses:
-        "201":
-          description: Shareable link created successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  message:
-                    type: string
-                    example: Shareable link created successfully
-                  data:
-                    type: object
-                    properties:
-                      shareableLink:
-                        type: object
-                        properties:
-                          id:
-                            type: string
-                            example: link_123
-                          conversationId:
-                            type: string
-                            example: conversation_456
-                          token:
-                            type: string
-                            example: a1b2c3d4e5f678901234567890123456
-                          createdBy:
-                            type: string
-                            example: user_789
-                          workspaceId:
-                            type: string
-                            example: workspace_101
-                          createdAt:
-                            type: string
-                            format: date-time
-                            example: "2025-01-15T10:30:00Z"
-                          conversation:
-                            type: object
-                            properties:
-                              id:
-                                type: string
-                                example: conversation_456
-                              isPublic:
-                                type: boolean
-                                example: true
-                              messageCount:
-                                type: integer
-                                example: 10
-                              persona:
-                                type: object
-                                properties:
-                                  id:
-                                    type: string
-                                    example: persona_123
-                                  name:
-                                    type: string
-                                    example: Chief Financial Officer
-                                  description:
-                                    type: string
-                                    example: Expert in financial planning
-                                  persona_id:
-                                    type: string
-                                    example: Chief-Financial-Officer
-              example:
-                status: success
-                message: Shareable link created successfully
-                data:
-                  shareableLink:
-                    id: link_123
-                    conversationId: conversation_456
-                    token: a1b2c3d4e5f678901234567890123456
-                    createdBy: user_789
-                    workspaceId: workspace_101
-                    createdAt: "2025-01-15T10:30:00Z"
-                    conversation:
-                      id: conversation_456
-                      isPublic: true
-                      messageCount: 10
-                      persona:
-                        id: persona_123
-                        name: Chief Financial Officer
-                        description: Expert in financial planning
-                        persona_id: Chief-Financial-Officer
-        "400":
-          description: Invalid input or conversation not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "401":
-          description: Authentication required
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Shareable link already exists for this conversation
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-    get:
-      summary: Get user's shareable links
-      tags: [ShareableLink]
-      description: |
-        **RBAC:** Any authenticated user can access this endpoint.
-        Returns a list of the user's shareable links.
-      security:
-        - bearerAuth: []
-      responses:
-        "200":
-          description: Shareable links retrieved successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  message:
-                    type: string
-                    example: Shareable links retrieved successfully
-                  data:
-                    type: object
-                    properties:
-                      shareableLinks:
-                        type: array
-                        items:
-                          type: object
-                          properties:
-                            id:
-                              type: string
-                              example: link_123
-                            conversationId:
-                              type: string
-                              example: conversation_456
-                            token:
-                              type: string
-                              example: a1b2c3d4e5f678901234567890123456
-                            createdAt:
-                              type: string
-                              format: date-time
-                              example: "2025-01-15T10:30:00Z"
-                            conversation:
-                              type: object
-                              properties:
-                                id:
-                                  type: string
-                                  example: conversation_456
-                                isPublic:
-                                  type: boolean
-                                  example: true
-                                messageCount:
-                                  type: integer
-                                  example: 10
-                                persona:
-                                  type: object
-                                  properties:
-                                    id:
-                                      type: string
-                                      example: persona_123
-                                    name:
-                                      type: string
-                                      example: Chief Financial Officer
-                                    description:
-                                      type: string
-                                      example: Expert in financial planning
-                                    persona_id:
-                                      type: string
-                                      example: Chief-Financial-Officer
-              example:
-                status: success
-                message: Shareable links retrieved successfully
-                data:
-                  shareableLinks:
-                    - id: link_123
-                      conversationId: conversation_456
-                      token: a1b2c3d4e5f678901234567890123456
-                      createdAt: "2025-01-15T10:30:00Z"
-                      conversation:
-                        id: conversation_456
-                        isPublic: true
-                        messageCount: 10
-                        persona:
-                          id: persona_123
-                          name: Chief Financial Officer
-                          description: Expert in financial planning
-                          persona_id: Chief-Financial-Officer
-        "401":
-          description: Authentication required
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  /api/shareable-links/stats:
-    get:
-      summary: Get shareable link statistics
-      tags: [ShareableLink]
-      description: |
-        **RBAC:** Any authenticated user can access this endpoint.
-        Returns statistics about the user's shareable links.
-      security:
-        - bearerAuth: []
-      responses:
-        "200":
-          description: Shareable link statistics retrieved successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  message:
-                    type: string
-                    example: Shareable link statistics retrieved successfully
-                  data:
-                    type: object
-                    properties:
-                      stats:
-                        type: object
-                        properties:
-                          totalLinks:
-                            type: integer
-                            example: 5
-              example:
-                status: success
-                message: Shareable link statistics retrieved successfully
-                data:
-                  stats:
-                    totalLinks: 5
-        "401":
-          description: Authentication required
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  /api/shareable-links/{id}:
-    get:
-      summary: Get shareable link by ID
-      tags: [ShareableLink]
-      description: |
-        **RBAC:** Any authenticated user can access this endpoint.
-        Returns details for a specific shareable link.
-        Users can only access their own shareable links.
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-          description: The shareable link ID
-      responses:
-        "200":
-          description: Shareable link details retrieved successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  message:
-                    type: string
-                    example: Shareable link retrieved successfully
-                  data:
-                    type: object
-                    properties:
-                      shareableLink:
-                        type: object
-                        properties:
-                          id:
-                            type: string
-                            example: link_123
-                          conversationId:
-                            type: string
-                            example: conversation_456
-                          token:
-                            type: string
-                            example: a1b2c3d4e5f678901234567890123456
-                          createdBy:
-                            type: string
-                            example: user_789
-                          workspaceId:
-                            type: string
-                            example: workspace_101
-                          createdAt:
-                            type: string
-                            format: date-time
-                            example: "2025-01-15T10:30:00Z"
-                          conversation:
-                            type: object
-                            properties:
-                              id:
-                                type: string
-                                example: conversation_456
-                              isPublic:
-                                type: boolean
-                                example: true
-                              messageCount:
-                                type: integer
-                                example: 10
-                              persona:
-                                type: object
-                                properties:
-                                  id:
-                                    type: string
-                                    example: persona_123
-                                  name:
-                                    type: string
-                                    example: Chief Financial Officer
-                                  description:
-                                    type: string
-                                    example: Expert in financial planning
-                                  persona_id:
-                                    type: string
-                                    example: Chief-Financial-Officer
-              example:
-                status: success
-                message: Shareable link retrieved successfully
-                data:
-                  shareableLink:
-                    id: link_123
-                    conversationId: conversation_456
-                    token: a1b2c3d4e5f678901234567890123456
-                    createdBy: user_789
-                    workspaceId: workspace_101
-                    createdAt: "2025-01-15T10:30:00Z"
-                    conversation:
-                      id: conversation_456
-                      isPublic: true
-                      messageCount: 10
-                      persona:
-                        id: persona_123
-                        name: Chief Financial Officer
-                        description: Expert in financial planning
-                        persona_id: Chief-Financial-Officer
-        "401":
-          description: Authentication required
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Shareable link not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-    delete:
-      summary: Delete shareable link
-      tags: [ShareableLink]
-      description: |
-        **RBAC:** Any authenticated user can access this endpoint.
-        Deletes a shareable link.
-        Users can only delete their own shareable links.
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-          description: The shareable link ID
-      responses:
-        "200":
-          description: Shareable link deleted successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  message:
-                    type: string
-                    example: Shareable link deleted successfully
-              example:
-                status: success
-                message: Shareable link deleted successfully
-        "401":
-          description: Authentication required
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Shareable link not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  /api/shareable-links/share/{token}:
-    get:
-      summary: Access conversation via shareable link (Public)
-      tags: [ShareableLink]
-      description: |
-        **Public endpoint:** No authentication required.
-        Returns the conversation and its messages via a shareable link token.
-        Only public conversations can be accessed via shareable links.
-      parameters:
-        - in: path
-          name: token
-          required: true
-          schema:
-            type: string
-          description: The shareable link token
-      responses:
-        "200":
-          description: Conversation accessed successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  message:
-                    type: string
-                    example: Conversation retrieved successfully
-                  data:
-                    type: object
-                    properties:
-                      shareableLink:
-                        type: object
-                        properties:
-                          id:
-                            type: string
-                            example: link_123
-                          conversationId:
-                            type: string
-                            example: conversation_456
-                          token:
-                            type: string
-                            example: a1b2c3d4e5f678901234567890123456
-                          createdAt:
-                            type: string
-                            format: date-time
-                            example: "2025-01-15T10:30:00Z"
-                          conversation:
-                            type: object
-                            properties:
-                              id:
-                                type: string
-                                example: conversation_456
-                              isPublic:
-                                type: boolean
-                                example: true
-                              messageCount:
-                                type: integer
-                                example: 10
-                              createdAt:
-                                type: string
-                                format: date-time
-                                example: "2025-01-15T10:30:00Z"
-                              updatedAt:
-                                type: string
-                                format: date-time
-                                example: "2025-01-15T10:35:00Z"
-                              persona:
-                                type: object
-                                properties:
-                                  id:
-                                    type: string
-                                    example: persona_123
-                                  name:
-                                    type: string
-                                    example: Chief Financial Officer
-                                  description:
-                                    type: string
-                                    example: Expert in financial planning
-                                  persona_id:
-                                    type: string
-                                    example: Chief-Financial-Officer
-                                  traits:
-                                    type: object
-                                    example:
-                                      tone: formal
-                                      expertise: ["finance", "accounting"]
-                                      domains: ["budgeting", "investment"]
-                              messages:
-                                type: array
-                                items:
-                                  type: object
-                                  properties:
-                                    id:
-                                      type: string
-                                      example: message_789
-                                    content:
-                                      type: string
-                                      example: "Hello, I need help with budgeting"
-                                    isFromUser:
-                                      type: boolean
-                                      example: true
-                                    createdAt:
-                                      type: string
-                                      format: date-time
-                                      example: "2025-01-15T10:30:00Z"
-                                    reactions:
-                                      type: array
-                                      items:
-                                        type: object
-                                        properties:
-                                          id:
-                                            type: string
-                                            example: reaction_123
-                                          type:
-                                            type: string
-                                            example: LIKE
-                                          createdAt:
-                                            type: string
-                                            format: date-time
-                                            example: "2025-01-15T10:32:00Z"
-              example:
-                status: success
-                message: Conversation retrieved successfully
-                data:
-                  shareableLink:
-                    id: link_123
-                    conversationId: conversation_456
-                    token: a1b2c3d4e5f678901234567890123456
-                    createdAt: "2025-01-15T10:30:00Z"
-                    conversation:
-                      id: conversation_456
-                      isPublic: true
-                      messageCount: 10
-                      createdAt: "2025-01-15T10:30:00Z"
-                      updatedAt: "2025-01-15T10:35:00Z"
-                      persona:
-                        id: persona_123
-                        name: Chief Financial Officer
-                        description: Expert in financial planning
-                        persona_id: Chief-Financial-Officer
-                        traits:
-                          tone: formal
-                          expertise: ["finance", "accounting"]
-                          domains: ["budgeting", "investment"]
-                      messages:
-                        - id: message_789
-                          content: "Hello, I need help with budgeting"
-                          isFromUser: true
-                          createdAt: "2025-01-15T10:30:00Z"
-                          reactions: []
-                        - id: message_790
-                          content: "I'd be happy to help you with budgeting!"
-                          isFromUser: false
-                          createdAt: "2025-01-15T10:31:00Z"
-                          reactions:
-                            - id: reaction_123
-                              type: LIKE
-                              createdAt: "2025-01-15T10:32:00Z"
-        "400":
-          description: Token is required
+          description: Unauthorized
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
-          description: This conversation is not publicly accessible
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Shareable link not found or invalid
+          description: Forbidden (admin only)
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
 components:
-  tags:
-    - name: Auth
-      description: Authentication and authorization endpoints
-    - name: OAuth
-      description: OAuth authentication endpoints (Google)
-    - name: User
-      description: User profile and account management
-    - name: Admin
-      description: Administrative operations (workspace-scoped)
-    - name: Persona
-      description: AI persona management
-    - name: Conversation
-      description: User-persona conversation management
-    - name: Message
-      description: Message handling within conversations
-    - name: Folder
-      description: Folder organization system
-    - name: ShareableLink
-      description: Shareable link management
-    - name: System
-      description: System health and monitoring endpoints
-  parameters:
-    WorkspaceIdHeader:
-      name: x-workspace-id
-      in: header
-      description: Workspace ID for multi-tenancy. Required for all authenticated, workspace-scoped endpoints.
-      required: true
-      schema:
-        type: string
-        example: clworkspace_123xyz
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
   schemas:
+    # Common Response Schemas
+    SuccessResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: "success"
+        message:
+          type: string
+          example: "Operation completed successfully"
+
+    ErrorResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: "error"
+        message:
+          type: string
+          example: "Error message"
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+                example: "email"
+              message:
+                type: string
+                example: "Invalid email format"
+
+    # Authentication Response Schemas
     AuthSuccessResponse:
       type: object
       properties:
         status:
           type: string
-          example: success
+          example: "success"
         message:
           type: string
-          example: Registration successful
+          example: "User registered successfully"
         data:
           type: object
           properties:
             user:
-              type: object
-              properties:
-                id:
-                  type: string
-                  example: clxyz123abc
-                email:
-                  type: string
-                  example: user@example.com
-                name:
-                  type: string
-                  example: John Doe
-                role:
-                  type: string
-                  example: ADMIN
-                workspaceId:
-                  type: string
-                  example: clxyzworkspace123
+              $ref: "#/components/schemas/User"
             workspace:
-              type: object
-              properties:
-                id:
-                  type: string
-                  example: clxyzworkspace123
-                domain:
-                  type: string
-                  example: example.com
-            accessToken:
-              type: string
-              example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-            refreshToken:
-              type: string
-              example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+              $ref: "#/components/schemas/Workspace"
             isNewUser:
               type: boolean
-              example: false
-            provider:
-              type: string
-              example: google
-    RefreshSuccessResponse:
+              example: true
+            breachWarning:
+              type: object
+              nullable: true
+              properties:
+                message:
+                  type: string
+                  example: "Password found in data breaches"
+                severity:
+                  type: string
+                  enum: [low, medium, high]
+                  example: "medium"
+                count:
+                  type: integer
+                  example: 1234
+
+    LoginSuccessResponse:
       type: object
       properties:
         status:
           type: string
-          example: success
+          example: "success"
         message:
           type: string
-          example: Tokens refreshed
+          example: "Login successful"
+        data:
+          type: object
+          properties:
+            user:
+              $ref: "#/components/schemas/User"
+            workspace:
+              $ref: "#/components/schemas/Workspace"
+            accessToken:
+              type: string
+              example: "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
+            refreshToken:
+              type: string
+              example: "refresh_token_here"
+            sessionId:
+              type: string
+              example: "session_id_here"
+
+    TokenRefreshResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: "success"
+        message:
+          type: string
+          example: "Token refreshed successfully"
         data:
           type: object
           properties:
             accessToken:
               type: string
-              example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+              example: "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
             refreshToken:
               type: string
-              example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-    ErrorResponse:
+              example: "new_refresh_token_here"
+
+    SessionsResponse:
       type: object
       properties:
-        error:
+        status:
+          type: string
+          example: "success"
+        message:
+          type: string
+          example: "Sessions retrieved successfully"
+        data:
           type: object
           properties:
-            message:
-              type: string
-              example: Invalid email or password
-            details:
-              type: string
-              example: Stack trace or additional error details (optional)
-  securitySchemes:
-    bearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
+            sessions:
+              type: array
+              items:
+                $ref: "#/components/schemas/Session"
+
+    # User Management Response Schemas
+    UserProfileResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: "success"
+        message:
+          type: string
+          example: "Profile retrieved successfully"
+        data:
+          type: object
+          properties:
+            user:
+              $ref: "#/components/schemas/User"
+
+    UsersListResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: "success"
+        message:
+          type: string
+          example: "Users retrieved successfully"
+        data:
+          type: object
+          properties:
+            users:
+              type: array
+              items:
+                $ref: "#/components/schemas/User"
+            pagination:
+              $ref: "#/components/schemas/Pagination"
+
+    UserResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: "success"
+        message:
+          type: string
+          example: "User updated successfully"
+        data:
+          type: object
+          properties:
+            user:
+              $ref: "#/components/schemas/User"
+
+    WorkspaceStatsResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: "success"
+        message:
+          type: string
+          example: "Workspace statistics retrieved"
+        data:
+          type: object
+          properties:
+            workspace:
+              $ref: "#/components/schemas/Workspace"
+            stats:
+              type: object
+              properties:
+                totalUsers:
+                  type: integer
+                  example: 42
+                activeUsers:
+                  type: integer
+                  example: 38
+                pendingVerification:
+                  type: integer
+                  example: 3
+                deactivatedUsers:
+                  type: integer
+                  example: 1
+
+    # Data Models
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "user_id_here"
+        email:
+          type: string
+          format: email
+          example: "user@example.com"
+        name:
+          type: string
+          example: "John Doe"
+        status:
+          type: string
+          enum: [PENDING_VERIFY, ACTIVE, DEACTIVATED, PENDING_DELETION]
+          example: "ACTIVE"
+        role:
+          type: string
+          enum: [ADMIN, MEMBER]
+          example: "MEMBER"
+        emailVerified:
+          type: boolean
+          example: true
+        verifiedAt:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00Z"
+        lastLoginAt:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00Z"
+        createdAt:
+          type: string
+          format: date-time
+          example: "2024-01-01T00:00:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00Z"
+
+    Workspace:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "workspace_id_here"
+        name:
+          type: string
+          example: "My Workspace"
+        domain:
+          type: string
+          example: "example.com"
+        createdAt:
+          type: string
+          format: date-time
+          example: "2024-01-01T00:00:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00Z"
+
+    Session:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "session_id_here"
+        deviceId:
+          type: string
+          example: "device_id_here"
+        userAgent:
+          type: string
+          example: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
+        ipAddress:
+          type: string
+          example: "192.168.1.1"
+        isActive:
+          type: boolean
+          example: true
+        createdAt:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00Z"
+        expiresAt:
+          type: string
+          format: date-time
+          example: "2024-01-22T10:30:00Z"
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+          example: 1
+        limit:
+          type: integer
+          example: 20
+        total:
+          type: integer
+          example: 100
+        pages:
+          type: integer
+          example: 5
+        hasNext:
+          type: boolean
+          example: true
+        hasPrev:
+          type: boolean
+          example: false

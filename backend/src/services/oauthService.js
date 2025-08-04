@@ -47,7 +47,7 @@ async function handleOAuthLogin(provider, profile) {
 
   if (user) {
     // Existing user - log them in
-    if (!user.isActive) {
+    if (user.status !== "ACTIVE") {
       throw new ApiError(403, "Account is deactivated");
     }
 
@@ -85,7 +85,7 @@ async function handleOAuthLogin(provider, profile) {
           email: user.email,
           name: user.name,
           emailVerified: user.emailVerified,
-          isActive: user.isActive,
+          status: user.status,
           role: user.role,
           workspaceId: user.workspaceId,
         },
@@ -112,7 +112,7 @@ async function handleOAuthLogin(provider, profile) {
         email,
         name,
         emailVerified: true, // OAuth users are pre-verified
-        isActive: true,
+        status: "ACTIVE",
         workspaceId: workspace.id,
         role,
       },
@@ -121,7 +121,7 @@ async function handleOAuthLogin(provider, profile) {
         email: true,
         name: true,
         emailVerified: true,
-        isActive: true,
+        status: true,
         role: true,
         workspaceId: true,
       },

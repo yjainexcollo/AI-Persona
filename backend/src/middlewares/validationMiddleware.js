@@ -90,12 +90,6 @@ const validateTokenRefresh = [
   handleValidationErrors,
 ];
 
-// Logout validation
-const validateLogout = [
-  body("refreshToken").notEmpty().withMessage("Refresh token is required"),
-  handleValidationErrors,
-];
-
 // Session revocation validation
 const validateSessionRevocation = [
   param("sessionId").notEmpty().withMessage("Session ID is required"),
@@ -178,7 +172,6 @@ module.exports = {
   validateEmailVerification,
   validateResendVerification,
   validateTokenRefresh,
-  validateLogout,
   validateSessionRevocation,
   validateUserId,
   validatePagination,
