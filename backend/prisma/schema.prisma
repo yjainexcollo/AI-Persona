@@ -41,6 +41,11 @@ model User {
     emailVerifications EmailVerification[]
     passwordResetTokens PasswordResetToken[]
     auditEvents   AuditEvent[]
+    personaFavourites PersonaFavourite[]
+    conversations Conversation[]
+    messages    Message[]
+    files       File[]
+    reactions   Reaction[]
     
     @@map("users")
     @@index([email])
@@ -180,6 +185,223 @@ model AuditEvent {
 }
 
 // ===================================
+// PERSONA MODEL
+// ===================================
+model Persona {
+    id          String   @id @default(cuid())
+    name        String
+    description String?
+    avatarUrl   String?
+    webhookUrl  String   // Encrypted webhook URL
+    isActive    Boolean  @default(true)
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+    
+    // Relations
+    favourites  PersonaFavourite[]
+    conversations Conversation[]
+    messages    Message[]
+    
+    @@map("personas")
+    @@index([isActive])
+    @@index([createdAt])
+}
+
+// ===================================
+// PERSONA FAVOURITE MODEL
+// ===================================
+model PersonaFavourite {
+    id        String   @id @default(cuid())
+    userId    String
+    personaId String
+    createdAt DateTime @default(now())
+    
+    // Relations
+    user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+    persona   Persona  @relation(fields: [personaId], references: [id], onDelete: Cascade)
+    
+    @@unique([userId, personaId])
+    @@map("persona_favourites")
+    @@index([userId])
+    @@index([personaId])
+    @@index([createdAt])
+}
+
+// ===================================
+// CONVERSATION MODEL
+// ===================================
+model Conversation {
+    id          String   @id @default(cuid())
+    userId      String
+    personaId   String
+    title       String?  // Auto-generated from first message
+    visibility  ConversationVisibility @default(PRIVATE)
+    archivedAt  DateTime?
+    isActive    Boolean  @default(true)
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+    
+    // Relations
+    user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+    persona     Persona  @relation(fields: [personaId], references: [id], onDelete: Cascade)
+    messages    Message[]
+    files       File[]
+    sharedLink  SharedLink?
+    
+    @@map("conversations")
+    @@index([userId])
+    @@index([personaId])
+    @@index([isActive])
+    @@index([createdAt])
+    @@index([userId, isActive])
+    @@index([visibility])
+    @@index([archivedAt])
+    @@index([userId, visibility])
+}
+
+// ===================================
+// MESSAGE MODEL
+// ===================================
+model Message {
+    id             String   @id @default(cuid())
+    conversationId String
+    personaId      String
+    userId         String?  // User who created the message
+    fileId         String?  // Optional file attachment
+    content        String
+    role           MessageRole
+    edited         Boolean  @default(false)
+    deleted        Boolean  @default(false)
+    createdAt      DateTime @default(now())
+    
+    // Relations
+    conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+    persona       Persona      @relation(fields: [personaId], references: [id], onDelete: Cascade)
+    user          User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+    file          File?        @relation(fields: [fileId], references: [id], onDelete: SetNull)
+    edits         MessageEdit[]
+    reactions     Reaction[]
+    
+    @@map("messages")
+    @@index([conversationId])
+    @@index([personaId])
+    @@index([role])
+    @@index([createdAt])
+    @@index([conversationId, createdAt])
+    @@index([userId])
+    @@index([edited])
+    @@index([deleted])
+    @@index([fileId])
+}
+
+// ===================================
+// MESSAGE EDIT MODEL
+// ===================================
+model MessageEdit {
+    id        String   @id @default(cuid())
+    messageId String
+    oldContent String
+    editedAt  DateTime @default(now())
+    
+    // Relations
+    message   Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+    
+    @@map("message_edits")
+    @@index([messageId])
+    @@index([editedAt])
+}
+
+// ===================================
+// FILE MODEL
+// ===================================
+model File {
+    id          String   @id @default(cuid())
+    conversationId String
+    userId      String
+    filename    String
+    mimeType    String
+    sizeBytes   Int
+    url         String?  // Will be updated after upload
+    uploadedAt  DateTime?
+    createdAt   DateTime @default(now())
+    
+    // Relations
+    conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+    user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+    messages    Message[]
+    
+    @@map("files")
+    @@index([conversationId])
+    @@index([userId])
+    @@index([uploadedAt])
+}
+
+// ===================================
+// REACTION MODEL
+// ===================================
+model Reaction {
+    id        String   @id @default(cuid())
+    messageId String
+    userId    String
+    type      ReactionType
+    createdAt DateTime @default(now())
+    
+    // Relations
+    message   Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+    user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+    
+    @@unique([messageId, userId])
+    @@map("reactions")
+    @@index([messageId])
+    @@index([userId])
+    @@index([type])
+    @@index([createdAt])
+}
+
+// ===================================
+// SHARED LINK MODEL
+// ===================================
+model SharedLink {
+    id            String   @id @default(cuid())
+    conversationId String   @unique
+    token         String   @unique
+    expiresAt     DateTime
+    createdAt     DateTime @default(now())
+    
+    // Relations
+    conversation  Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+    
+    @@map("shared_links")
+    @@index([token])
+    @@index([expiresAt])
+    @@index([conversationId])
+}
+
+// ===================================
+// MESSAGE ROLE ENUM
+// ===================================
+enum MessageRole {
+    USER
+    ASSISTANT
+}
+
+// ===================================
+// CONVERSATION VISIBILITY ENUM
+// ===================================
+enum ConversationVisibility {
+    PRIVATE
+    SHARED
+}
+
+// ===================================
+// REACTION TYPE ENUM
+// ===================================
+enum ReactionType {
+    LIKE
+    DISLIKE
+}
+
+// ===================================
 // ENUMS
 // ===================================
 enum UserStatus {
@@ -222,4 +444,16 @@ enum AuditEventType {
     MEMBER_ROLE_CHANGED
     MEMBER_REMOVED
     WORKSPACE_DELETION_REQUESTED
+    PERSONA_FAVOURITED
+    PERSONA_UNFAVOURITED
+    CHAT_MESSAGE_SENT
+    WEBHOOK_FAILED
+    WEBHOOK_SUCCESS
+    CONVERSATION_VISIBILITY_CHANGED
+    CONVERSATION_ARCHIVED
+    MESSAGE_EDITED
+    FILE_UPLOADED
+    REACTION_ADDED
+    SHARED_LINK_CREATED
+    SHARED_LINK_ACCESSED
 }

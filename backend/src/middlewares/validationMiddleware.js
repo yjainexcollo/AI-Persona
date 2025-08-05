@@ -286,6 +286,129 @@ const validateId = (fieldName) => [
   handleValidationErrors,
 ];
 
+// Persona validation schemas
+const validatePersonaId = [
+  param("id").notEmpty().withMessage("Persona ID is required"),
+  handleValidationErrors,
+];
+
+const validateChatMessage = [
+  param("id").notEmpty().withMessage("Persona ID is required"),
+  body("message")
+    .trim()
+    .notEmpty()
+    .withMessage("Message is required")
+    .isLength({ min: 1, max: 10000 })
+    .withMessage("Message must be between 1 and 10000 characters"),
+  body("conversationId")
+    .optional()
+    .isUUID()
+    .withMessage("Conversation ID must be a valid UUID"),
+  handleValidationErrors,
+];
+
+const validateFavouriteToggle = [
+  param("id").notEmpty().withMessage("Persona ID is required"),
+  handleValidationErrors,
+];
+
+// Conversation validation schemas
+const validateConversationId = [
+  param("id").isUUID().withMessage("Conversation ID must be a valid UUID"),
+  handleValidationErrors,
+];
+
+const validateConversationVisibility = [
+  param("id").isUUID().withMessage("Conversation ID must be a valid UUID"),
+  body("visibility")
+    .isIn(["PRIVATE", "SHARED"])
+    .withMessage("Visibility must be either PRIVATE or SHARED"),
+  handleValidationErrors,
+];
+
+const validateConversationQuery = [
+  query("archived")
+    .optional()
+    .isBoolean()
+    .withMessage("Archived parameter must be a boolean"),
+  handleValidationErrors,
+];
+
+// Message validation schemas
+const validateMessageId = [
+  param("id").isUUID().withMessage("Message ID must be a valid UUID"),
+  handleValidationErrors,
+];
+
+const validateMessageEdit = [
+  param("id").isUUID().withMessage("Message ID must be a valid UUID"),
+  body("content")
+    .trim()
+    .notEmpty()
+    .withMessage("Content is required")
+    .isLength({ min: 1, max: 4000 })
+    .withMessage("Content must be between 1 and 4000 characters"),
+  handleValidationErrors,
+];
+
+// File upload validation schemas
+const validateFileUpload = [
+  param("id").isUUID().withMessage("Conversation ID must be a valid UUID"),
+  body("filename")
+    .trim()
+    .notEmpty()
+    .withMessage("Filename is required")
+    .isLength({ max: 200 })
+    .withMessage("Filename must be less than 200 characters"),
+  body("mimeType")
+    .trim()
+    .notEmpty()
+    .withMessage("Mime type is required")
+    .matches(/^(image\/|application\/pdf)$/)
+    .withMessage("Invalid mime type. Allowed: image/*, application/pdf"),
+  body("sizeBytes")
+    .isInt({ min: 1, max: 10485760 })
+    .withMessage("File size must be between 1 and 10 MB"),
+  handleValidationErrors,
+];
+
+// Reaction validation schemas
+const validateReaction = [
+  param("id").isUUID().withMessage("Message ID must be a valid UUID"),
+  body("type")
+    .isIn(["LIKE", "DISLIKE"])
+    .withMessage("Reaction type must be LIKE or DISLIKE"),
+  handleValidationErrors,
+];
+
+// Archive validation schemas
+const validateArchive = [
+  param("id").isUUID().withMessage("Conversation ID must be a valid UUID"),
+  body("archived").isBoolean().withMessage("Archived must be a boolean"),
+  handleValidationErrors,
+];
+
+// Share link validation schemas
+const validateShareLink = [
+  param("id").isUUID().withMessage("Conversation ID must be a valid UUID"),
+  body("expiresInDays")
+    .optional()
+    .isInt({ min: 1, max: 365 })
+    .withMessage("Expires in days must be between 1 and 365"),
+  handleValidationErrors,
+];
+
+// Shared token validation schemas
+const validateSharedToken = [
+  param("token")
+    .isLength({ min: 16 })
+    .matches(/^[A-Za-z0-9_-]+$/)
+    .withMessage(
+      "Token must be at least 16 characters and contain only letters, numbers, hyphens, and underscores"
+    ),
+  handleValidationErrors,
+];
+
 module.exports = {
   validateRegistration,
   validateLogin,
@@ -316,5 +439,26 @@ module.exports = {
   validateMembersListQuery,
   validateRolePatch,
   validateStatusPatch,
+  // Persona validation schemas
+  validatePersonaId,
+  validateChatMessage,
+  validateFavouriteToggle,
+  // Conversation validation schemas
+  validateConversationId,
+  validateConversationVisibility,
+  validateConversationQuery,
+  // Message validation schemas
+  validateMessageId,
+  validateMessageEdit,
+  // File upload validation schemas
+  validateFileUpload,
+  // Reaction validation schemas
+  validateReaction,
+  // Archive validation schemas
+  validateArchive,
+  // Share link validation schemas
+  validateShareLink,
+  // Shared token validation schemas
+  validateSharedToken,
   handleValidationErrors,
 };

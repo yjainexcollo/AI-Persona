@@ -64,6 +64,22 @@ A secure, scalable, and enterprise-grade multi-tenant backend for the AI-Persona
 - **Email Templates**: Professional HTML email templates
 - **Delivery Tracking**: Email send success/failure logging
 
+### 🤖 Persona Management & Chat
+
+- **Persona Catalogue**: Read-only persona listing with favourites support
+- **Webhook Integration**: Secure encrypted webhook URLs for persona communication
+- **Circuit Breaker**: Automatic failure detection and recovery (5 failures → 5 min timeout)
+- **Chat Relay**: Message forwarding to n8n webhooks with retry logic
+- **Rate Limiting**: 60 requests/min per persona with exponential backoff
+- **Conversation Management**: Private and shared conversations with workspace-wide visibility
+- **Google Docs Mode**: Share conversations with workspace members (PRIVATE/SHARED)
+- **Message Editing**: Edit recent messages and branch conversations (ChatGPT-style)
+- **File Attachments**: Upload images and PDFs with presigned URLs (10 MB limit)
+- **Message Reactions**: Like/dislike messages with toggle functionality
+- **Conversation Archiving**: Archive/unarchive conversations with proper access controls
+- **Shareable Links**: Create public shareable links with expiration dates (Google Docs style)
+- **Audit Logging**: Complete chat, webhook, visibility change, message edit, reaction, and sharing tracking
+
 ### 📚 API & Documentation
 
 - **OpenAPI/Swagger**: Complete API documentation with examples
@@ -245,6 +261,23 @@ GET  /.well-known/jwks.json              # JSON Web Key Set
 POST /api/auth/rotate-keys                # Rotate JWT keys (admin only)
 ```
 
+#### Persona Management & Chat
+
+```http
+GET    /api/personas                      # List all personas
+GET    /api/personas/:id                  # Get persona details
+POST   /api/personas/:id/favourite        # Toggle persona favourite
+POST   /api/personas/:id/chat             # Send message to persona
+GET    /api/conversations                 # List user conversations
+PATCH  /api/conversations/:id/visibility  # Update conversation visibility
+PATCH  /api/conversations/:id/archive    # Archive/unarchive conversation
+POST   /api/conversations/:id/share      # Create shareable link
+POST   /api/conversations/:id/files      # Request file upload URL
+PATCH  /api/messages/:id                  # Edit message and branch conversation
+POST   /api/messages/:id/reactions       # Toggle message reaction
+GET    /p/:token                         # Get shared conversation (public)
+```
+
 ### Admin Operations
 
 ```http
@@ -288,6 +321,9 @@ JWT_SECRET="your-super-secret-jwt-key"
 SESSION_SECRET="your-session-secret"
 BCRYPT_SALT_ROUNDS=12
 JWT_EXPIRES_IN=15m
+
+# Persona Configuration
+ENCRYPTION_KEY="your-32-byte-encryption-key-here"
 JWT_REFRESH_EXPIRES_IN=7d
 
 # OAuth Configuration

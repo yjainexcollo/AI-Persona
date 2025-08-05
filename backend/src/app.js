@@ -11,6 +11,10 @@ passportSetup();
 const authRoutes = require("./routes/authRoutes");
 const profileRoutes = require("./routes/profileRoutes");
 const workspaceRoutes = require("./routes/workspaceRoutes");
+const personaRoutes = require("./routes/personaRoutes");
+const conversationRoutes = require("./routes/conversationRoutes");
+const messageRoutes = require("./routes/messageRoutes");
+const publicRoutes = require("./routes/publicRoutes");
 
 const swaggerUi = require("swagger-ui-express");
 const YAML = require("yamljs");
@@ -47,6 +51,12 @@ app.get("/health", (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/workspaces", workspaceRoutes);
 app.use("/api/users", profileRoutes);
+app.use("/api/personas", personaRoutes);
+app.use("/api/conversations", conversationRoutes);
+app.use("/api/messages", messageRoutes);
+
+// Public Routes (no authentication required)
+app.use("/p", publicRoutes);
 
 // Load the swagger.yaml file
 const swaggerDocument = YAML.load(path.join(__dirname, "../docs/swagger.yaml"));

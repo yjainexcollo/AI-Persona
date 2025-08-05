@@ -1,4 +1,6 @@
 openapi: 3.0.3
+security:
+  - BearerAuth: []
 info:
   title: AI-Persona Backend API
   version: 1.0.0
@@ -181,6 +183,7 @@ paths:
         - System
       summary: Health check
       description: Check if the service is running
+      security: []
       responses:
         "200":
           description: Service is healthy
@@ -200,6 +203,7 @@ paths:
         - Authentication
       summary: Register new user
       description: Create a new user account with email verification
+      security: []
       requestBody:
         required: true
         content:
@@ -255,6 +259,7 @@ paths:
         - Authentication
       summary: User login
       description: Authenticate user with email and password
+      security: []
       requestBody:
         required: true
         content:
@@ -364,6 +369,7 @@ paths:
         - Authentication
       summary: Verify email address
       description: Verify user email with token from verification email
+      security: []
       parameters:
         - name: token
           in: query
@@ -596,6 +602,7 @@ paths:
         - Authentication
       summary: Google OAuth login
       description: Redirect to Google OAuth for authentication
+      security: []
       responses:
         "302":
           description: Redirect to Google OAuth
@@ -606,6 +613,7 @@ paths:
         - Authentication
       summary: Google OAuth callback
       description: Handle Google OAuth callback and create user session
+      security: []
       parameters:
         - name: code
           in: query
@@ -1264,13 +1272,844 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  # Persona Endpoints
+  /api/personas:
+    get:
+      tags:
+        - Personas
+      summary: List all personas
+      description: Get a list of all available personas with optional favourites filter
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: favouritesOnly
+          in: query
+          description: Filter to show only favourited personas
+          required: false
+          schema:
+            type: boolean
+            example: false
+      responses:
+        "200":
+          description: Personas retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  message:
+                    type: string
+                    example: "Personas retrieved successfully"
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Persona"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /api/personas/{id}:
+    get:
+      tags:
+        - Personas
+      summary: Get persona details
+      description: Get detailed information about a specific persona
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Persona ID
+          schema:
+            type: string
+            example: "persona_id_here"
+      responses:
+        "200":
+          description: Persona retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  message:
+                    type: string
+                    example: "Persona retrieved successfully"
+                  data:
+                    $ref: "#/components/schemas/Persona"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /api/personas/{id}/favourite:
+    post:
+      tags:
+        - Personas
+      summary: Toggle persona favourite
+      description: Add or remove a persona from user's favourites
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Persona ID
+          schema:
+            type: string
+            example: "persona_id_here"
+      responses:
+        "200":
+          description: Favourite status toggled successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  message:
+                    type: string
+                    example: "Persona added to favourites"
+                  data:
+                    type: object
+                    properties:
+                      isFavourited:
+                        type: boolean
+                        example: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /api/personas/{id}/chat:
+    post:
+      tags:
+        - Personas
+      summary: Send message to persona
+      description: Send a message to a persona and get a response via webhook
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Persona ID
+          schema:
+            type: string
+            example: "persona_id_here"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - message
+              properties:
+                message:
+                  type: string
+                  minLength: 1
+                  maxLength: 10000
+                  example: "Hello, how are you today?"
+                conversationId:
+                  type: string
+                  format: uuid
+                  description: Optional conversation ID to continue existing conversation
+                  example: "conversation_id_here"
+                fileId:
+                  type: string
+                  description: Optional file ID for file attachment
+                  example: "file_id_here"
+      responses:
+        "200":
+          description: Message sent successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  message:
+                    type: string
+                    example: "Message sent successfully"
+                  data:
+                    type: object
+                    properties:
+                      reply:
+                        type: string
+                        example: "Hello! I'm doing well, thank you for asking."
+                      conversationId:
+                        type: string
+                        example: "conversation_id_here"
+                      messageId:
+                        type: string
+                        example: "message_id_here"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "502":
+          $ref: "#/components/responses/BadGateway"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/conversations:
+    get:
+      tags:
+        - Conversations
+      summary: List user conversations
+      description: |
+        Get a list of conversations for the authenticated user.
+        Returns user's private conversations plus all shared conversations in their workspace.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: archived
+          in: query
+          description: Include archived conversations
+          required: false
+          schema:
+            type: boolean
+            example: false
+      responses:
+        "200":
+          description: Conversations retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  message:
+                    type: string
+                    example: "Conversations retrieved successfully"
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Conversation"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /api/conversations/{id}/visibility:
+    patch:
+      tags:
+        - Conversations
+      summary: Update conversation visibility
+      description: |
+        Update conversation visibility to PRIVATE or SHARED.
+        Only conversation owner or workspace admin can change visibility.
+        Cannot change visibility of archived conversations.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Conversation ID
+          schema:
+            type: string
+            format: uuid
+            example: "conversation_id_here"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - visibility
+              properties:
+                visibility:
+                  type: string
+                  enum: [PRIVATE, SHARED]
+                  example: "SHARED"
+      responses:
+        "200":
+          description: Conversation visibility updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  message:
+                    type: string
+                    example: "Conversation visibility updated successfully"
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        example: "conversation_id_here"
+                      visibility:
+                        type: string
+                        enum: [PRIVATE, SHARED]
+                        example: "SHARED"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          description: Cannot change visibility of archived conversation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "error"
+                  message:
+                    type: string
+                    example: "Cannot change visibility of archived conversation"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /api/messages/{id}:
+    patch:
+      tags:
+        - Messages
+      summary: Edit message
+      description: |
+        Edit a user message and branch the conversation (ChatGPT-style).
+        Only user messages can be edited within 10 minutes of creation.
+        All messages after the edited message will be soft-deleted and a new AI response will be generated.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Message ID
+          schema:
+            type: string
+            format: uuid
+            example: "message_id_here"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - content
+              properties:
+                content:
+                  type: string
+                  minLength: 1
+                  maxLength: 4000
+                  example: "Can you explain this in more detail?"
+      responses:
+        "200":
+          description: Message edited successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  message:
+                    type: string
+                    example: "Message edited successfully"
+                  data:
+                    type: object
+                    properties:
+                      editedMessageId:
+                        type: string
+                        example: "message_id_here"
+                      assistantMessageId:
+                        type: string
+                        example: "new_reply_id_here"
+                      conversationId:
+                        type: string
+                        example: "conversation_id_here"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          description: Message cannot be edited
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "error"
+                  message:
+                    type: string
+                    example: "Messages can only be edited within 10 minutes"
+        "502":
+          $ref: "#/components/responses/BadGateway"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /api/conversations/{id}/files:
+    post:
+      tags:
+        - Files
+      summary: Request file upload URL
+      description: |
+        Request a presigned upload URL for file attachment.
+        Only conversation owner or workspace member can upload files.
+        Supports images and PDFs up to 10 MB.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Conversation ID
+          schema:
+            type: string
+            format: uuid
+            example: "conversation_id_here"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - filename
+                - mimeType
+                - sizeBytes
+              properties:
+                filename:
+                  type: string
+                  maxLength: 200
+                  example: "document.pdf"
+                mimeType:
+                  type: string
+                  pattern: "^(image/|application/pdf)$"
+                  example: "application/pdf"
+                sizeBytes:
+                  type: integer
+                  minimum: 1
+                  maximum: 10485760
+                  example: 1024000
+      responses:
+        "200":
+          description: File upload URL generated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  message:
+                    type: string
+                    example: "File upload URL generated successfully"
+                  data:
+                    type: object
+                    properties:
+                      presignedUrl:
+                        type: string
+                        format: uri
+                        example: "https://example.com/uploads/file_id"
+                      fileId:
+                        type: string
+                        example: "file_id_here"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          description: File too large
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "error"
+                  message:
+                    type: string
+                    example: "File size must be less than 10 MB"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /api/messages/{id}/reactions:
+    post:
+      tags:
+        - Reactions
+      summary: Toggle message reaction
+      description: |
+        Add or toggle a reaction to a message.
+        Sending the same reaction type again removes it.
+        Sending a different type updates the reaction.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Message ID
+          schema:
+            type: string
+            format: uuid
+            example: "message_id_here"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - type
+              properties:
+                type:
+                  type: string
+                  enum: [LIKE, DISLIKE]
+                  example: "LIKE"
+      responses:
+        "200":
+          description: Reaction toggled successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  message:
+                    type: string
+                    example: "Reaction added successfully"
+                  data:
+                    type: object
+                    properties:
+                      messageId:
+                        type: string
+                        example: "message_id_here"
+                      type:
+                        type: string
+                        enum: [LIKE, DISLIKE]
+                        example: "LIKE"
+                      action:
+                        type: string
+                        enum: [added, removed, updated]
+                        example: "added"
+                      toggled:
+                        type: boolean
+                        example: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /api/conversations/{id}/archive:
+    patch:
+      tags:
+        - Conversations
+      summary: Archive or unarchive conversation
+      description: |
+        Archive or unarchive a conversation.
+        Only conversation owner or workspace admin can archive.
+        Archived conversations cannot be edited, receive new messages, or change visibility.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Conversation ID
+          schema:
+            type: string
+            format: uuid
+            example: "conversation_id_here"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - archived
+              properties:
+                archived:
+                  type: boolean
+                  example: true
+      responses:
+        "200":
+          description: Conversation archive status updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  message:
+                    type: string
+                    example: "Conversation archived successfully"
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        example: "conversation_id_here"
+                      archived:
+                        type: boolean
+                        example: true
+                      archivedAt:
+                        type: string
+                        format: date-time
+                        example: "2025-08-05T08:40:00.000Z"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          description: Conversation cannot be archived
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "error"
+                  message:
+                    type: string
+                    example: "Conversation is already archived"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /api/conversations/{id}/share:
+    post:
+      tags:
+        - Conversations
+      summary: Create or refresh shareable link
+      description: |
+        Create or refresh a shareable link for a conversation.
+        Only SHARED conversations can have shareable links.
+        Archived conversations cannot be shared.
+        Only conversation owner or workspace admin can share.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Conversation ID
+          schema:
+            type: string
+            format: uuid
+            example: "conversation_id_here"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                expiresInDays:
+                  type: integer
+                  minimum: 1
+                  maximum: 365
+                  default: 30
+                  description: Days until link expires
+                  example: 30
+      responses:
+        "200":
+          description: Shareable link created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  message:
+                    type: string
+                    example: "Shareable link created successfully"
+                  data:
+                    type: object
+                    properties:
+                      url:
+                        type: string
+                        format: uri
+                        example: "https://app.com/p/abc123def456"
+                      expiresAt:
+                        type: string
+                        format: date-time
+                        example: "2025-09-04T08:40:00.000Z"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          description: Conversation cannot be shared
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "error"
+                  message:
+                    type: string
+                    example: "Only SHARED conversations can have shareable links"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /p/{token}:
+    get:
+      tags:
+        - Public
+      summary: Get shared conversation
+      description: |
+        Get a shared conversation by token.
+        Returns USER and ASSISTANT messages only.
+        Returns 410 if link has expired.
+      security: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          description: Share token
+          schema:
+            type: string
+            minLength: 16
+            example: "abc123def456ghi789jkl012"
+      responses:
+        "200":
+          description: Shared conversation retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  message:
+                    type: string
+                    example: "Shared conversation retrieved successfully"
+                  data:
+                    type: object
+                    properties:
+                      conversationId:
+                        type: string
+                        example: "conversation_id_here"
+                      persona:
+                        type: object
+                        properties:
+                          name:
+                            type: string
+                            example: "AI Assistant"
+                          description:
+                            type: string
+                            example: "A helpful AI assistant"
+                      messages:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            role:
+                              type: string
+                              enum: [USER, ASSISTANT]
+                              example: "USER"
+                            content:
+                              type: string
+                              example: "Hello, how are you?"
+                            fileUrl:
+                              type: string
+                              format: uri
+                              nullable: true
+                              example: "https://example.com/file.pdf"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          description: Shared link not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "error"
+                  message:
+                    type: string
+                    example: "Shared link not found"
+        "410":
+          description: Shared link has expired
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "error"
+                  message:
+                    type: string
+                    example: "Shared link has expired"
+
 components:
   securitySchemes:
     BearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
-
   schemas:
     # Common Response Schemas
     SuccessResponse:
@@ -1686,6 +2525,109 @@ components:
           type: boolean
           example: false
 
+    # Persona and Conversation Schemas
+    Persona:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "persona_id_here"
+        name:
+          type: string
+          example: "AI Assistant"
+        description:
+          type: string
+          example: "A helpful AI assistant for general questions"
+        avatarUrl:
+          type: string
+          format: uri
+          example: "https://example.com/avatar.jpg"
+        isActive:
+          type: boolean
+          example: true
+        isAvailable:
+          type: boolean
+          example: true
+        isFavourited:
+          type: boolean
+          example: false
+        createdAt:
+          type: string
+          format: date-time
+          example: "2024-01-01T00:00:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00Z"
+        _count:
+          type: object
+          properties:
+            conversations:
+              type: integer
+              example: 5
+            messages:
+              type: integer
+              example: 25
+
+    Conversation:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "conversation_id_here"
+        title:
+          type: string
+          example: "Chat with AI Assistant"
+        persona:
+          type: object
+          properties:
+            id:
+              type: string
+              example: "persona_id_here"
+            name:
+              type: string
+              example: "AI Assistant"
+            avatarUrl:
+              type: string
+              format: uri
+              example: "https://example.com/avatar.jpg"
+        owner:
+          type: object
+          properties:
+            id:
+              type: string
+              example: "user_id_here"
+            name:
+              type: string
+              example: "John Doe"
+            email:
+              type: string
+              format: email
+              example: "john@example.com"
+        visibility:
+          type: string
+          enum: [PRIVATE, SHARED]
+          example: "PRIVATE"
+        archivedAt:
+          type: string
+          format: date-time
+          nullable: true
+          example: null
+        lastMessage:
+          type: string
+          example: "Hello! How can I help you today?"
+        messageCount:
+          type: integer
+          example: 10
+        createdAt:
+          type: string
+          format: date-time
+          example: "2024-01-01T00:00:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00Z"
+
   # Common Response Definitions
   responses:
     BadRequest:
@@ -1779,3 +2721,45 @@ components:
                     message:
                       type: string
                       example: "Invalid email format"
+
+    TooManyRequests:
+      description: Too Many Requests
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              status:
+                type: string
+                example: "error"
+              message:
+                type: string
+                example: "Too many requests, please try again later"
+
+    BadGateway:
+      description: Bad Gateway
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              status:
+                type: string
+                example: "error"
+              message:
+                type: string
+                example: "Failed to get response from persona"
+
+    ServiceUnavailable:
+      description: Service Unavailable
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              status:
+                type: string
+                example: "error"
+              message:
+                type: string
+                example: "Persona is temporarily unavailable"
