@@ -101,25 +101,6 @@ const changeStatus = asyncHandler(async (req, res) => {
   });
 });
 
-// POST /api/workspaces/:id/members/:uid/force-reset
-const forcePasswordReset = asyncHandler(async (req, res) => {
-  const workspaceId = req.params.id;
-  const memberId = req.params.uid;
-  const userId = req.user.id;
-
-  const result = await workspaceService.forcePasswordReset(
-    workspaceId,
-    userId,
-    memberId
-  );
-
-  res.status(200).json({
-    status: "success",
-    message: "Password reset email sent successfully",
-    data: { resetEmailSent: true },
-  });
-});
-
 // DELETE /api/workspaces/:id/members/:uid
 const removeMember = asyncHandler(async (req, res) => {
   const workspaceId = req.params.id;
@@ -154,7 +135,6 @@ module.exports = {
   listMembers,
   changeRole,
   changeStatus,
-  forcePasswordReset,
   removeMember,
   requestDeletion,
 };

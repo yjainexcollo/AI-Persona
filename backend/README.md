@@ -35,7 +35,7 @@ A secure, scalable, and enterprise-grade multi-tenant backend for the AI-Persona
 - **Role-Based Access Control**: ADMIN and MEMBER roles with workspace-scoped permissions
 - **Smart Member Management**: Advanced filtering, pagination, and member operations
 - **Profile Management**: User profile updates, avatar uploads, and password changes
-- **Member Operations**: Add, remove, change roles, activate/deactivate, force password reset
+- **Member Operations**: Add, remove, change roles, activate/deactivate
 - **Workspace Settings**: Update workspace name, timezone, and locale settings
 - **Workspace Deletion**: Request workspace deletion with 30-day grace period
 - **Last Admin Protection**: Prevents demoting/deactivating the last admin in workspace

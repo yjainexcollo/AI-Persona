@@ -65,16 +65,6 @@ router.patch(
   workspaceController.changeStatus
 );
 
-// POST /api/workspaces/:id/members/:uid/force-reset
-router.post(
-  "/:id/members/:uid/force-reset",
-  authMiddleware,
-  validateWorkspaceId,
-  validateMemberId,
-  roleMiddleware("ADMIN"),
-  workspaceController.forcePasswordReset
-);
-
 // DELETE /api/workspaces/:id/members/:uid
 router.delete(
   "/:id/members/:uid",

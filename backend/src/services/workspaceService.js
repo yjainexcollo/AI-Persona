@@ -309,50 +309,6 @@ async function changeMemberStatus(workspaceId, userId, memberId, newStatus) {
   return updatedMember;
 }
 
-// Force password reset for member
-async function forcePasswordReset(workspaceId, userId, memberId) {
-  // Verify user is admin of this workspace
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { workspaceId: true, role: true },
-  });
-
-  if (!user || user.workspaceId !== workspaceId) {
-    throw new ApiError(403, "Access denied to this workspace");
-  }
-
-  if (user.role !== "ADMIN") {
-    throw new ApiError(403, "Only workspace admins can force password reset");
-  }
-
-  // Verify member exists and belongs to the same workspace
-  const member = await prisma.user.findUnique({
-    where: { id: memberId },
-    select: { workspaceId: true, email: true, name: true },
-  });
-
-  if (!member || member.workspaceId !== workspaceId) {
-    throw new ApiError(404, "Member not found in this workspace");
-  }
-
-  // Import password reset service
-  const passwordResetService = require("./passwordResetService");
-
-  // Request password reset (this handles token generation and email sending)
-  await passwordResetService.requestPasswordReset(member.email);
-
-  // Log audit event
-  await logAuditEvent(userId, "PASSWORD_RESET_FORCED", {
-    workspaceId,
-    memberId,
-    memberEmail: member.email,
-  });
-
-  logger.info(`Password reset forced for member ${memberId} by user ${userId}`);
-
-  return { resetEmailSent: true };
-}
-
 // Remove member from workspace
 async function removeMember(workspaceId, userId, memberId) {
   // Verify user is admin of this workspace
@@ -512,7 +468,6 @@ module.exports = {
   listMembers,
   changeMemberRole,
   changeMemberStatus,
-  forcePasswordReset,
   removeMember,
   requestDeletion,
 };

@@ -1185,56 +1185,6 @@ paths:
                         type: string
                         example: "Cannot deactivate the last admin in the workspace"
 
-  /api/workspaces/{id}/members/{uid}/force-reset:
-    post:
-      tags:
-        - Workspace Management
-      summary: Force password reset
-      description: Generate a password reset token and send email to member (Admin only)
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-          description: Workspace ID
-        - name: uid
-          in: path
-          required: true
-          schema:
-            type: string
-          description: Member user ID
-      responses:
-        "200":
-          description: Password reset email sent successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: "success"
-                  message:
-                    type: string
-                    example: "Password reset email sent successfully"
-                  data:
-                    type: object
-                    properties:
-                      resetEmailSent:
-                        type: boolean
-                        example: true
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "422":
-          $ref: "#/components/responses/ValidationError"
-
   /api/workspaces/{id}/members/{uid}:
     delete:
       tags:
