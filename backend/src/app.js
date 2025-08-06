@@ -67,7 +67,7 @@ app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 // Centralized error handler
 app.use((err, req, res, next) => {
   logger.error("Unhandled error: %o", err);
-  res.status(err.status || 500).json({
+  res.status(err.statusCode || err.status || 500).json({
     error: {
       message: err.message || "Internal Server Error",
       details: process.env.NODE_ENV === "production" ? undefined : err.stack,

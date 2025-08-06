@@ -188,14 +188,21 @@ model AuditEvent {
 // PERSONA MODEL
 // ===================================
 model Persona {
-    id          String   @id @default(cuid())
-    name        String
-    description String?
-    avatarUrl   String?
-    webhookUrl  String   // Encrypted webhook URL
-    isActive    Boolean  @default(true)
-    createdAt   DateTime @default(now())
-    updatedAt   DateTime @updatedAt
+    id                  String   @id @default(cuid())
+    name                String
+    personaRole         String?  // The role this persona represents (e.g., "CFO", "Marketing Manager")
+    about               String?  // Brief description about the persona
+    traits              String?  // Key personality traits
+    painPoints          String?  // Common pain points this persona faces
+    coreExpertise       String?  // Areas of expertise
+    communicationStyle  String?  // How this persona communicates
+    keyResponsibility   String?  // Primary responsibilities
+    description         String?  // Legacy field - kept for backward compatibility
+    avatarUrl           String?
+    webhookUrl          String   // Encrypted webhook URL
+    isActive            Boolean  @default(true)
+    createdAt           DateTime @default(now())
+    updatedAt           DateTime @updatedAt
     
     // Relations
     favourites  PersonaFavourite[]

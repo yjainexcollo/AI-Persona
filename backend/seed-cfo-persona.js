@@ -85,10 +85,15 @@ async function seedCFOPersona() {
       const updatedPersona = await prisma.persona.update({
         where: { id: existingCFO.id },
         data: {
-          description:
-            cfoPersona.description +
-            "\n\n" +
-            JSON.stringify(cfoPersona.metadata, null, 2),
+          name: cfoPersona.name,
+          personaRole: "Chief Financial Officer",
+          about: cfoPersona.metadata.about,
+          traits: cfoPersona.metadata.traits.join("; "),
+          painPoints: cfoPersona.metadata.painPoints.join("; "),
+          coreExpertise: cfoPersona.metadata.coreExpertise.join("; "),
+          communicationStyle: cfoPersona.metadata.communicationStyle,
+          keyResponsibility: cfoPersona.metadata.keyResponsibilities.join("; "),
+          description: cfoPersona.description, // Keep original description for backward compatibility
           avatarUrl: cfoPersona.avatarUrl,
           webhookUrl: encrypt(
             cfoPersona.webhookUrl,
@@ -111,10 +116,14 @@ async function seedCFOPersona() {
     // Create CFO persona with encrypted webhook URL
     const cfoWithEncryptedWebhook = {
       name: cfoPersona.name,
-      description:
-        cfoPersona.description +
-        "\n\n" +
-        JSON.stringify(cfoPersona.metadata, null, 2),
+      personaRole: "Chief Financial Officer",
+      about: cfoPersona.metadata.about,
+      traits: cfoPersona.metadata.traits.join("; "),
+      painPoints: cfoPersona.metadata.painPoints.join("; "),
+      coreExpertise: cfoPersona.metadata.coreExpertise.join("; "),
+      communicationStyle: cfoPersona.metadata.communicationStyle,
+      keyResponsibility: cfoPersona.metadata.keyResponsibilities.join("; "),
+      description: cfoPersona.description, // Keep original description for backward compatibility
       avatarUrl: cfoPersona.avatarUrl,
       webhookUrl: encrypt(cfoPersona.webhookUrl, encryptionKey),
       isActive: true,

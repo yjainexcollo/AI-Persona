@@ -34,3 +34,14 @@ db_data/
 .keys/
 *.pem
 keyid.txt
+
+# Test files
+__tests__/coverage/
+__tests__/test-results/
+__tests__/test-reports/
+
+# Test database
+test-db-data/
+
+# Test environment
+.env.test.local

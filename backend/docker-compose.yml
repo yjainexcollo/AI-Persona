@@ -16,6 +16,23 @@ services:
     networks:
       - aipersona_net
 
+  redis:
+    image: redis:8-alpine
+    container_name: aipersona_redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ""
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - aipersona_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
   backend:
     build:
       context: .
@@ -28,6 +45,7 @@ services:
       - "3000:3000"
     depends_on:
       - db
+      - redis
     networks:
       - aipersona_net
     volumes:
@@ -36,6 +54,7 @@ services:
 
 volumes:
   db_data:
+  redis_data:
 
 networks:
   aipersona_net:

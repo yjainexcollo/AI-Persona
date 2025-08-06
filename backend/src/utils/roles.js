@@ -7,18 +7,9 @@ const roles = {
     "manage_members",
     "view_workspace",
     "view_persona",
-    "create_persona",
-    "update_persona",
     "delete_persona",
   ],
-  MEMBER: [
-    "view_workspace",
-    "view_persona",
-    "create_persona",
-    "update_persona",
-    "delete_persona",
-    "update_self",
-  ],
+  MEMBER: ["view_workspace", "view_persona", "delete_persona", "update_self"],
 };
 
 module.exports = roles;

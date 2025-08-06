@@ -12,7 +12,12 @@ const TAG_LENGTH = 16;
 
 function encrypt(text, secretKey) {
   try {
-    if (!text || !secretKey) {
+    if (
+      text === undefined ||
+      text === null ||
+      secretKey === undefined ||
+      secretKey === null
+    ) {
       throw new Error("Text and secret key are required");
     }
     // Accept both base64 and utf8 keys
@@ -36,7 +41,12 @@ function encrypt(text, secretKey) {
 
 function decrypt(encryptedText, secretKey) {
   try {
-    if (!encryptedText || !secretKey) {
+    if (
+      encryptedText === undefined ||
+      encryptedText === null ||
+      secretKey === undefined ||
+      secretKey === null
+    ) {
       throw new Error("Encrypted text and secret key are required");
     }
     const key =

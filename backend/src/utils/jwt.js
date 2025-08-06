@@ -18,58 +18,46 @@ let keyId = null;
 // Key storage path
 const KEY_STORAGE_PATH = path.join(__dirname, "../../.keys");
 
-// Initialize or rotate keys
+// Check if we're in test environment
+const isTestEnvironment =
+  process.env.NODE_ENV === "test" || process.env.JEST_WORKER_ID;
+
+// Initialize RSA keys
 async function initializeKeys() {
-  if (!currentKeyPair) {
+  if (currentKeyPair && keyId) {
+    return {
+      privateKey: currentKeyPair.privateKey,
+      publicKey: currentKeyPair.publicKey,
+      kid: keyId,
+    };
+  }
+
+  try {
+    await fs.mkdir(KEY_STORAGE_PATH, { recursive: true });
+    const privateKeyPath = path.join(KEY_STORAGE_PATH, "private.pem");
+    const publicKeyPath = path.join(KEY_STORAGE_PATH, "public.pem");
+    const keyIdPath = path.join(KEY_STORAGE_PATH, "keyid.txt");
+
     try {
-      // Try to load existing keys from storage
-      await fs.mkdir(KEY_STORAGE_PATH, { recursive: true });
+      // Try to load existing keys
+      const [privateKey, publicKey, storedKeyId] = await Promise.all([
+        fs.readFile(privateKeyPath, "utf8"),
+        fs.readFile(publicKeyPath, "utf8"),
+        fs.readFile(keyIdPath, "utf8"),
+      ]);
 
-      const privateKeyPath = path.join(KEY_STORAGE_PATH, "private.pem");
-      const publicKeyPath = path.join(KEY_STORAGE_PATH, "public.pem");
-      const keyIdPath = path.join(KEY_STORAGE_PATH, "keyid.txt");
+      currentKeyPair = { privateKey, publicKey };
+      keyId = storedKeyId.trim();
 
-      try {
-        const [privateKey, publicKey, storedKeyId] = await Promise.all([
-          fs.readFile(privateKeyPath, "utf8"),
-          fs.readFile(publicKeyPath, "utf8"),
-          fs.readFile(keyIdPath, "utf8"),
-        ]);
-
-        currentKeyPair = { privateKey, publicKey };
-        keyId = storedKeyId.trim();
-
+      if (!isTestEnvironment) {
         console.log("✅ Loaded existing RSA keys from storage");
-      } catch (error) {
-        // Keys don't exist, generate new ones
-        console.log("🔑 Generating new RSA key pair...");
-
-        currentKeyPair = crypto.generateKeyPairSync("rsa", {
-          modulusLength: 2048,
-          publicKeyEncoding: {
-            type: "spki",
-            format: "pem",
-          },
-          privateKeyEncoding: {
-            type: "pkcs8",
-            format: "pem",
-          },
-        });
-
-        keyId = crypto.randomBytes(16).toString("hex");
-
-        // Save keys to storage
-        await Promise.all([
-          fs.writeFile(privateKeyPath, currentKeyPair.privateKey),
-          fs.writeFile(publicKeyPath, currentKeyPair.publicKey),
-          fs.writeFile(keyIdPath, keyId),
-        ]);
-
-        console.log("✅ Generated and saved new RSA keys");
       }
     } catch (error) {
-      console.error("❌ Error initializing keys:", error.message);
-      // Fallback to in-memory keys if storage fails
+      // Keys don't exist, generate new ones
+      if (!isTestEnvironment) {
+        console.log("🔑 Generating new RSA key pair...");
+      }
+
       currentKeyPair = crypto.generateKeyPairSync("rsa", {
         modulusLength: 2048,
         publicKeyEncoding: {
@@ -81,8 +69,37 @@ async function initializeKeys() {
           format: "pem",
         },
       });
+
       keyId = crypto.randomBytes(16).toString("hex");
+
+      // Save keys to storage
+      await Promise.all([
+        fs.writeFile(privateKeyPath, currentKeyPair.privateKey),
+        fs.writeFile(publicKeyPath, currentKeyPair.publicKey),
+        fs.writeFile(keyIdPath, keyId),
+      ]);
+
+      if (!isTestEnvironment) {
+        console.log("✅ Generated and saved new RSA keys");
+      }
     }
+  } catch (error) {
+    if (!isTestEnvironment) {
+      console.error("❌ Error initializing keys:", error.message);
+    }
+    // Fallback to in-memory keys if storage fails
+    currentKeyPair = crypto.generateKeyPairSync("rsa", {
+      modulusLength: 2048,
+      publicKeyEncoding: {
+        type: "spki",
+        format: "pem",
+      },
+      privateKeyEncoding: {
+        type: "pkcs8",
+        format: "pem",
+      },
+    });
+    keyId = crypto.randomBytes(16).toString("hex");
   }
 
   return {
@@ -126,7 +143,9 @@ async function rotateKeys() {
       fs.writeFile(keyIdPath, keyId),
     ]);
   } catch (error) {
-    console.error("❌ Error saving rotated keys:", error.message);
+    if (!isTestEnvironment) {
+      console.error("❌ Error saving rotated keys:", error.message);
+    }
   }
 
   return {

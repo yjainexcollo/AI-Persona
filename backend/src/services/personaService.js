@@ -64,7 +64,14 @@ async function getPersonas(userId, options = {}) {
     return personas.map((persona) => ({
       id: persona.id,
       name: persona.name,
-      description: persona.description,
+      personaRole: persona.personaRole,
+      about: persona.about,
+      traits: persona.traits,
+      painPoints: persona.painPoints,
+      coreExpertise: persona.coreExpertise,
+      communicationStyle: persona.communicationStyle,
+      keyResponsibility: persona.keyResponsibility,
+      description: persona.description, // Keep for backward compatibility
       avatarUrl: persona.avatarUrl,
       isActive: persona.isActive,
       createdAt: persona.createdAt,
@@ -112,7 +119,14 @@ async function getPersonaById(personaId, userId) {
     return {
       id: persona.id,
       name: persona.name,
-      description: persona.description,
+      personaRole: persona.personaRole,
+      about: persona.about,
+      traits: persona.traits,
+      painPoints: persona.painPoints,
+      coreExpertise: persona.coreExpertise,
+      communicationStyle: persona.communicationStyle,
+      keyResponsibility: persona.keyResponsibility,
+      description: persona.description, // Keep for backward compatibility
       avatarUrl: persona.avatarUrl,
       isActive: persona.isActive,
       isAvailable,
@@ -1134,7 +1148,14 @@ async function getSharedConversation(token) {
       conversationId: sharedLink.conversation.id,
       persona: {
         name: sharedLink.conversation.persona.name,
-        description: sharedLink.conversation.persona.description,
+        personaRole: sharedLink.conversation.persona.personaRole,
+        about: sharedLink.conversation.persona.about,
+        traits: sharedLink.conversation.persona.traits,
+        painPoints: sharedLink.conversation.persona.painPoints,
+        coreExpertise: sharedLink.conversation.persona.coreExpertise,
+        communicationStyle: sharedLink.conversation.persona.communicationStyle,
+        keyResponsibility: sharedLink.conversation.persona.keyResponsibility,
+        description: sharedLink.conversation.persona.description, // Keep for backward compatibility
       },
       messages: sharedLink.conversation.messages.map((msg) => ({
         role: msg.role,
