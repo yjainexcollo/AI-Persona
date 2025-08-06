@@ -23,7 +23,7 @@ async function monitorRateLimits() {
       }
 
       console.log(`\n${new Date().toISOString()} - Active Rate Limits:`);
-      console.log("=".repeat(60));
+      console.log("=".repeat(70));
 
       for (const key of keys) {
         const type = await redis.type(key);

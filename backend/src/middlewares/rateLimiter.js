@@ -1,6 +1,5 @@
 const rateLimit = require("express-rate-limit");
 const { ipKeyGenerator } = require("express-rate-limit");
-const RedisStore = require("rate-limit-redis").default;
 const Redis = require("ioredis");
 
 // Initialize Redis client
@@ -189,10 +188,67 @@ const getRateLimitStatus = async (key, prefix = "rl:") => {
   }
 };
 
+// Auth-specific rate limiters (used by authRoutes.js)
+const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 5, // 5 requests per hour per IP
+  message: {
+    error: {
+      message: "Too many registration attempts, please try again later.",
+    },
+  },
+  store: new SlidingWindowRedisStore({
+    prefix: "rl:register:",
+    windowMs: 60 * 60 * 1000,
+  }),
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipFailedRequests: true,
+});
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // 10 requests per 15 minutes per IP
+  message: {
+    error: {
+      message: "Too many login attempts, please try again later.",
+    },
+  },
+  store: new SlidingWindowRedisStore({
+    prefix: "rl:login:",
+    windowMs: 15 * 60 * 1000,
+  }),
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipFailedRequests: true,
+});
+
+const passwordResetLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 3, // 3 requests per hour per IP
+  message: {
+    error: {
+      message: "Too many password reset attempts, please try again later.",
+    },
+  },
+  store: new SlidingWindowRedisStore({
+    prefix: "rl:password-reset:",
+    windowMs: 60 * 60 * 1000,
+  }),
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipFailedRequests: true,
+});
+
 module.exports = {
+  // Persona & Chat rate limiters
   resendVerificationLimiter,
   chatLimiter,
   personaLimiter,
+  // Auth rate limiters
+  registerLimiter,
+  loginLimiter,
+  passwordResetLimiter,
   // Utilities for monitoring and admin
   redis,
   checkRedisHealth,
