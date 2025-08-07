@@ -1,5 +1,10 @@
 const asyncHandler = require("../../../src/utils/asyncHandler");
 
+// Mock logger
+jest.mock("../../../src/utils/logger", () => ({
+  error: jest.fn(),
+}));
+
 describe("AsyncHandler", () => {
   describe("asyncHandler", () => {
     it("should handle successful async function", async () => {
@@ -46,9 +51,10 @@ describe("AsyncHandler", () => {
 
       const wrappedFunction = asyncHandler(asyncFunction);
 
-      // Wait for the promise to be handled
-      await new Promise((resolve) => setTimeout(resolve, 10));
       await wrappedFunction(mockReq, mockRes, mockNext);
+
+      // Wait a bit for the promise to be handled
+      await new Promise((resolve) => setTimeout(resolve, 10));
 
       expect(mockNext).toHaveBeenCalledWith(expect.any(Error));
       expect(mockNext.mock.calls[0][0].message).toBe("Promise rejection");
@@ -149,6 +155,12 @@ describe("AsyncHandler", () => {
       // asyncHandler doesn't return the result, it just catches errors
       expect(result).toBeUndefined();
       expect(mockNext).not.toHaveBeenCalled();
+    });
+
+    it("should throw TypeError for non-function input", () => {
+      expect(() => {
+        asyncHandler("not a function");
+      }).toThrow(TypeError);
     });
   });
 });

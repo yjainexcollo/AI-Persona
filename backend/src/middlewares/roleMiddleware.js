@@ -13,7 +13,8 @@ function roleMiddleware(requiredRoles, permitSelf = false) {
 
     // Check if user's role is in the required roles
     const hasRequiredRole = roles.some(
-      (role) => req.user.role.toLowerCase() === role.toLowerCase()
+      (role) =>
+        req.user.role && req.user.role.toLowerCase() === role.toLowerCase()
     );
 
     // If permitSelf is true, allow access if user is accessing their own resource

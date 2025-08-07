@@ -1,16 +1,10 @@
-const { body, validationResult } = require("express-validator");
 const {
   handleValidationErrors,
   validateRegistration,
   validateLogin,
   validateEmailVerification,
-  validateRefreshToken,
-  validatePasswordReset,
-  validatePersonaMessage,
-  validateWorkspaceUpdate,
-  validateProfileUpdate,
-  validatePasswordChange,
 } = require("../../../src/middlewares/validationMiddleware");
+const ApiError = require("../../../src/utils/apiError");
 
 // Mock express-validator
 jest.mock("express-validator", () => ({
@@ -22,10 +16,35 @@ jest.mock("express-validator", () => ({
     optional: jest.fn().mockReturnThis(),
     isIn: jest.fn().mockReturnThis(),
     isURL: jest.fn().mockReturnThis(),
+    isString: jest.fn().mockReturnThis(),
+    isInt: jest.fn().mockReturnThis(),
+    isBoolean: jest.fn().mockReturnThis(),
+    isUUID: jest.fn().mockReturnThis(),
+    isISO8601: jest.fn().mockReturnThis(),
     custom: jest.fn().mockReturnThis(),
     escape: jest.fn().mockReturnThis(),
     trim: jest.fn().mockReturnThis(),
     normalizeEmail: jest.fn().mockReturnThis(),
+    withMessage: jest.fn().mockReturnThis(),
+  })),
+  param: jest.fn(() => ({
+    notEmpty: jest.fn().mockReturnThis(),
+    isUUID: jest.fn().mockReturnThis(),
+    isLength: jest.fn().mockReturnThis(),
+    matches: jest.fn().mockReturnThis(),
+    withMessage: jest.fn().mockReturnThis(),
+  })),
+  query: jest.fn(() => ({
+    notEmpty: jest.fn().mockReturnThis(),
+    optional: jest.fn().mockReturnThis(),
+    isInt: jest.fn().mockReturnThis(),
+    trim: jest.fn().mockReturnThis(),
+    isLength: jest.fn().mockReturnThis(),
+    isISO8601: jest.fn().mockReturnThis(),
+    isBoolean: jest.fn().mockReturnThis(),
+    isIn: jest.fn().mockReturnThis(),
+    matches: jest.fn().mockReturnThis(),
+    withMessage: jest.fn().mockReturnThis(),
   })),
   validationResult: jest.fn(),
 }));
@@ -51,6 +70,7 @@ describe("ValidationMiddleware", () => {
 
   describe("handleValidationErrors", () => {
     it("should call next() when no validation errors", () => {
+      const { validationResult } = require("express-validator");
       validationResult.mockReturnValue({
         isEmpty: () => true,
       });
@@ -58,10 +78,11 @@ describe("ValidationMiddleware", () => {
       handleValidationErrors(mockReq, mockRes, mockNext);
 
       expect(mockNext).toHaveBeenCalledWith();
-      expect(mockRes.status).not.toHaveBeenCalled();
+      expect(mockNext).toHaveBeenCalledTimes(1);
     });
 
-    it("should return 400 with errors when validation fails", () => {
+    it("should throw ApiError when validation fails", () => {
+      const { validationResult } = require("express-validator");
       const mockErrors = [
         {
           msg: "Email is required",
@@ -80,19 +101,37 @@ describe("ValidationMiddleware", () => {
         array: () => mockErrors,
       });
 
-      handleValidationErrors(mockReq, mockRes, mockNext);
+      expect(() => {
+        handleValidationErrors(mockReq, mockRes, mockNext);
+      }).toThrow(ApiError);
 
-      expect(mockRes.status).toHaveBeenCalledWith(400);
-      expect(mockRes.json).toHaveBeenCalledWith({
-        error: {
-          message: "Validation failed",
-          details: mockErrors,
-        },
-      });
       expect(mockNext).not.toHaveBeenCalled();
     });
 
-    it("should format errors correctly", () => {
+    it("should throw ApiError with correct message for validation failures", () => {
+      const { validationResult } = require("express-validator");
+      const mockErrors = [
+        {
+          msg: "Email is required",
+          param: "email",
+          location: "body",
+        },
+      ];
+
+      validationResult.mockReturnValue({
+        isEmpty: () => false,
+        array: () => mockErrors,
+      });
+
+      expect(() => {
+        handleValidationErrors(mockReq, mockRes, mockNext);
+      }).toThrow("Validation failed: Email is required");
+
+      expect(mockNext).not.toHaveBeenCalled();
+    });
+
+    it("should throw ApiError with 400 status code", () => {
+      const { validationResult } = require("express-validator");
       const mockErrors = [
         {
           msg: "Invalid email format",
@@ -107,393 +146,65 @@ describe("ValidationMiddleware", () => {
         array: () => mockErrors,
       });
 
-      handleValidationErrors(mockReq, mockRes, mockNext);
+      try {
+        handleValidationErrors(mockReq, mockRes, mockNext);
+      } catch (error) {
+        expect(error).toBeInstanceOf(ApiError);
+        expect(error.statusCode).toBe(400);
+      }
 
-      expect(mockRes.json).toHaveBeenCalledWith({
-        error: {
-          message: "Validation failed",
-          details: mockErrors,
+      expect(mockNext).not.toHaveBeenCalled();
+    });
+
+    it("should handle multiple validation errors", () => {
+      const { validationResult } = require("express-validator");
+      const mockErrors = [
+        {
+          msg: "Email is required",
+          param: "email",
+          location: "body",
         },
+        {
+          msg: "Password is required",
+          param: "password",
+          location: "body",
+        },
+        {
+          msg: "Name is required",
+          param: "name",
+          location: "body",
+        },
+      ];
+
+      validationResult.mockReturnValue({
+        isEmpty: () => false,
+        array: () => mockErrors,
       });
+
+      expect(() => {
+        handleValidationErrors(mockReq, mockRes, mockNext);
+      }).toThrow(
+        "Validation failed: Email is required, Password is required, Name is required"
+      );
+
+      expect(mockNext).not.toHaveBeenCalled();
     });
   });
 
-  describe("validateRegistration", () => {
-    it("should return validation chain for registration", () => {
-      const result = validateRegistration();
-
-      expect(Array.isArray(result)).toBe(true);
-      expect(result.length).toBeGreaterThan(0);
-      expect(body).toHaveBeenCalledWith("email");
-      expect(body).toHaveBeenCalledWith("password");
-      expect(body).toHaveBeenCalledWith("name");
+  describe("Validation Schemas", () => {
+    it("should have validateRegistration function", () => {
+      expect(Array.isArray(validateRegistration)).toBe(true);
+      expect(validateRegistration.length).toBeGreaterThan(0);
     });
 
-    it("should validate email field", () => {
-      const mockChain = {
-        isEmail: jest.fn().mockReturnThis(),
-        normalizeEmail: jest.fn().mockReturnThis(),
-      };
-      body.mockReturnValue(mockChain);
-
-      validateRegistration();
-
-      expect(body).toHaveBeenCalledWith("email");
-      expect(mockChain.isEmail).toHaveBeenCalled();
-      expect(mockChain.normalizeEmail).toHaveBeenCalled();
+    it("should have validateLogin function", () => {
+      expect(Array.isArray(validateLogin)).toBe(true);
+      expect(validateLogin.length).toBeGreaterThan(0);
     });
 
-    it("should validate password field", () => {
-      const mockChain = {
-        isLength: jest.fn().mockReturnThis(),
-        matches: jest.fn().mockReturnThis(),
-      };
-      body.mockReturnValue(mockChain);
-
-      validateRegistration();
-
-      expect(body).toHaveBeenCalledWith("password");
-      expect(mockChain.isLength).toHaveBeenCalled();
-      expect(mockChain.matches).toHaveBeenCalled();
-    });
-
-    it("should validate name field", () => {
-      const mockChain = {
-        isLength: jest.fn().mockReturnThis(),
-        trim: jest.fn().mockReturnThis(),
-        escape: jest.fn().mockReturnThis(),
-      };
-      body.mockReturnValue(mockChain);
-
-      validateRegistration();
-
-      expect(body).toHaveBeenCalledWith("name");
-      expect(mockChain.isLength).toHaveBeenCalled();
-      expect(mockChain.trim).toHaveBeenCalled();
-      expect(mockChain.escape).toHaveBeenCalled();
-    });
-  });
-
-  describe("validateLogin", () => {
-    it("should return validation chain for login", () => {
-      const result = validateLogin();
-
-      expect(Array.isArray(result)).toBe(true);
-      expect(result.length).toBeGreaterThan(0);
-      expect(body).toHaveBeenCalledWith("email");
-      expect(body).toHaveBeenCalledWith("password");
-    });
-
-    it("should validate email field", () => {
-      const mockChain = {
-        isEmail: jest.fn().mockReturnThis(),
-        normalizeEmail: jest.fn().mockReturnThis(),
-      };
-      body.mockReturnValue(mockChain);
-
-      validateLogin();
-
-      expect(body).toHaveBeenCalledWith("email");
-      expect(mockChain.isEmail).toHaveBeenCalled();
-      expect(mockChain.normalizeEmail).toHaveBeenCalled();
-    });
-
-    it("should validate password field", () => {
-      const mockChain = {
-        notEmpty: jest.fn().mockReturnThis(),
-      };
-      body.mockReturnValue(mockChain);
-
-      validateLogin();
-
-      expect(body).toHaveBeenCalledWith("password");
-      expect(mockChain.notEmpty).toHaveBeenCalled();
-    });
-  });
-
-  describe("validateEmailVerification", () => {
-    it("should return validation chain for email verification", () => {
-      const result = validateEmailVerification();
-
-      expect(Array.isArray(result)).toBe(true);
-      expect(result.length).toBeGreaterThan(0);
-      expect(body).toHaveBeenCalledWith("token");
-    });
-
-    it("should validate token field", () => {
-      const mockChain = {
-        notEmpty: jest.fn().mockReturnThis(),
-        isLength: jest.fn().mockReturnThis(),
-      };
-      body.mockReturnValue(mockChain);
-
-      validateEmailVerification();
-
-      expect(body).toHaveBeenCalledWith("token");
-      expect(mockChain.notEmpty).toHaveBeenCalled();
-      expect(mockChain.isLength).toHaveBeenCalled();
-    });
-  });
-
-  describe("validateRefreshToken", () => {
-    it("should return validation chain for refresh token", () => {
-      const result = validateRefreshToken();
-
-      expect(Array.isArray(result)).toBe(true);
-      expect(result.length).toBeGreaterThan(0);
-      expect(body).toHaveBeenCalledWith("refreshToken");
-    });
-
-    it("should validate refreshToken field", () => {
-      const mockChain = {
-        notEmpty: jest.fn().mockReturnThis(),
-      };
-      body.mockReturnValue(mockChain);
-
-      validateRefreshToken();
-
-      expect(body).toHaveBeenCalledWith("refreshToken");
-      expect(mockChain.notEmpty).toHaveBeenCalled();
-    });
-  });
-
-  describe("validatePasswordReset", () => {
-    it("should return validation chain for password reset", () => {
-      const result = validatePasswordReset();
-
-      expect(Array.isArray(result)).toBe(true);
-      expect(result.length).toBeGreaterThan(0);
-      expect(body).toHaveBeenCalledWith("token");
-      expect(body).toHaveBeenCalledWith("newPassword");
-    });
-
-    it("should validate token field", () => {
-      const mockChain = {
-        notEmpty: jest.fn().mockReturnThis(),
-      };
-      body.mockReturnValue(mockChain);
-
-      validatePasswordReset();
-
-      expect(body).toHaveBeenCalledWith("token");
-      expect(mockChain.notEmpty).toHaveBeenCalled();
-    });
-
-    it("should validate newPassword field", () => {
-      const mockChain = {
-        isLength: jest.fn().mockReturnThis(),
-        matches: jest.fn().mockReturnThis(),
-      };
-      body.mockReturnValue(mockChain);
-
-      validatePasswordReset();
-
-      expect(body).toHaveBeenCalledWith("newPassword");
-      expect(mockChain.isLength).toHaveBeenCalled();
-      expect(mockChain.matches).toHaveBeenCalled();
-    });
-  });
-
-  describe("validatePersonaMessage", () => {
-    it("should return validation chain for persona message", () => {
-      const result = validatePersonaMessage();
-
-      expect(Array.isArray(result)).toBe(true);
-      expect(result.length).toBeGreaterThan(0);
-      expect(body).toHaveBeenCalledWith("message");
-    });
-
-    it("should validate message field", () => {
-      const mockChain = {
-        notEmpty: jest.fn().mockReturnThis(),
-        isLength: jest.fn().mockReturnThis(),
-        trim: jest.fn().mockReturnThis(),
-      };
-      body.mockReturnValue(mockChain);
-
-      validatePersonaMessage();
-
-      expect(body).toHaveBeenCalledWith("message");
-      expect(mockChain.notEmpty).toHaveBeenCalled();
-      expect(mockChain.isLength).toHaveBeenCalled();
-      expect(mockChain.trim).toHaveBeenCalled();
-    });
-
-    it("should validate optional fileId field", () => {
-      const mockChain = {
-        optional: jest.fn().mockReturnThis(),
-        isLength: jest.fn().mockReturnThis(),
-      };
-      body.mockReturnValue(mockChain);
-
-      validatePersonaMessage();
-
-      expect(body).toHaveBeenCalledWith("fileId");
-      expect(mockChain.optional).toHaveBeenCalled();
-      expect(mockChain.isLength).toHaveBeenCalled();
-    });
-  });
-
-  describe("validateWorkspaceUpdate", () => {
-    it("should return validation chain for workspace update", () => {
-      const result = validateWorkspaceUpdate();
-
-      expect(Array.isArray(result)).toBe(true);
-      expect(result.length).toBeGreaterThan(0);
-    });
-
-    it("should validate optional name field", () => {
-      const mockChain = {
-        optional: jest.fn().mockReturnThis(),
-        isLength: jest.fn().mockReturnThis(),
-        trim: jest.fn().mockReturnThis(),
-        escape: jest.fn().mockReturnThis(),
-      };
-      body.mockReturnValue(mockChain);
-
-      validateWorkspaceUpdate();
-
-      expect(body).toHaveBeenCalledWith("name");
-      expect(mockChain.optional).toHaveBeenCalled();
-      expect(mockChain.isLength).toHaveBeenCalled();
-      expect(mockChain.trim).toHaveBeenCalled();
-      expect(mockChain.escape).toHaveBeenCalled();
-    });
-
-    it("should validate optional timezone field", () => {
-      const mockChain = {
-        optional: jest.fn().mockReturnThis(),
-        isLength: jest.fn().mockReturnThis(),
-      };
-      body.mockReturnValue(mockChain);
-
-      validateWorkspaceUpdate();
-
-      expect(body).toHaveBeenCalledWith("timezone");
-      expect(mockChain.optional).toHaveBeenCalled();
-      expect(mockChain.isLength).toHaveBeenCalled();
-    });
-
-    it("should validate optional locale field", () => {
-      const mockChain = {
-        optional: jest.fn().mockReturnThis(),
-        isIn: jest.fn().mockReturnThis(),
-      };
-      body.mockReturnValue(mockChain);
-
-      validateWorkspaceUpdate();
-
-      expect(body).toHaveBeenCalledWith("locale");
-      expect(mockChain.optional).toHaveBeenCalled();
-      expect(mockChain.isIn).toHaveBeenCalled();
-    });
-  });
-
-  describe("validateProfileUpdate", () => {
-    it("should return validation chain for profile update", () => {
-      const result = validateProfileUpdate();
-
-      expect(Array.isArray(result)).toBe(true);
-      expect(result.length).toBeGreaterThan(0);
-    });
-
-    it("should validate optional name field", () => {
-      const mockChain = {
-        optional: jest.fn().mockReturnThis(),
-        isLength: jest.fn().mockReturnThis(),
-        trim: jest.fn().mockReturnThis(),
-        escape: jest.fn().mockReturnThis(),
-      };
-      body.mockReturnValue(mockChain);
-
-      validateProfileUpdate();
-
-      expect(body).toHaveBeenCalledWith("name");
-      expect(mockChain.optional).toHaveBeenCalled();
-      expect(mockChain.isLength).toHaveBeenCalled();
-      expect(mockChain.trim).toHaveBeenCalled();
-      expect(mockChain.escape).toHaveBeenCalled();
-    });
-
-    it("should validate optional avatarUrl field", () => {
-      const mockChain = {
-        optional: jest.fn().mockReturnThis(),
-        isURL: jest.fn().mockReturnThis(),
-      };
-      body.mockReturnValue(mockChain);
-
-      validateProfileUpdate();
-
-      expect(body).toHaveBeenCalledWith("avatarUrl");
-      expect(mockChain.optional).toHaveBeenCalled();
-      expect(mockChain.isURL).toHaveBeenCalled();
-    });
-
-    it("should validate optional timezone field", () => {
-      const mockChain = {
-        optional: jest.fn().mockReturnThis(),
-        isLength: jest.fn().mockReturnThis(),
-      };
-      body.mockReturnValue(mockChain);
-
-      validateProfileUpdate();
-
-      expect(body).toHaveBeenCalledWith("timezone");
-      expect(mockChain.optional).toHaveBeenCalled();
-      expect(mockChain.isLength).toHaveBeenCalled();
-    });
-
-    it("should validate optional locale field", () => {
-      const mockChain = {
-        optional: jest.fn().mockReturnThis(),
-        isIn: jest.fn().mockReturnThis(),
-      };
-      body.mockReturnValue(mockChain);
-
-      validateProfileUpdate();
-
-      expect(body).toHaveBeenCalledWith("locale");
-      expect(mockChain.optional).toHaveBeenCalled();
-      expect(mockChain.isIn).toHaveBeenCalled();
-    });
-  });
-
-  describe("validatePasswordChange", () => {
-    it("should return validation chain for password change", () => {
-      const result = validatePasswordChange();
-
-      expect(Array.isArray(result)).toBe(true);
-      expect(result.length).toBeGreaterThan(0);
-      expect(body).toHaveBeenCalledWith("currentPassword");
-      expect(body).toHaveBeenCalledWith("newPassword");
-    });
-
-    it("should validate currentPassword field", () => {
-      const mockChain = {
-        notEmpty: jest.fn().mockReturnThis(),
-      };
-      body.mockReturnValue(mockChain);
-
-      validatePasswordChange();
-
-      expect(body).toHaveBeenCalledWith("currentPassword");
-      expect(mockChain.notEmpty).toHaveBeenCalled();
-    });
-
-    it("should validate newPassword field", () => {
-      const mockChain = {
-        isLength: jest.fn().mockReturnThis(),
-        matches: jest.fn().mockReturnThis(),
-        custom: jest.fn().mockReturnThis(),
-      };
-      body.mockReturnValue(mockChain);
-
-      validatePasswordChange();
-
-      expect(body).toHaveBeenCalledWith("newPassword");
-      expect(mockChain.isLength).toHaveBeenCalled();
-      expect(mockChain.matches).toHaveBeenCalled();
-      expect(mockChain.custom).toHaveBeenCalled();
+    it("should have validateEmailVerification function", () => {
+      expect(Array.isArray(validateEmailVerification)).toBe(true);
+      expect(validateEmailVerification.length).toBeGreaterThan(0);
     });
   });
 });

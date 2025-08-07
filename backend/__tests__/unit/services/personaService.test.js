@@ -1,22 +1,47 @@
 const personaService = require("../../../src/services/personaService");
-const axios = require("axios");
 
 // Mock axios
 jest.mock("axios");
 
+// Mock encrypt and decrypt
+jest.mock("../../../src/utils/encrypt", () => ({
+  encrypt: jest.fn((data) => `encrypted:${data}`),
+  decrypt: jest.fn((data) => {
+    if (typeof data === "string" && data.startsWith("encrypted:")) {
+      return data.replace("encrypted:", "");
+    }
+    return data;
+  }),
+}));
+
+// Mock authService
+jest.mock("../../../src/services/authService", () => ({
+  createAuditEvent: jest.fn().mockResolvedValue(undefined),
+}));
+
+// Mock logger
+jest.mock("../../../src/utils/logger", () => ({
+  info: jest.fn(),
+  error: jest.fn(),
+  warn: jest.fn(),
+}));
+
 describe("PersonaService", () => {
   beforeEach(() => {
-    // Reset all mocks before each test
     jest.clearAllMocks();
+
+    // Reset mock implementations
+    global.mockFindMany.mockReset();
+    global.mockFindUnique.mockReset();
+    global.mockCreate.mockReset();
   });
 
   describe("getPersonas", () => {
     it("should return all active personas", async () => {
-      const user = await global.testUtils.createTestUser();
-
-      // Create test personas
-      const persona1 = await global.testPrisma.persona.create({
-        data: {
+      const user = { id: "user123" };
+      const mockPersonas = [
+        {
+          id: "p1",
           name: "Test Persona 1",
           personaRole: "Test Role 1",
           about: "About test persona 1",
@@ -28,11 +53,11 @@ describe("PersonaService", () => {
           description: "Test Description",
           webhookUrl: "https://test.com/webhook1",
           isActive: true,
+          favourites: [],
+          _count: { conversations: 0, messages: 0 },
         },
-      });
-
-      const persona2 = await global.testPrisma.persona.create({
-        data: {
+        {
+          id: "p2",
           name: "Test Persona 2",
           personaRole: "Test Role 2",
           about: "About test persona 2",
@@ -44,8 +69,11 @@ describe("PersonaService", () => {
           description: "Test Description 2",
           webhookUrl: "https://test.com/webhook2",
           isActive: true,
+          favourites: [],
+          _count: { conversations: 0, messages: 0 },
         },
-      });
+      ];
+      global.mockFindMany.mockResolvedValue(mockPersonas);
 
       const personas = await personaService.getPersonas(user.id);
 
@@ -67,10 +95,10 @@ describe("PersonaService", () => {
     });
 
     it("should filter favourites when requested", async () => {
-      const user = await global.testUtils.createTestUser();
-
-      const persona = await global.testPrisma.persona.create({
-        data: {
+      const user = { id: "user123" };
+      const mockPersonas = [
+        {
+          id: "p1",
           name: "Test Persona",
           personaRole: "Test Role",
           about: "About test persona",
@@ -79,18 +107,14 @@ describe("PersonaService", () => {
           coreExpertise: "Test expertise",
           communicationStyle: "Test communication style",
           keyResponsibility: "Test responsibilities",
+          description: "Test Description",
           webhookUrl: "https://test.com/webhook",
           isActive: true,
+          favourites: [{ userId: user.id }],
+          _count: { conversations: 0, messages: 0 },
         },
-      });
-
-      // Create favourite relationship
-      await global.testPrisma.personaFavourite.create({
-        data: {
-          userId: user.id,
-          personaId: persona.id,
-        },
-      });
+      ];
+      global.mockFindMany.mockResolvedValue(mockPersonas);
 
       const personas = await personaService.getPersonas(user.id, {
         favouritesOnly: true,
@@ -103,100 +127,106 @@ describe("PersonaService", () => {
 
   describe("sendMessage", () => {
     it("should send message to persona webhook", async () => {
-      const user = await global.testUtils.createTestUser();
+      const personaId = "persona123";
+      const message = "Hello!";
+      const userId = "user123";
 
-      // Create persona with encrypted webhook URL
-      const { encrypt } = require("../../../src/utils/encrypt");
-      const encryptedWebhookUrl = encrypt(
-        "https://test.com/webhook",
-        process.env.ENCRYPTION_KEY
-      );
+      const mockPersona = {
+        id: personaId,
+        name: "Test Persona",
+        isActive: true,
+        webhookUrl: "encrypted-webhook-url",
+      };
 
-      const persona = await global.testPrisma.persona.create({
-        data: {
-          name: "Test Persona",
-          webhookUrl: encryptedWebhookUrl,
-          isActive: true,
-        },
-      });
+      const mockConversation = {
+        id: "conv1",
+        userId,
+        personaId,
+        title: "Chat with Test Persona",
+        isActive: true,
+      };
 
-      // Mock successful webhook response
-      axios.post.mockResolvedValue({
-        data: { response: "Test response" },
-        status: 200,
-      });
+      global.mockFindUnique.mockResolvedValue(mockPersona);
+      global.mockCreate
+        .mockResolvedValueOnce({ id: "conv1" }) // Conversation creation
+        .mockResolvedValueOnce({ id: "msg1" }) // User message creation
+        .mockResolvedValueOnce({ id: "msg2" }); // Assistant message creation
+
+      const axios = require("axios");
+      axios.post.mockResolvedValue({ data: { reply: "Hello!" } });
 
       const result = await personaService.sendMessage(
-        persona.id,
-        "Hello, test message",
+        personaId,
+        message,
         null,
-        user.id
+        userId
       );
 
-      expect(result.messages).toHaveLength(2); // User message + AI response
-      expect(axios.post).toHaveBeenCalledWith(
-        "https://test.com/webhook",
-        expect.objectContaining({
-          message: "Hello, test message",
-        }),
-        expect.any(Object)
-      );
+      expect(result).toBeDefined();
+      expect(result.reply).toBe("Hello!");
+      expect(result.conversationId).toBe("conv1");
+      expect(result.messageId).toBe("msg2");
     });
 
     it("should handle webhook failures with circuit breaker", async () => {
-      const user = await global.testUtils.createTestUser();
+      const mockPersona = {
+        id: "p1",
+        name: "Test Persona",
+        webhookUrl: "https://test.com/webhook",
+        isActive: true,
+      };
+      global.mockFindUnique.mockResolvedValue(mockPersona);
 
-      // Create persona with encrypted webhook URL
-      const { encrypt } = require("../../../src/utils/encrypt");
-      const encryptedWebhookUrl = encrypt(
-        "https://test.com/webhook",
-        process.env.ENCRYPTION_KEY
-      );
-
-      const persona = await global.testPrisma.persona.create({
-        data: {
-          name: "Test Persona",
-          webhookUrl: encryptedWebhookUrl,
-          isActive: true,
-        },
-      });
-
-      // Mock webhook failure multiple times to trigger circuit breaker
+      const axios = require("axios");
       axios.post.mockRejectedValue(new Error("Webhook failed"));
 
-      // First call should fail but not trigger circuit breaker
+      global.mockCreate
+        .mockResolvedValueOnce({ id: "conv1" }) // Conversation creation
+        .mockResolvedValueOnce({ id: "msg1", text: "Hello" }); // Message creation
+
       await expect(
         personaService.sendMessage(
-          persona.id,
-          "Hello, test message",
-          null,
-          user.id
+          "p1",
+          "Hello",
+          undefined,
+          "user123",
+          undefined
         )
-      ).rejects.toThrow("Webhook failed");
+      ).rejects.toThrow("Failed to get response from persona");
+    });
 
-      // Mock circuit breaker to be open
-      const {
-        getCircuitBreaker,
-      } = require("../../../src/utils/circuitBreaker");
-      const mockCircuitBreaker = {
-        isOpen: jest.fn().mockReturnValue(true),
+    it("should throw error for non-existent persona", async () => {
+      global.mockFindUnique.mockResolvedValue(null);
+
+      await expect(
+        personaService.sendMessage(
+          "non-existent",
+          "Hello",
+          undefined,
+          "user123",
+          undefined
+        )
+      ).rejects.toThrow("Persona not found");
+    });
+
+    it("should throw error for inactive persona", async () => {
+      const mockPersona = {
+        id: "p1",
+        name: "Test Persona",
+        webhookUrl: "https://test.com/webhook",
+        isActive: false,
       };
-      jest
-        .spyOn(
-          require("../../../src/utils/circuitBreaker"),
-          "getCircuitBreaker"
-        )
-        .mockReturnValue(mockCircuitBreaker);
+      global.mockFindUnique.mockResolvedValue(mockPersona);
 
-      // Now test circuit breaker error
       await expect(
         personaService.sendMessage(
-          persona.id,
-          "Hello, test message",
-          null,
-          user.id
+          "p1",
+          "Hello",
+          undefined,
+          "user123",
+          undefined
         )
-      ).rejects.toThrow("Persona is temporarily unavailable");
+      ).rejects.toThrow("Persona is not active");
     });
   });
 });

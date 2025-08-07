@@ -77,12 +77,21 @@ const sendMessage = asyncHandler(async (req, res) => {
   const { message, conversationId, fileId } = req.body;
   const userId = req.user.id;
 
+  // Extract metadata for session tracking
+  const metadata = {
+    userAgent: req.headers["user-agent"],
+    ipAddress: req.ip || req.connection.remoteAddress,
+    deviceInfo: req.headers["sec-ch-ua"] || null,
+    requestId: req.headers["x-request-id"] || null,
+  };
+
   const result = await personaService.sendMessage(
     id,
     message,
     conversationId,
     userId,
-    fileId
+    fileId,
+    metadata
   );
 
   res.status(200).json(

@@ -33,12 +33,19 @@ app.use(mockAuthMiddleware);
 app.get("/personas", personaController.getPersonas);
 app.post("/personas/:id/messages", personaController.sendMessage);
 app.post("/personas/:id/favourite", personaController.toggleFavourite);
-app.get("/personas/:id/conversations", personaController.getConversations);
+app.get("/conversations", personaController.getConversations);
 app.put(
   "/conversations/:id/visibility",
   personaController.updateConversationVisibility
 );
 app.put("/conversations/:id/archive", personaController.toggleArchive);
+
+// Error handling middleware (after routes)
+app.use((err, req, res, next) => {
+  res.status(err.statusCode || 500).json({
+    error: err.message,
+  });
+});
 
 describe("PersonaController", () => {
   beforeEach(() => {
@@ -69,9 +76,11 @@ describe("PersonaController", () => {
       const response = await request(app).get("/personas").expect(200);
 
       expect(response.body.status).toBe("success");
-      expect(response.body.data.personas).toHaveLength(2);
-      expect(response.body.data.personas[0].name).toBe("Assistant");
-      expect(personaService.getPersonas).toHaveBeenCalledWith("user123", {});
+      expect(response.body.data).toHaveLength(2);
+      expect(response.body.data[0].name).toBe("Assistant");
+      expect(personaService.getPersonas).toHaveBeenCalledWith("user123", {
+        favouritesOnly: false,
+      });
     });
 
     it("should filter favourites when requested", async () => {
@@ -92,52 +101,39 @@ describe("PersonaController", () => {
         .expect(200);
 
       expect(response.body.status).toBe("success");
-      expect(response.body.data.personas).toHaveLength(1);
-      expect(response.body.data.personas[0].isFavourited).toBe(true);
+      expect(response.body.data).toHaveLength(1);
+      expect(response.body.data[0].isFavourited).toBe(true);
       expect(personaService.getPersonas).toHaveBeenCalledWith("user123", {
         favouritesOnly: true,
       });
     });
 
     it("should handle service errors", async () => {
-      personaService.getPersonas.mockRejectedValue(new Error("Service error"));
+      const error = new Error("Service error");
+      error.statusCode = 500;
+      personaService.getPersonas.mockRejectedValue(error);
 
       const response = await request(app).get("/personas").expect(500);
 
-      expect(response.body.error.message).toBe("Service error");
+      expect(response.body.error).toBe("Service error");
     });
   });
 
   describe("POST /personas/:id/messages", () => {
     it("should send message to persona", async () => {
-      const mockResult = {
-        conversation: {
-          id: "conv123",
-          title: "Chat with Assistant",
-        },
-        messages: [
-          {
-            id: "msg1",
-            content: "Hello",
-            role: "USER",
-            createdAt: new Date(),
-          },
-          {
-            id: "msg2",
-            content: "Hi there!",
-            role: "ASSISTANT",
-            createdAt: new Date(),
-          },
-        ],
-      };
-
-      personaService.sendMessage.mockResolvedValue(mockResult);
+      const mockConversation = { id: "conv123" };
+      const mockMessages = [
+        { id: "msg1", text: "Hello" },
+        { id: "msg2", text: "Hi!" },
+      ];
+      personaService.sendMessage.mockResolvedValue({
+        conversation: mockConversation,
+        messages: mockMessages,
+      });
 
       const response = await request(app)
         .post("/personas/persona1/messages")
-        .send({
-          message: "Hello",
-        })
+        .send({ message: "Hello" })
         .expect(200);
 
       expect(response.body.status).toBe("success");
@@ -146,62 +142,49 @@ describe("PersonaController", () => {
       expect(personaService.sendMessage).toHaveBeenCalledWith(
         "persona1",
         "Hello",
-        null,
+        undefined, // conversationId
         "user123",
-        null
+        undefined // fileId
       );
     });
 
     it("should send message with file attachment", async () => {
-      const mockResult = {
-        conversation: {
-          id: "conv123",
-          title: "Chat with Assistant",
-        },
-        messages: [
-          {
-            id: "msg1",
-            content: "Check this file",
-            role: "USER",
-            fileId: "file123",
-            createdAt: new Date(),
-          },
-        ],
-      };
-
-      personaService.sendMessage.mockResolvedValue(mockResult);
+      const mockConversation = { id: "conv123" };
+      const mockMessages = [
+        { id: "msg1", text: "Check this file" },
+        { id: "msg2", text: "File received!" },
+      ];
+      personaService.sendMessage.mockResolvedValue({
+        conversation: mockConversation,
+        messages: mockMessages,
+      });
 
       const response = await request(app)
         .post("/personas/persona1/messages")
-        .send({
-          message: "Check this file",
-          fileId: "file123",
-        })
+        .send({ message: "Check this file", fileId: "file123" })
         .expect(200);
 
       expect(response.body.status).toBe("success");
       expect(personaService.sendMessage).toHaveBeenCalledWith(
         "persona1",
         "Check this file",
-        null,
+        undefined, // conversationId
         "user123",
-        "file123"
+        "file123" // fileId
       );
     });
 
     it("should handle persona service errors", async () => {
-      personaService.sendMessage.mockRejectedValue(
-        new Error("Persona not found")
-      );
+      const error = new Error("Persona not found");
+      error.statusCode = 404;
+      personaService.sendMessage.mockRejectedValue(error);
 
       const response = await request(app)
         .post("/personas/invalid/messages")
-        .send({
-          message: "Hello",
-        })
-        .expect(500);
+        .send({ message: "Hi" })
+        .expect(404);
 
-      expect(response.body.error.message).toBe("Persona not found");
+      expect(response.body.error).toBe("Persona not found");
     });
   });
 
@@ -224,102 +207,80 @@ describe("PersonaController", () => {
     });
 
     it("should handle toggle favourite errors", async () => {
-      personaService.toggleFavourite.mockRejectedValue(
-        new Error("Persona not found")
-      );
+      const error = new Error("Persona not found");
+      error.statusCode = 404;
+      personaService.toggleFavourite.mockRejectedValue(error);
 
       const response = await request(app)
         .post("/personas/invalid/favourite")
-        .expect(500);
+        .expect(404);
 
-      expect(response.body.error.message).toBe("Persona not found");
+      expect(response.body.error).toBe("Persona not found");
     });
   });
 
-  describe("GET /personas/:id/conversations", () => {
-    it("should return persona conversations", async () => {
-      const mockConversations = {
-        conversations: [
-          {
-            id: "conv1",
-            title: "First chat",
-            lastMessageAt: new Date(),
-            messageCount: 5,
-          },
-          {
-            id: "conv2",
-            title: "Second chat",
-            lastMessageAt: new Date(),
-            messageCount: 3,
-          },
-        ],
-        pagination: {
-          page: 1,
-          limit: 10,
-          total: 2,
-          pages: 1,
-        },
-      };
+  describe("GET /conversations", () => {
+    it("should return user conversations", async () => {
+      const mockConversations = [
+        { id: "conv1", title: "Chat 1" },
+        { id: "conv2", title: "Chat 2" },
+      ];
+      personaService.getConversations.mockResolvedValue({
+        conversations: mockConversations,
+        pagination: { total: 2, page: 1, limit: 10 },
+      });
 
-      personaService.getConversations.mockResolvedValue(mockConversations);
-
-      const response = await request(app)
-        .get("/personas/persona1/conversations")
-        .expect(200);
+      const response = await request(app).get("/conversations").expect(200);
 
       expect(response.body.status).toBe("success");
       expect(response.body.data.conversations).toHaveLength(2);
-      expect(response.body.pagination.total).toBe(2);
+      expect(response.body.data.pagination.total).toBe(2);
       expect(personaService.getConversations).toHaveBeenCalledWith(
-        "persona1",
         "user123",
-        { page: 1, limit: 10 }
+        "workspace123",
+        { archived: false }
       );
     });
 
     it("should support pagination", async () => {
-      const mockConversations = {
-        conversations: [],
-        pagination: {
-          page: 2,
-          limit: 5,
-          total: 10,
-          pages: 2,
-        },
-      };
-
-      personaService.getConversations.mockResolvedValue(mockConversations);
+      const mockConversations = [
+        { id: "conv1", title: "Chat 1" },
+        { id: "conv2", title: "Chat 2" },
+      ];
+      personaService.getConversations.mockResolvedValue({
+        conversations: mockConversations,
+        pagination: { total: 2, page: 2, limit: 5 },
+      });
 
       const response = await request(app)
-        .get("/personas/persona1/conversations?page=2&limit=5")
+        .get("/conversations?page=2&limit=5")
         .expect(200);
 
-      expect(response.body.pagination.page).toBe(2);
-      expect(response.body.pagination.limit).toBe(5);
+      expect(response.body.data.pagination.page).toBe(2);
+      expect(response.body.data.pagination.limit).toBe(5);
       expect(personaService.getConversations).toHaveBeenCalledWith(
-        "persona1",
         "user123",
-        { page: 2, limit: 5 }
+        "workspace123",
+        { archived: false }
       );
     });
   });
 
   describe("PUT /conversations/:id/archive", () => {
     it("should toggle archive conversation", async () => {
-      personaService.toggleArchive.mockResolvedValue({
-        id: "conv1",
-        isArchived: true,
-      });
+      personaService.toggleArchive.mockResolvedValue({ archived: true });
 
       const response = await request(app)
         .put("/conversations/conv1/archive")
+        .send({ archived: true })
         .expect(200);
 
       expect(response.body.status).toBe("success");
-      expect(response.body.data.isArchived).toBe(true);
+      expect(response.body.data.archived).toBe(true);
       expect(personaService.toggleArchive).toHaveBeenCalledWith(
         "conv1",
-        "user123"
+        "user123",
+        true
       );
     });
   });

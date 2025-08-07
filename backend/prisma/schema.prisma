@@ -46,6 +46,7 @@ model User {
     messages    Message[]
     files       File[]
     reactions   Reaction[]
+    chatSessions ChatSession[]
     
     @@map("users")
     @@index([email])
@@ -208,6 +209,7 @@ model Persona {
     favourites  PersonaFavourite[]
     conversations Conversation[]
     messages    Message[]
+    chatSessions ChatSession[]
     
     @@map("personas")
     @@index([isActive])
@@ -254,6 +256,7 @@ model Conversation {
     messages    Message[]
     files       File[]
     sharedLink  SharedLink?
+    chatSessions ChatSession[]
     
     @@map("conversations")
     @@index([userId])
@@ -288,6 +291,8 @@ model Message {
     file          File?        @relation(fields: [fileId], references: [id], onDelete: SetNull)
     edits         MessageEdit[]
     reactions     Reaction[]
+    chatSession   ChatSession? @relation(fields: [chatSessionId], references: [id])
+    chatSessionId String?
     
     @@map("messages")
     @@index([conversationId])
@@ -299,6 +304,41 @@ model Message {
     @@index([edited])
     @@index([deleted])
     @@index([fileId])
+    @@index([chatSessionId])
+}
+
+// ===================================
+// CHAT SESSION MODEL
+// ===================================
+model ChatSession {
+    id              String        @id @default(cuid())
+    conversationId  String
+    personaId       String
+    userId          String
+    sessionId       String        @unique // Unique session identifier for n8n
+    status          ChatSessionStatus @default(ACTIVE)
+    startedAt       DateTime      @default(now())
+    endedAt         DateTime?
+    lastActivityAt  DateTime      @default(now())
+    metadata        Json?         // Additional session data (user agent, IP, etc.)
+    errorMessage    String?       // Error details if session failed
+    
+    // Relations
+    conversation    Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+    persona        Persona       @relation(fields: [personaId], references: [id], onDelete: Cascade)
+    user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+    messages       Message[]
+    
+    @@map("chat_sessions")
+    @@index([conversationId])
+    @@index([personaId])
+    @@index([userId])
+    @@index([sessionId])
+    @@index([status])
+    @@index([startedAt])
+    @@index([lastActivityAt])
+    @@index([conversationId, status])
+    @@index([userId, status])
 }
 
 // ===================================
@@ -406,6 +446,17 @@ enum ConversationVisibility {
 enum ReactionType {
     LIKE
     DISLIKE
+}
+
+// ===================================
+// CHAT SESSION STATUS ENUM
+// ===================================
+enum ChatSessionStatus {
+    ACTIVE      // Session is currently active
+    COMPLETED   // Session completed successfully
+    FAILED      // Session failed with error
+    TIMEOUT     // Session timed out
+    CANCELLED   // Session was cancelled
 }
 
 // ===================================

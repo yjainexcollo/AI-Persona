@@ -318,4 +318,6 @@ module.exports = {
   processAvatarUpload,
   processPresignedAvatar,
   changePassword,
+  isValidTimezone,
+  isValidLocale,
 };

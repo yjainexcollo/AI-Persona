@@ -1,7 +1,12 @@
-const {
-  checkWorkspaceAccess,
-} = require("../../../src/middlewares/permissionMiddleware");
+const permissionMiddleware = require("../../../src/middlewares/permissionMiddleware");
 const ApiError = require("../../../src/utils/apiError");
+
+// Mock the roles utility
+jest.mock("../../../src/utils/roles", () => ({
+  ADMIN: ["read", "write", "delete", "manage_users"],
+  MEMBER: ["read", "write"],
+  GUEST: ["read"],
+}));
 
 describe("PermissionMiddleware", () => {
   let mockReq;
@@ -16,9 +21,6 @@ describe("PermissionMiddleware", () => {
         role: "MEMBER",
         workspaceId: "workspace123",
       },
-      params: {
-        id: "workspace123",
-      },
     };
     mockRes = {
       status: jest.fn().mockReturnThis(),
@@ -28,200 +30,187 @@ describe("PermissionMiddleware", () => {
     jest.clearAllMocks();
   });
 
-  describe("checkWorkspaceAccess", () => {
-    it("should call next() when user has access to their workspace", () => {
-      checkWorkspaceAccess(mockReq, mockRes, mockNext);
+  describe("permissionMiddleware", () => {
+    it("should call next() when user has required permission", () => {
+      mockReq.user.role = "ADMIN";
+      const middleware = permissionMiddleware("read");
+
+      middleware(mockReq, mockRes, mockNext);
 
       expect(mockNext).toHaveBeenCalledWith();
       expect(mockNext).toHaveBeenCalledTimes(1);
     });
 
-    it("should call next() when workspace ID matches user's workspace", () => {
-      mockReq.params.id = "workspace123";
-      mockReq.user.workspaceId = "workspace123";
+    it("should call next() with ApiError when user lacks required permission", () => {
+      mockReq.user.role = "MEMBER";
+      const middleware = permissionMiddleware("delete");
 
-      checkWorkspaceAccess(mockReq, mockRes, mockNext);
+      middleware(mockReq, mockRes, mockNext);
 
-      expect(mockNext).toHaveBeenCalledWith();
-      expect(mockNext).toHaveBeenCalledTimes(1);
+      expect(mockNext).toHaveBeenCalledWith(
+        expect.objectContaining({
+          statusCode: 403,
+          message: "Insufficient permissions",
+        })
+      );
     });
 
-    it("should throw ApiError when user tries to access different workspace", () => {
-      mockReq.params.id = "other-workspace";
-      mockReq.user.workspaceId = "workspace123";
+    it("should call next() with correct message for insufficient permissions", () => {
+      mockReq.user.role = "MEMBER";
+      const middleware = permissionMiddleware("delete");
 
-      expect(() => {
-        checkWorkspaceAccess(mockReq, mockRes, mockNext);
-      }).toThrow(ApiError);
+      middleware(mockReq, mockRes, mockNext);
 
-      expect(mockNext).not.toHaveBeenCalled();
+      expect(mockNext).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: "Insufficient permissions",
+        })
+      );
     });
 
-    it("should throw ApiError with correct message for access denied", () => {
-      mockReq.params.id = "other-workspace";
+    it("should call next() with 403 status code", () => {
+      mockReq.user.role = "MEMBER";
+      const middleware = permissionMiddleware("delete");
 
-      expect(() => {
-        checkWorkspaceAccess(mockReq, mockRes, mockNext);
-      }).toThrow("Access denied to this workspace");
+      middleware(mockReq, mockRes, mockNext);
 
-      expect(mockNext).not.toHaveBeenCalled();
-    });
-
-    it("should throw ApiError with 403 status code", () => {
-      mockReq.params.id = "other-workspace";
-
-      try {
-        checkWorkspaceAccess(mockReq, mockRes, mockNext);
-      } catch (error) {
-        expect(error).toBeInstanceOf(ApiError);
-        expect(error.statusCode).toBe(403);
-      }
-
-      expect(mockNext).not.toHaveBeenCalled();
+      expect(mockNext).toHaveBeenCalledWith(
+        expect.objectContaining({
+          statusCode: 403,
+        })
+      );
     });
 
     it("should handle missing user object", () => {
       mockReq.user = null;
+      const middleware = permissionMiddleware("read");
 
-      expect(() => {
-        checkWorkspaceAccess(mockReq, mockRes, mockNext);
-      }).toThrow(ApiError);
+      middleware(mockReq, mockRes, mockNext);
 
-      expect(mockNext).not.toHaveBeenCalled();
+      expect(mockNext).toHaveBeenCalledWith(
+        expect.objectContaining({
+          statusCode: 401,
+          message: "User role not found",
+        })
+      );
     });
 
-    it("should handle missing user workspaceId", () => {
-      delete mockReq.user.workspaceId;
+    it("should handle missing role property", () => {
+      delete mockReq.user.role;
+      const middleware = permissionMiddleware("read");
 
-      expect(() => {
-        checkWorkspaceAccess(mockReq, mockRes, mockNext);
-      }).toThrow(ApiError);
+      middleware(mockReq, mockRes, mockNext);
 
-      expect(mockNext).not.toHaveBeenCalled();
+      expect(mockNext).toHaveBeenCalledWith(
+        expect.objectContaining({
+          statusCode: 401,
+          message: "User role not found",
+        })
+      );
     });
 
-    it("should handle missing params object", () => {
-      mockReq.params = null;
+    it("should handle invalid role values", () => {
+      mockReq.user.role = "INVALID_ROLE";
+      const middleware = permissionMiddleware("read");
 
-      expect(() => {
-        checkWorkspaceAccess(mockReq, mockRes, mockNext);
-      }).toThrow(ApiError);
+      middleware(mockReq, mockRes, mockNext);
 
-      expect(mockNext).not.toHaveBeenCalled();
+      expect(mockNext).toHaveBeenCalledWith(
+        expect.objectContaining({
+          statusCode: 403,
+          message: "Insufficient permissions",
+        })
+      );
     });
 
-    it("should handle missing workspace ID in params", () => {
-      mockReq.params = {};
+    it("should work with MEMBER role requirement", () => {
+      mockReq.user.role = "MEMBER";
+      const middleware = permissionMiddleware("read");
 
-      expect(() => {
-        checkWorkspaceAccess(mockReq, mockRes, mockNext);
-      }).toThrow(ApiError);
+      middleware(mockReq, mockRes, mockNext);
 
-      expect(mockNext).not.toHaveBeenCalled();
+      expect(mockNext).toHaveBeenCalledWith();
+      expect(mockNext).toHaveBeenCalledTimes(1);
     });
 
-    it("should handle empty workspace ID in params", () => {
-      mockReq.params.id = "";
+    it("should work with ADMIN role requirement", () => {
+      mockReq.user.role = "ADMIN";
+      const middleware = permissionMiddleware("manage_users");
 
-      expect(() => {
-        checkWorkspaceAccess(mockReq, mockRes, mockNext);
-      }).toThrow(ApiError);
+      middleware(mockReq, mockRes, mockNext);
 
-      expect(mockNext).not.toHaveBeenCalled();
+      expect(mockNext).toHaveBeenCalledWith();
+      expect(mockNext).toHaveBeenCalledTimes(1);
     });
 
-    it("should handle null workspace ID in params", () => {
-      mockReq.params.id = null;
+    it("should reject MEMBER when ADMIN required", () => {
+      mockReq.user.role = "MEMBER";
+      const middleware = permissionMiddleware("manage_users");
 
-      expect(() => {
-        checkWorkspaceAccess(mockReq, mockRes, mockNext);
-      }).toThrow(ApiError);
+      middleware(mockReq, mockRes, mockNext);
 
-      expect(mockNext).not.toHaveBeenCalled();
+      expect(mockNext).toHaveBeenCalledWith(
+        expect.objectContaining({
+          statusCode: 403,
+          message: "Insufficient permissions",
+        })
+      );
     });
 
-    it("should handle undefined workspace ID in params", () => {
-      mockReq.params.id = undefined;
+    it("should handle case-sensitive role comparison", () => {
+      mockReq.user.role = "member"; // lowercase
+      const middleware = permissionMiddleware("read");
 
-      expect(() => {
-        checkWorkspaceAccess(mockReq, mockRes, mockNext);
-      }).toThrow(ApiError);
+      middleware(mockReq, mockRes, mockNext);
 
-      expect(mockNext).not.toHaveBeenCalled();
+      expect(mockNext).toHaveBeenCalledWith(
+        expect.objectContaining({
+          statusCode: 403,
+          message: "Insufficient permissions",
+        })
+      );
     });
 
-    it("should handle null user workspaceId", () => {
-      mockReq.user.workspaceId = null;
+    it("should handle empty string role", () => {
+      mockReq.user.role = "";
+      const middleware = permissionMiddleware("read");
 
-      expect(() => {
-        checkWorkspaceAccess(mockReq, mockRes, mockNext);
-      }).toThrow(ApiError);
+      middleware(mockReq, mockRes, mockNext);
 
-      expect(mockNext).not.toHaveBeenCalled();
+      expect(mockNext).toHaveBeenCalledWith(
+        expect.objectContaining({
+          statusCode: 401,
+          message: "User role not found",
+        })
+      );
     });
 
-    it("should handle undefined user workspaceId", () => {
-      mockReq.user.workspaceId = undefined;
+    it("should handle null role", () => {
+      mockReq.user.role = null;
+      const middleware = permissionMiddleware("read");
 
-      expect(() => {
-        checkWorkspaceAccess(mockReq, mockRes, mockNext);
-      }).toThrow(ApiError);
+      middleware(mockReq, mockRes, mockNext);
 
-      expect(mockNext).not.toHaveBeenCalled();
+      expect(mockNext).toHaveBeenCalledWith(
+        expect.objectContaining({
+          statusCode: 401,
+          message: "User role not found",
+        })
+      );
     });
 
-    it("should handle empty user workspaceId", () => {
-      mockReq.user.workspaceId = "";
+    it("should handle undefined role", () => {
+      mockReq.user.role = undefined;
+      const middleware = permissionMiddleware("read");
 
-      expect(() => {
-        checkWorkspaceAccess(mockReq, mockRes, mockNext);
-      }).toThrow(ApiError);
+      middleware(mockReq, mockRes, mockNext);
 
-      expect(mockNext).not.toHaveBeenCalled();
-    });
-
-    it("should be case-sensitive for workspace ID comparison", () => {
-      mockReq.params.id = "WORKSPACE123";
-      mockReq.user.workspaceId = "workspace123";
-
-      expect(() => {
-        checkWorkspaceAccess(mockReq, mockRes, mockNext);
-      }).toThrow(ApiError);
-
-      expect(mockNext).not.toHaveBeenCalled();
-    });
-
-    it("should work with different workspace ID formats", () => {
-      const testCases = [
-        "workspace-123",
-        "workspace_123",
-        "123-workspace-456",
-        "ws123",
-        "cluid123abc456def789",
-      ];
-
-      testCases.forEach((workspaceId) => {
-        mockReq.params.id = workspaceId;
-        mockReq.user.workspaceId = workspaceId;
-        mockNext.mockClear();
-
-        checkWorkspaceAccess(mockReq, mockRes, mockNext);
-
-        expect(mockNext).toHaveBeenCalledWith();
-      });
-    });
-
-    it("should work regardless of user role", () => {
-      const roles = ["MEMBER", "ADMIN"];
-
-      roles.forEach((role) => {
-        mockReq.user.role = role;
-        mockNext.mockClear();
-
-        checkWorkspaceAccess(mockReq, mockRes, mockNext);
-
-        expect(mockNext).toHaveBeenCalledWith();
-      });
+      expect(mockNext).toHaveBeenCalledWith(
+        expect.objectContaining({
+          statusCode: 401,
+          message: "User role not found",
+        })
+      );
     });
   });
 });

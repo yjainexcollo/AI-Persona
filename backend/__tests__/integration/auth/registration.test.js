@@ -1,3 +1,30 @@
+// Mock breachCheckService before importing the app
+jest.mock("../../../src/services/breachCheckService", () => ({
+  validatePasswordWithBreachCheck: jest.fn().mockImplementation((password) => {
+    console.log(
+      "breachCheckService.validatePasswordWithBreachCheck called with:",
+      password
+    );
+    if (password === "weak") {
+      return Promise.resolve({
+        isValid: false,
+        reason: "Password too weak",
+        severity: "danger",
+      });
+    }
+    const result = {
+      isValid: true,
+      reason: "Password is secure",
+      severity: "safe",
+    };
+    console.log(
+      "breachCheckService.validatePasswordWithBreachCheck returning:",
+      result
+    );
+    return Promise.resolve(result);
+  }),
+}));
+
 const request = require("supertest");
 const app = require("../../../src/app");
 
@@ -40,7 +67,9 @@ describe("Authentication Integration Tests", () => {
         })
         .expect(400);
 
-      expect(response.body.error.message).toContain("Invalid email format");
+      expect(response.body.error.message).toContain(
+        "Please provide a valid email address"
+      );
     });
 
     it("should validate password strength", async () => {
@@ -53,7 +82,15 @@ describe("Authentication Integration Tests", () => {
         })
         .expect(400);
 
-      expect(response.body.error.message).toContain("Password too weak");
+      expect(response.body.error.message).toContain(
+        "Password must be at least 8 characters long"
+      );
+      expect(response.body.error.message).toContain(
+        "Password must contain at least one uppercase letter"
+      );
+      expect(response.body.error.message).toContain("one lowercase letter");
+      expect(response.body.error.message).toContain("one number");
+      expect(response.body.error.message).toContain("one special character");
     });
 
     it("should handle duplicate email", async () => {

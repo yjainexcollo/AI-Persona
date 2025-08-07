@@ -4,9 +4,10 @@ const profileController = require("../../../src/controllers/profileController");
 
 // Mock the profile service
 jest.mock("../../../src/services/profileService", () => ({
-  getMe: jest.fn(),
-  updateMe: jest.fn(),
-  uploadAvatar: jest.fn(),
+  getProfile: jest.fn(),
+  updateProfile: jest.fn(),
+  processAvatarUpload: jest.fn(),
+  processPresignedAvatar: jest.fn(),
   changePassword: jest.fn(),
 }));
 
@@ -33,6 +34,13 @@ app.put("/profile", profileController.updateMe);
 app.post("/profile/avatar", profileController.uploadAvatar);
 app.put("/profile/password", profileController.changePassword);
 
+// Error handling middleware
+app.use((err, req, res, next) => {
+  res.status(err.statusCode || 500).json({
+    error: err.message,
+  });
+});
+
 describe("ProfileController", () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -54,25 +62,27 @@ describe("ProfileController", () => {
         updatedAt: new Date(),
       };
 
-      profileService.getMe.mockResolvedValue(mockProfile);
+      profileService.getProfile.mockResolvedValue(mockProfile);
 
       const response = await request(app).get("/profile").expect(200);
 
       expect(response.body.status).toBe("success");
-      expect(response.body.data.profile.email).toBe("test@example.com");
-      expect(response.body.data.profile.name).toBe("Test User");
-      expect(response.body.data.profile.avatarUrl).toBe(
+      expect(response.body.data.user.email).toBe("test@example.com");
+      expect(response.body.data.user.name).toBe("Test User");
+      expect(response.body.data.user.avatarUrl).toBe(
         "https://example.com/avatar.jpg"
       );
-      expect(profileService.getMe).toHaveBeenCalledWith("user123");
+      expect(profileService.getProfile).toHaveBeenCalledWith("user123");
     });
 
     it("should handle profile not found", async () => {
-      profileService.getMe.mockRejectedValue(new Error("User not found"));
+      const error = new Error("User not found");
+      error.statusCode = 404;
+      profileService.getProfile.mockRejectedValue(error);
 
-      const response = await request(app).get("/profile").expect(500);
+      const response = await request(app).get("/profile").expect(404);
 
-      expect(response.body.error.message).toBe("User not found");
+      expect(response.body.error).toBe("User not found");
     });
   });
 
@@ -92,7 +102,7 @@ describe("ProfileController", () => {
         updatedAt: new Date(),
       };
 
-      profileService.updateMe.mockResolvedValue(mockUpdatedProfile);
+      profileService.updateProfile.mockResolvedValue(mockUpdatedProfile);
 
       const updateData = {
         name: "Updated User",
@@ -107,10 +117,8 @@ describe("ProfileController", () => {
         .expect(200);
 
       expect(response.body.status).toBe("success");
-      expect(response.body.data.profile.name).toBe("Updated User");
-      expect(response.body.data.profile.timezone).toBe("America/New_York");
-      expect(response.body.data.profile.locale).toBe("es");
-      expect(profileService.updateMe).toHaveBeenCalledWith(
+      expect(response.body.data.user.name).toBe("Updated User");
+      expect(profileService.updateProfile).toHaveBeenCalledWith(
         "user123",
         updateData
       );
@@ -121,7 +129,7 @@ describe("ProfileController", () => {
         id: "user123",
         email: "test@example.com",
         name: "Partially Updated",
-        avatarUrl: null,
+        avatarUrl: "https://example.com/avatar.jpg",
         timezone: "UTC",
         locale: "en",
         role: "MEMBER",
@@ -131,7 +139,7 @@ describe("ProfileController", () => {
         updatedAt: new Date(),
       };
 
-      profileService.updateMe.mockResolvedValue(mockUpdatedProfile);
+      profileService.updateProfile.mockResolvedValue(mockUpdatedProfile);
 
       const updateData = {
         name: "Partially Updated",
@@ -143,78 +151,58 @@ describe("ProfileController", () => {
         .expect(200);
 
       expect(response.body.status).toBe("success");
-      expect(response.body.data.profile.name).toBe("Partially Updated");
-      expect(profileService.updateMe).toHaveBeenCalledWith(
+      expect(response.body.data.user.name).toBe("Partially Updated");
+      expect(profileService.updateProfile).toHaveBeenCalledWith(
         "user123",
         updateData
       );
     });
 
     it("should handle email validation errors", async () => {
-      profileService.updateMe.mockRejectedValue(
-        new Error("Invalid email format")
-      );
-
-      const updateData = {
-        email: "invalid-email",
-      };
+      const error = new Error("Invalid email format");
+      error.statusCode = 400;
+      profileService.updateProfile.mockRejectedValue(error);
 
       const response = await request(app)
         .put("/profile")
-        .send(updateData)
-        .expect(500);
+        .send({ name: "Test" })
+        .expect(400);
 
-      expect(response.body.error.message).toBe("Invalid email format");
+      expect(response.body.error).toBe("Invalid email format");
     });
 
     it("should handle duplicate email errors", async () => {
-      profileService.updateMe.mockRejectedValue(
-        new Error("Email already exists")
-      );
-
-      const updateData = {
-        email: "existing@example.com",
-      };
+      const error = new Error("Email already exists");
+      error.statusCode = 400;
+      profileService.updateProfile.mockRejectedValue(error);
 
       const response = await request(app)
         .put("/profile")
-        .send(updateData)
-        .expect(500);
+        .send({ name: "Test" })
+        .expect(400);
 
-      expect(response.body.error.message).toBe("Email already exists");
+      expect(response.body.error).toBe("Email already exists");
     });
   });
 
   describe("POST /profile/avatar", () => {
     it("should upload avatar successfully", async () => {
-      const mockUpdatedProfile = {
-        id: "user123",
-        email: "test@example.com",
-        name: "Test User",
-        avatarUrl: "https://example.com/new-avatar.jpg",
-        timezone: "UTC",
-        locale: "en",
-        role: "MEMBER",
-        status: "ACTIVE",
-        emailVerified: true,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-
-      profileService.uploadAvatar.mockResolvedValue(mockUpdatedProfile);
+      profileService.processPresignedAvatar.mockResolvedValue(
+        "https://example.com/new-avatar.jpg"
+      );
 
       const response = await request(app)
         .post("/profile/avatar")
         .send({
-          avatarUrl: "https://example.com/new-avatar.jpg",
+          presignedUrl: "https://example.com/new-avatar.jpg",
         })
         .expect(200);
 
       expect(response.body.status).toBe("success");
-      expect(response.body.data.profile.avatarUrl).toBe(
+      expect(response.body.data.avatarUrl).toBe(
         "https://example.com/new-avatar.jpg"
       );
-      expect(profileService.uploadAvatar).toHaveBeenCalledWith(
+      expect(profileService.processPresignedAvatar).toHaveBeenCalledWith(
         "user123",
         "https://example.com/new-avatar.jpg"
       );
@@ -226,78 +214,77 @@ describe("ProfileController", () => {
         .send({})
         .expect(400);
 
-      expect(response.body.error.message).toBe("Avatar URL is required");
+      expect(response.body.error).toBe(
+        "No avatar file or presigned URL provided"
+      );
     });
 
     it("should handle upload errors", async () => {
-      profileService.uploadAvatar.mockRejectedValue(
-        new Error("Invalid avatar URL")
-      );
+      const error = new Error("Invalid avatar URL");
+      error.statusCode = 400;
+      profileService.processPresignedAvatar.mockRejectedValue(error);
 
       const response = await request(app)
         .post("/profile/avatar")
         .send({
-          avatarUrl: "invalid-url",
+          presignedUrl: "invalid-url",
         })
-        .expect(500);
+        .expect(400);
 
-      expect(response.body.error.message).toBe("Invalid avatar URL");
+      expect(response.body.error).toBe("Invalid avatar URL");
     });
   });
 
   describe("PUT /profile/password", () => {
     it("should change password successfully", async () => {
-      profileService.changePassword.mockResolvedValue({
-        message: "Password changed successfully",
-      });
+      profileService.changePassword.mockResolvedValue();
 
       const response = await request(app)
         .put("/profile/password")
         .send({
-          currentPassword: "OldPassword123!",
-          newPassword: "NewPassword123!",
+          currentPassword: "oldPassword123",
+          newPassword: "newPassword123!",
         })
         .expect(200);
 
       expect(response.body.status).toBe("success");
-      expect(response.body.message).toBe("Password changed successfully");
       expect(profileService.changePassword).toHaveBeenCalledWith(
         "user123",
-        "OldPassword123!",
-        "NewPassword123!"
+        "oldPassword123",
+        "newPassword123!"
       );
     });
 
     it("should handle incorrect current password", async () => {
-      profileService.changePassword.mockRejectedValue(
-        new Error("Current password is incorrect")
-      );
+      const error = new Error("Current password is incorrect");
+      error.statusCode = 401;
+      profileService.changePassword.mockRejectedValue(error);
 
       const response = await request(app)
         .put("/profile/password")
         .send({
-          currentPassword: "WrongPassword",
-          newPassword: "NewPassword123!",
+          currentPassword: "wrongPassword",
+          newPassword: "newPassword123!",
         })
-        .expect(500);
+        .expect(401);
 
-      expect(response.body.error.message).toBe("Current password is incorrect");
+      expect(response.body.error).toBe("Current password is incorrect");
     });
 
     it("should handle weak new password", async () => {
-      profileService.changePassword.mockRejectedValue(
-        new Error("Password too weak")
-      );
+      const error = new Error("Password too weak");
+      error.statusCode = 400;
+      profileService.changePassword.mockRejectedValue(error);
 
       const response = await request(app)
         .put("/profile/password")
         .send({
-          currentPassword: "OldPassword123!",
+          currentPassword: "oldPassword123",
           newPassword: "weak",
         })
-        .expect(500);
+        .expect(400);
 
-      expect(response.body.error.message).toBe("Password too weak");
+      expect(response.body.error).toBe("Password too weak");
     });
   });
 });

@@ -32,6 +32,13 @@ app.get("/workspaces/:id", workspaceController.getWorkspace);
 app.put("/workspaces/:id", workspaceController.updateWorkspace);
 app.get("/workspaces/:id/members", workspaceController.listMembers);
 
+// Error handling middleware
+app.use((err, req, res, next) => {
+  res.status(500).json({
+    error: err.message,
+  });
+});
+
 describe("WorkspaceController", () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -76,7 +83,8 @@ describe("WorkspaceController", () => {
         .get("/workspaces/invalid")
         .expect(500);
 
-      expect(response.body.error.message).toBe("Workspace not found");
+      expect(response.body.error).toBeDefined();
+      expect(response.body.error).toContain("Workspace not found");
     });
 
     it("should handle access denied", async () => {
@@ -88,9 +96,8 @@ describe("WorkspaceController", () => {
         .get("/workspaces/other-workspace")
         .expect(500);
 
-      expect(response.body.error.message).toBe(
-        "Access denied to this workspace"
-      );
+      expect(response.body.error).toBeDefined();
+      expect(response.body.error).toContain("Access denied to this workspace");
     });
   });
 
@@ -173,7 +180,7 @@ describe("WorkspaceController", () => {
       );
 
       const updateData = {
-        name: "Updated Workspace",
+        name: "Unauthorized Update",
       };
 
       const response = await request(app)
@@ -181,7 +188,8 @@ describe("WorkspaceController", () => {
         .send(updateData)
         .expect(500);
 
-      expect(response.body.error.message).toBe(
+      expect(response.body.error).toBeDefined();
+      expect(response.body.error).toContain(
         "Only workspace admins can update workspace settings"
       );
     });
@@ -189,48 +197,47 @@ describe("WorkspaceController", () => {
 
   describe("GET /workspaces/:id/members", () => {
     it("should list workspace members", async () => {
-      const mockMembers = {
-        members: [
-          {
-            id: "user1",
-            email: "admin@test.com",
-            name: "Admin User",
-            role: "ADMIN",
-            status: "ACTIVE",
-            emailVerified: true,
-            createdAt: new Date(),
-          },
-          {
-            id: "user2",
-            email: "member@test.com",
-            name: "Member User",
-            role: "MEMBER",
-            status: "ACTIVE",
-            emailVerified: true,
-            createdAt: new Date(),
-          },
-        ],
-        pagination: {
-          page: 1,
-          limit: 10,
-          total: 2,
-          pages: 1,
+      const mockMembers = [
+        {
+          id: "user1",
+          name: "John Doe",
+          email: "john@example.com",
+          role: "MEMBER",
+          status: "ACTIVE",
+          joinedAt: new Date(),
         },
-      };
+        {
+          id: "user2",
+          name: "Jane Smith",
+          email: "jane@example.com",
+          role: "ADMIN",
+          status: "ACTIVE",
+          joinedAt: new Date(),
+        },
+      ];
 
-      workspaceService.listMembers.mockResolvedValue(mockMembers);
+      workspaceService.listMembers.mockResolvedValue({
+        members: mockMembers,
+        total: 2,
+      });
 
       const response = await request(app)
         .get("/workspaces/workspace123/members")
         .expect(200);
 
       expect(response.body.status).toBe("success");
-      expect(response.body.data.members).toHaveLength(2);
+      expect(response.body.data).toHaveLength(2);
       expect(response.body.pagination.total).toBe(2);
       expect(workspaceService.listMembers).toHaveBeenCalledWith(
         "workspace123",
         "user123",
-        { page: 1, limit: 10 }
+        {
+          search: undefined,
+          status: undefined,
+          role: undefined,
+          page: 1,
+          limit: 20,
+        }
       );
     });
 
@@ -261,38 +268,39 @@ describe("WorkspaceController", () => {
     });
 
     it("should support search", async () => {
-      const mockMembers = {
-        members: [
-          {
-            id: "user1",
-            email: "john@test.com",
-            name: "John Doe",
-            role: "MEMBER",
-            status: "ACTIVE",
-            emailVerified: true,
-            createdAt: new Date(),
-          },
-        ],
-        pagination: {
-          page: 1,
-          limit: 10,
-          total: 1,
-          pages: 1,
+      const mockMembers = [
+        {
+          id: "user1",
+          name: "John Doe",
+          email: "john@example.com",
+          role: "MEMBER",
+          status: "ACTIVE",
+          joinedAt: new Date(),
         },
-      };
+      ];
 
-      workspaceService.listMembers.mockResolvedValue(mockMembers);
+      workspaceService.listMembers.mockResolvedValue({
+        members: mockMembers,
+        total: 1,
+      });
 
       const response = await request(app)
-        .get("/workspaces/workspace123/members?search=john")
+        .get("/workspaces/workspace123/members")
+        .query({ search: "John" })
         .expect(200);
 
-      expect(response.body.data.members).toHaveLength(1);
-      expect(response.body.data.members[0].name).toBe("John Doe");
+      expect(response.body.data).toHaveLength(1);
+      expect(response.body.data[0].name).toBe("John Doe");
       expect(workspaceService.listMembers).toHaveBeenCalledWith(
         "workspace123",
         "user123",
-        { page: 1, limit: 10, search: "john" }
+        {
+          search: "John",
+          status: undefined,
+          role: undefined,
+          page: 1,
+          limit: 20,
+        }
       );
     });
 
@@ -305,9 +313,8 @@ describe("WorkspaceController", () => {
         .get("/workspaces/other-workspace/members")
         .expect(500);
 
-      expect(response.body.error.message).toBe(
-        "Access denied to this workspace"
-      );
+      expect(response.body.error).toBeDefined();
+      expect(response.body.error).toContain("Access denied to this workspace");
     });
   });
 });

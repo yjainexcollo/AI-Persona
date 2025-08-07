@@ -10,6 +10,7 @@ const ApiError = require("../utils/apiError");
 const { encrypt, decrypt } = require("../utils/encrypt");
 const { getCircuitBreaker } = require("../utils/circuitBreaker");
 const authService = require("./authService");
+const chatSessionService = require("./chatSessionService");
 
 const prisma = new PrismaClient();
 
@@ -217,6 +218,7 @@ async function toggleFavourite(personaId, userId) {
  * @param {string} conversationId - Conversation ID (optional)
  * @param {string} userId - User ID
  * @param {string} fileId - File ID (optional)
+ * @param {object} metadata - Additional metadata for session tracking
  * @returns {Promise<object>}
  */
 async function sendMessage(
@@ -224,8 +226,11 @@ async function sendMessage(
   message,
   conversationId,
   userId,
-  fileId = null
+  fileId = null,
+  metadata = {}
 ) {
+  let chatSession = null;
+
   try {
     // Validate persona exists and is active
     const persona = await prisma.persona.findUnique({
@@ -289,6 +294,14 @@ async function sendMessage(
       }
     }
 
+    // Create chat session for this interaction
+    chatSession = await chatSessionService.createChatSession(
+      conversation.id,
+      personaId,
+      userId,
+      metadata
+    );
+
     // Insert user message
     const userMessage = await prisma.message.create({
       data: {
@@ -298,6 +311,7 @@ async function sendMessage(
         content: message,
         fileId: fileId,
         role: "USER",
+        chatSessionId: chatSession.id,
       },
     });
 
@@ -317,6 +331,7 @@ async function sendMessage(
             conversationId: conversation.id,
             personaId,
             userId,
+            sessionId: chatSession.sessionId, // Include session ID in webhook payload
           },
           {
             timeout: WEBHOOK_TIMEOUT,
@@ -344,6 +359,13 @@ async function sendMessage(
     }
 
     if (!success) {
+      // Update session status to failed - REMOVED: updateChatSessionStatus function
+      // await chatSessionService.updateChatSessionStatus(
+      //   chatSession.sessionId,
+      //   "FAILED",
+      //   "Webhook request failed after all retry attempts"
+      // );
+
       // Record failure in circuit breaker
       circuitBreaker.onFailure();
 
@@ -351,6 +373,7 @@ async function sendMessage(
       await authService.createAuditEvent(userId, "WEBHOOK_FAILED", {
         personaId,
         conversationId: conversation.id,
+        sessionId: chatSession.sessionId,
         message,
       });
 
@@ -373,13 +396,21 @@ async function sendMessage(
         personaId,
         content: reply,
         role: "ASSISTANT",
+        chatSessionId: chatSession.id,
       },
     });
+
+    // Update session status to completed - REMOVED: updateChatSessionStatus function
+    // await chatSessionService.updateChatSessionStatus(
+    //   chatSession.sessionId,
+    //   "COMPLETED"
+    // );
 
     // Create audit event
     await authService.createAuditEvent(userId, "CHAT_MESSAGE_SENT", {
       personaId,
       conversationId: conversation.id,
+      sessionId: chatSession.sessionId,
       messageLength: message.length,
     });
 
@@ -387,8 +418,22 @@ async function sendMessage(
       reply,
       conversationId: conversation.id,
       messageId: assistantMessage.id,
+      sessionId: chatSession.sessionId,
     };
   } catch (error) {
+    // Update session status to failed if session was created - REMOVED: updateChatSessionStatus function
+    // if (chatSession) {
+    //   try {
+    //     await chatSessionService.updateChatSessionStatus(
+    //       chatSession.sessionId,
+    //       "FAILED",
+    //       error.message
+    //   );
+    //   } catch (sessionError) {
+    //     logger.error("Failed to update session status:", sessionError);
+    //   }
+    // }
+
     if (error instanceof ApiError) throw error;
     logger.error("Error sending message:", error);
     throw new ApiError(500, "Failed to send message");

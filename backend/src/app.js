@@ -14,6 +14,7 @@ const workspaceRoutes = require("./routes/workspaceRoutes");
 const personaRoutes = require("./routes/personaRoutes");
 const conversationRoutes = require("./routes/conversationRoutes");
 const messageRoutes = require("./routes/messageRoutes");
+const chatSessionRoutes = require("./routes/chatSessionRoutes");
 const publicRoutes = require("./routes/publicRoutes");
 
 const swaggerUi = require("swagger-ui-express");
@@ -54,6 +55,7 @@ app.use("/api/users", profileRoutes);
 app.use("/api/personas", personaRoutes);
 app.use("/api/conversations", conversationRoutes);
 app.use("/api/messages", messageRoutes);
+app.use("/api/chat-sessions", chatSessionRoutes);
 
 // Public Routes (no authentication required)
 app.use("/p", publicRoutes);

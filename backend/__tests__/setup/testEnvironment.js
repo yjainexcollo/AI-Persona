@@ -2,7 +2,19 @@ const { PrismaClient } = require("@prisma/client");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
 const path = require("path");
-require("dotenv").config({ path: path.resolve(__dirname, "../../.env.test") });
+
+// Load test environment variables ONLY (don't load .env)
+require("dotenv").config({
+  path: path.resolve(__dirname, "../../.env.test"),
+  override: true,
+});
+
+// Set DATABASE_URL to TEST_DATABASE_URL for Prisma
+process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
+
+// Debug: Log the database URL being used
+console.log("TEST_DATABASE_URL:", process.env.TEST_DATABASE_URL);
+console.log("DATABASE_URL:", process.env.DATABASE_URL);
 
 // Global test database client
 global.testPrisma = new PrismaClient({
@@ -20,6 +32,11 @@ global.testUtils = {
   createTestUser: async (userData = {}) => {
     const timestamp = Date.now();
     const randomSuffix = Math.random().toString(36).substring(7);
+    const processId = process.pid;
+    const testId = Math.random().toString(36).substring(2, 15);
+    const threadId = Math.random().toString(36).substring(2, 8);
+    const uniqueId = Math.random().toString(36).substring(2, 10);
+
     const defaultUser = {
       email: `test-${timestamp}-${randomSuffix}@example.com`,
       name: "Test User",
@@ -45,22 +62,67 @@ global.testUtils = {
         throw new Error(`Workspace with id ${userData.workspaceId} not found`);
       }
     } else {
-      workspace = await global.testPrisma.workspace.create({
-        data: {
-          name: `Test Workspace ${timestamp}-${randomSuffix}`,
-          domain: `test-${timestamp}-${randomSuffix}.com`,
-        },
-      });
+      // Use a more unique domain to avoid constraint violations
+      const uniqueDomain = `test-${timestamp}-${processId}-${testId}-${threadId}-${uniqueId}.com`;
+
+      try {
+        workspace = await global.testPrisma.workspace.create({
+          data: {
+            name: `Test Workspace ${timestamp}-${randomSuffix}`,
+            domain: uniqueDomain,
+          },
+        });
+      } catch (error) {
+        // If domain still conflicts, try with additional randomness
+        const fallbackDomain = `test-${timestamp}-${processId}-${testId}-${threadId}-${uniqueId}-${Math.random()
+          .toString(36)
+          .substring(2, 8)}.com`;
+        try {
+          workspace = await global.testPrisma.workspace.create({
+            data: {
+              name: `Test Workspace ${timestamp}-${randomSuffix}`,
+              domain: fallbackDomain,
+            },
+          });
+        } catch (secondError) {
+          // Last resort: use UUID-like domain
+          const uuidDomain = `test-${Date.now()}-${Math.random()
+            .toString(36)
+            .substring(2, 15)}-${Math.random()
+            .toString(36)
+            .substring(2, 15)}.com`;
+          workspace = await global.testPrisma.workspace.create({
+            data: {
+              name: `Test Workspace ${timestamp}-${randomSuffix}`,
+              domain: uuidDomain,
+            },
+          });
+        }
+      }
     }
 
-    return await global.testPrisma.user.create({
-      data: {
-        ...userDataForDb,
-        passwordHash: hashedPassword,
-        workspaceId: workspace.id,
-      },
-      include: { workspace: true },
-    });
+    try {
+      return await global.testPrisma.user.create({
+        data: {
+          ...userDataForDb,
+          passwordHash: hashedPassword,
+          workspaceId: workspace.id,
+        },
+        include: { workspace: true },
+      });
+    } catch (error) {
+      // If user creation fails, clean up the workspace and retry
+      if (workspace && !userData.workspaceId) {
+        try {
+          await global.testPrisma.workspace.delete({
+            where: { id: workspace.id },
+          });
+        } catch (deleteError) {
+          // Ignore delete errors
+        }
+      }
+      throw error;
+    }
   },
 
   createTestToken: (user) => {

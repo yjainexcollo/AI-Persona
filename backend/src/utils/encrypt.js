@@ -11,15 +11,15 @@ const IV_LENGTH = 16;
 const TAG_LENGTH = 16;
 
 function encrypt(text, secretKey) {
+  if (
+    text === undefined ||
+    text === null ||
+    secretKey === undefined ||
+    secretKey === null
+  ) {
+    throw new Error("Text and secret key are required");
+  }
   try {
-    if (
-      text === undefined ||
-      text === null ||
-      secretKey === undefined ||
-      secretKey === null
-    ) {
-      throw new Error("Text and secret key are required");
-    }
     // Accept both base64 and utf8 keys
     const key =
       Buffer.from(secretKey, "base64").length === 32
@@ -40,15 +40,15 @@ function encrypt(text, secretKey) {
 }
 
 function decrypt(encryptedText, secretKey) {
+  if (
+    encryptedText === undefined ||
+    encryptedText === null ||
+    secretKey === undefined ||
+    secretKey === null
+  ) {
+    throw new Error("Encrypted text and secret key are required");
+  }
   try {
-    if (
-      encryptedText === undefined ||
-      encryptedText === null ||
-      secretKey === undefined ||
-      secretKey === null
-    ) {
-      throw new Error("Encrypted text and secret key are required");
-    }
     const key =
       Buffer.from(secretKey, "base64").length === 32
         ? Buffer.from(secretKey, "base64")

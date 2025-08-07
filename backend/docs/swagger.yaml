@@ -174,6 +174,8 @@ tags:
     description: Workspace and member management
   - name: Security
     description: Security and key management
+  - name: Chat Sessions
+    description: Chat session management and tracking
 
 paths:
   # Health Check
@@ -1472,6 +1474,164 @@ paths:
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
 
+  # Chat Session Management
+  /api/chat-sessions:
+    get:
+      tags:
+        - Chat Sessions
+      summary: Get user's chat sessions
+      description: |
+        Get a list of chat sessions for the authenticated user.
+        Supports filtering by status and pagination.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          description: Filter by session status
+          required: false
+          schema:
+            type: string
+            enum: [ACTIVE, COMPLETED, FAILED, TIMEOUT, CANCELLED]
+            example: "ACTIVE"
+        - name: limit
+          in: query
+          description: Number of sessions to return (max 100)
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+            example: 50
+        - name: offset
+          in: query
+          description: Number of sessions to skip
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+            example: 0
+      responses:
+        "200":
+          description: Chat sessions retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  message:
+                    type: string
+                    example: "User chat sessions retrieved successfully"
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ChatSession"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /api/chat-sessions/{sessionId}:
+    get:
+      tags:
+        - Chat Sessions
+      summary: Get specific chat session
+      description: |
+        Get details of a specific chat session including all messages.
+        Users can only access their own sessions.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          description: Chat session ID
+          schema:
+            type: string
+            example: "abc123def456"
+      responses:
+        "200":
+          description: Chat session retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  message:
+                    type: string
+                    example: "Chat session retrieved successfully"
+                  data:
+                    $ref: "#/components/schemas/ChatSession"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+    delete:
+      tags:
+        - Chat Sessions
+      summary: Delete chat session
+      description: |
+        Permanently delete a chat session and all associated messages.
+        Users can only delete their own sessions.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          description: Chat session ID to delete
+          schema:
+            type: string
+            example: "abc123def456"
+      responses:
+        "200":
+          description: Chat session deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  message:
+                    type: string
+                    example: "Chat session deleted successfully"
+                  data:
+                    type: object
+                    properties:
+                      sessionId:
+                        type: string
+                        example: "abc123def456"
+                      deletedAt:
+                        type: string
+                        format: date-time
+                        example: "2024-01-15T10:30:00Z"
+                      messageCount:
+                        type: integer
+                        example: 5
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
   /api/conversations:
     get:
       tags:
@@ -2627,6 +2787,103 @@ components:
           type: string
           format: date-time
           example: "2024-01-15T10:30:00Z"
+
+    ChatSession:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "session_123"
+        sessionId:
+          type: string
+          example: "abc123def456"
+        conversationId:
+          type: string
+          example: "conv_456"
+        personaId:
+          type: string
+          example: "persona_789"
+        userId:
+          type: string
+          example: "user_123"
+        status:
+          type: string
+          enum: [ACTIVE, COMPLETED, FAILED, TIMEOUT, CANCELLED]
+          example: "COMPLETED"
+        startedAt:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:00:00Z"
+        endedAt:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2024-01-15T10:05:00Z"
+        lastActivityAt:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:05:00Z"
+        metadata:
+          type: object
+          nullable: true
+          properties:
+            userAgent:
+              type: string
+              example: "Mozilla/5.0..."
+            ipAddress:
+              type: string
+              example: "192.168.1.1"
+            deviceInfo:
+              type: string
+              example: "Chrome/120.0.0.0"
+        errorMessage:
+          type: string
+          nullable: true
+          example: "Webhook timeout"
+        conversation:
+          $ref: "#/components/schemas/Conversation"
+        persona:
+          $ref: "#/components/schemas/Persona"
+        user:
+          type: object
+          properties:
+            id:
+              type: string
+              example: "user_123"
+            email:
+              type: string
+              example: "user@example.com"
+            name:
+              type: string
+              example: "John Doe"
+        messages:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                example: "msg_123"
+              content:
+                type: string
+                example: "Hello, how are you?"
+              role:
+                type: string
+                enum: [USER, ASSISTANT]
+                example: "USER"
+              createdAt:
+                type: string
+                format: date-time
+                example: "2024-01-15T10:01:00Z"
+      required:
+        - id
+        - sessionId
+        - conversationId
+        - personaId
+        - userId
+        - status
+        - startedAt
+        - lastActivityAt
 
   # Common Response Definitions
   responses:

@@ -1,4 +1,4 @@
-const { requireRole } = require("../../../src/middlewares/roleMiddleware");
+const roleMiddleware = require("../../../src/middlewares/roleMiddleware");
 const ApiError = require("../../../src/utils/apiError");
 
 describe("RoleMiddleware", () => {
@@ -23,10 +23,10 @@ describe("RoleMiddleware", () => {
     jest.clearAllMocks();
   });
 
-  describe("requireRole", () => {
+  describe("roleMiddleware", () => {
     it("should call next() when user has required role", () => {
       mockReq.user.role = "ADMIN";
-      const middleware = requireRole("ADMIN");
+      const middleware = roleMiddleware("ADMIN");
 
       middleware(mockReq, mockRes, mockNext);
 
@@ -34,9 +34,9 @@ describe("RoleMiddleware", () => {
       expect(mockNext).toHaveBeenCalledTimes(1);
     });
 
-    it("should call next() when user has higher role than required", () => {
-      mockReq.user.role = "ADMIN";
-      const middleware = requireRole("MEMBER");
+    it("should call next() when user has exact required role", () => {
+      mockReq.user.role = "MEMBER";
+      const middleware = roleMiddleware("MEMBER");
 
       middleware(mockReq, mockRes, mockNext);
 
@@ -44,78 +44,91 @@ describe("RoleMiddleware", () => {
       expect(mockNext).toHaveBeenCalledTimes(1);
     });
 
-    it("should throw ApiError when user has insufficient role", () => {
+    it("should call next() with ApiError when user has insufficient role", () => {
       mockReq.user.role = "MEMBER";
-      const middleware = requireRole("ADMIN");
+      const middleware = roleMiddleware("ADMIN");
 
-      expect(() => {
-        middleware(mockReq, mockRes, mockNext);
-      }).toThrow(ApiError);
+      middleware(mockReq, mockRes, mockNext);
 
-      expect(mockNext).not.toHaveBeenCalled();
+      expect(mockNext).toHaveBeenCalledWith(
+        expect.objectContaining({
+          statusCode: 403,
+          message: "Insufficient permissions",
+        })
+      );
     });
 
-    it("should throw ApiError with correct message for insufficient permissions", () => {
+    it("should call next() with correct message for insufficient permissions", () => {
       mockReq.user.role = "MEMBER";
-      const middleware = requireRole("ADMIN");
+      const middleware = roleMiddleware("ADMIN");
 
-      expect(() => {
-        middleware(mockReq, mockRes, mockNext);
-      }).toThrow("Insufficient permissions");
+      middleware(mockReq, mockRes, mockNext);
 
-      expect(mockNext).not.toHaveBeenCalled();
+      expect(mockNext).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: "Insufficient permissions",
+        })
+      );
     });
 
-    it("should throw ApiError with 403 status code", () => {
+    it("should call next() with 403 status code", () => {
       mockReq.user.role = "MEMBER";
-      const middleware = requireRole("ADMIN");
+      const middleware = roleMiddleware("ADMIN");
 
-      try {
-        middleware(mockReq, mockRes, mockNext);
-      } catch (error) {
-        expect(error).toBeInstanceOf(ApiError);
-        expect(error.statusCode).toBe(403);
-      }
+      middleware(mockReq, mockRes, mockNext);
 
-      expect(mockNext).not.toHaveBeenCalled();
+      expect(mockNext).toHaveBeenCalledWith(
+        expect.objectContaining({
+          statusCode: 403,
+        })
+      );
     });
 
     it("should handle missing user object", () => {
       mockReq.user = null;
-      const middleware = requireRole("MEMBER");
+      const middleware = roleMiddleware("MEMBER");
 
-      expect(() => {
-        middleware(mockReq, mockRes, mockNext);
-      }).toThrow(ApiError);
+      middleware(mockReq, mockRes, mockNext);
 
-      expect(mockNext).not.toHaveBeenCalled();
+      expect(mockNext).toHaveBeenCalledWith(
+        expect.objectContaining({
+          statusCode: 401,
+          message: "Authentication required",
+        })
+      );
     });
 
     it("should handle missing role property", () => {
       delete mockReq.user.role;
-      const middleware = requireRole("MEMBER");
+      const middleware = roleMiddleware("MEMBER");
 
-      expect(() => {
-        middleware(mockReq, mockRes, mockNext);
-      }).toThrow(ApiError);
+      middleware(mockReq, mockRes, mockNext);
 
-      expect(mockNext).not.toHaveBeenCalled();
+      expect(mockNext).toHaveBeenCalledWith(
+        expect.objectContaining({
+          statusCode: 403,
+          message: "Insufficient permissions",
+        })
+      );
     });
 
     it("should handle invalid role values", () => {
       mockReq.user.role = "INVALID_ROLE";
-      const middleware = requireRole("MEMBER");
+      const middleware = roleMiddleware("MEMBER");
 
-      expect(() => {
-        middleware(mockReq, mockRes, mockNext);
-      }).toThrow(ApiError);
+      middleware(mockReq, mockRes, mockNext);
 
-      expect(mockNext).not.toHaveBeenCalled();
+      expect(mockNext).toHaveBeenCalledWith(
+        expect.objectContaining({
+          statusCode: 403,
+          message: "Insufficient permissions",
+        })
+      );
     });
 
     it("should work with MEMBER role requirement", () => {
       mockReq.user.role = "MEMBER";
-      const middleware = requireRole("MEMBER");
+      const middleware = roleMiddleware("MEMBER");
 
       middleware(mockReq, mockRes, mockNext);
 
@@ -125,7 +138,7 @@ describe("RoleMiddleware", () => {
 
     it("should work with ADMIN role requirement", () => {
       mockReq.user.role = "ADMIN";
-      const middleware = requireRole("ADMIN");
+      const middleware = roleMiddleware("ADMIN");
 
       middleware(mockReq, mockRes, mockNext);
 
@@ -135,57 +148,68 @@ describe("RoleMiddleware", () => {
 
     it("should reject MEMBER when ADMIN required", () => {
       mockReq.user.role = "MEMBER";
-      const middleware = requireRole("ADMIN");
+      const middleware = roleMiddleware("ADMIN");
 
-      expect(() => {
-        middleware(mockReq, mockRes, mockNext);
-      }).toThrow(ApiError);
+      middleware(mockReq, mockRes, mockNext);
 
-      expect(mockNext).not.toHaveBeenCalled();
+      expect(mockNext).toHaveBeenCalledWith(
+        expect.objectContaining({
+          statusCode: 403,
+          message: "Insufficient permissions",
+        })
+      );
     });
 
-    it("should handle case-sensitive role comparison", () => {
+    it("should handle case-insensitive role comparison", () => {
       mockReq.user.role = "admin"; // lowercase
-      const middleware = requireRole("ADMIN"); // uppercase
+      const middleware = roleMiddleware("ADMIN"); // uppercase
 
-      expect(() => {
-        middleware(mockReq, mockRes, mockNext);
-      }).toThrow(ApiError);
+      middleware(mockReq, mockRes, mockNext);
 
-      expect(mockNext).not.toHaveBeenCalled();
+      expect(mockNext).toHaveBeenCalledWith();
+      expect(mockNext).toHaveBeenCalledTimes(1);
     });
 
     it("should handle empty string role", () => {
       mockReq.user.role = "";
-      const middleware = requireRole("MEMBER");
+      const middleware = roleMiddleware("MEMBER");
 
-      expect(() => {
-        middleware(mockReq, mockRes, mockNext);
-      }).toThrow(ApiError);
+      middleware(mockReq, mockRes, mockNext);
 
-      expect(mockNext).not.toHaveBeenCalled();
+      expect(mockNext).toHaveBeenCalledWith(
+        expect.objectContaining({
+          statusCode: 403,
+          message: "Insufficient permissions",
+        })
+      );
     });
 
     it("should handle null role", () => {
       mockReq.user.role = null;
-      const middleware = requireRole("MEMBER");
+      const middleware = roleMiddleware("MEMBER");
 
-      expect(() => {
-        middleware(mockReq, mockRes, mockNext);
-      }).toThrow(ApiError);
+      middleware(mockReq, mockRes, mockNext);
 
-      expect(mockNext).not.toHaveBeenCalled();
+      expect(mockNext).toHaveBeenCalledWith(
+        expect.objectContaining({
+          statusCode: 403,
+          message: "Insufficient permissions",
+        })
+      );
     });
 
     it("should handle undefined role", () => {
       mockReq.user.role = undefined;
-      const middleware = requireRole("MEMBER");
+      const middleware = roleMiddleware("MEMBER");
 
-      expect(() => {
-        middleware(mockReq, mockRes, mockNext);
-      }).toThrow(ApiError);
+      middleware(mockReq, mockRes, mockNext);
 
-      expect(mockNext).not.toHaveBeenCalled();
+      expect(mockNext).toHaveBeenCalledWith(
+        expect.objectContaining({
+          statusCode: 403,
+          message: "Insufficient permissions",
+        })
+      );
     });
   });
 });

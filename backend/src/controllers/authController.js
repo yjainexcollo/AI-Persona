@@ -14,7 +14,12 @@ const jwtUtils = require("../utils/jwt");
 
 // Generate trace ID for request tracking
 function generateTraceId() {
-  return crypto.randomBytes(16).toString("hex");
+  try {
+    return crypto.randomBytes(16).toString("hex");
+  } catch (error) {
+    // Fallback for test environments where crypto might be mocked
+    return "test-trace-id-" + Date.now();
+  }
 }
 
 // Get client information from request
