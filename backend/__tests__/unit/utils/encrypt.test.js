@@ -8,7 +8,7 @@ jest.mock("../../../src/utils/logger", () => ({
 }));
 
 describe("Encrypt Utils", () => {
-  const testKey = encrypt.generateKey();
+  const testKey = "12345678901234567890123456789012"; // 32 bytes
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -50,13 +50,26 @@ describe("Encrypt Utils", () => {
     it("should handle encryption errors", () => {
       const crypto = require("crypto");
       const originalCreateCipheriv = crypto.createCipheriv;
+
       crypto.createCipheriv = jest.fn(() => {
         throw new Error("Crypto error");
       });
+
       expect(() => encrypt.encrypt("data", testKey)).toThrow(
         "Encryption failed"
       );
+
+      // Restore original function
       crypto.createCipheriv = originalCreateCipheriv;
+    });
+
+    it("should handle invalid key types", () => {
+      expect(() => encrypt.encrypt("data", 123)).toThrow(
+        "Secret key must be a non-empty string"
+      );
+      expect(() => encrypt.encrypt("data", "")).toThrow(
+        "Secret key must be a non-empty string"
+      );
     });
   });
 
@@ -85,6 +98,14 @@ describe("Encrypt Utils", () => {
       );
     });
 
+    it("should throw error for too short encrypted data", () => {
+      const shortEncrypted = Buffer.from("short").toString("base64");
+
+      expect(() => encrypt.decrypt(shortEncrypted, testKey)).toThrow(
+        "Decryption failed"
+      );
+    });
+
     it("should handle null and undefined", () => {
       expect(() => encrypt.decrypt(null, testKey)).toThrow(
         "Encrypted text and secret key are required"
@@ -97,6 +118,13 @@ describe("Encrypt Utils", () => {
       );
       expect(() => encrypt.decrypt("data", undefined)).toThrow(
         "Encrypted text and secret key are required"
+      );
+    });
+
+    it("should handle invalid key types for decryption", () => {
+      const encrypted = encrypt.encrypt("test", testKey);
+      expect(() => encrypt.decrypt(encrypted, 123)).toThrow(
+        "Secret key must be a non-empty string"
       );
     });
   });
@@ -134,11 +162,19 @@ describe("Encrypt Utils", () => {
 
       expect(decrypted).toBe(unicodeData);
     });
+
+    it("should handle large data", () => {
+      const largeData = "x".repeat(10000);
+      const encrypted = encrypt.encrypt(largeData, testKey);
+      const decrypted = encrypt.decrypt(encrypted, testKey);
+
+      expect(decrypted).toBe(largeData);
+    });
   });
 
   describe("key handling", () => {
     it("should work with base64 keys", () => {
-      const base64Key = encrypt.generateKey();
+      const base64Key = "eOwIqTmP0l8wu3bkEhNHO4TkZxu7dLm5No+/SpEAyjw=";
       const data = "test data";
 
       const encrypted = encrypt.encrypt(data, base64Key);
@@ -156,6 +192,25 @@ describe("Encrypt Utils", () => {
       const decrypted = encrypt.decrypt(encrypted, utf8Key);
 
       expect(decrypted).toBe(data);
+    });
+  });
+
+  describe("generateKey", () => {
+    it("should generate valid base64 keys", () => {
+      const key1 = encrypt.generateKey();
+      const key2 = encrypt.generateKey();
+
+      expect(key1).toBeDefined();
+      expect(typeof key1).toBe("string");
+      expect(key1.length).toBeGreaterThan(0);
+      expect(key1).not.toBe(key2); // Keys should be different
+    });
+
+    it("should generate keys of correct length", () => {
+      const key = encrypt.generateKey();
+      const decodedKey = Buffer.from(key, "base64");
+
+      expect(decodedKey.length).toBe(32);
     });
   });
 });

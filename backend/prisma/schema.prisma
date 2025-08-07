@@ -193,11 +193,11 @@ model Persona {
     name                String
     personaRole         String?  // The role this persona represents (e.g., "CFO", "Marketing Manager")
     about               String?  // Brief description about the persona
-    traits              jsonb?  // Key personality traits
-    painPoints          jsonb?  // Common pain points this persona faces
-    coreExpertise       jsonb?  // Areas of expertise
+    traits              Json?  // Key personality traits
+    painPoints          Json?  // Common pain points this persona faces
+    coreExpertise       Json?  // Areas of expertise
     communicationStyle  String?  // How this persona communicates
-    keyResponsibility   jsonb?  // Primary responsibilities
+    keyResponsibility   Json?  // Primary responsibilities
     description         String?  // Legacy field - kept for backward compatibility
     avatarUrl           String?
     webhookUrl          String   // Encrypted webhook URL

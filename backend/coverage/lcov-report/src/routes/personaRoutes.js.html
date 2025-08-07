@@ -23,9 +23,9 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">100% </span>
+                <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>12/12</span>
+                <span class='fraction'>0/12</span>
             </div>
         
             
@@ -44,9 +44,9 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">100% </span>
+                <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>12/12</span>
+                <span class='fraction'>0/12</span>
             </div>
         
             
@@ -61,7 +61,7 @@
             </div>
         </template>
     </div>
-    <div class='status-line high'></div>
+    <div class='status-line low'></div>
     <pre><table class="coverage">
 <tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
 <a name='L2'></a><a href='#L2'>2</a>
@@ -123,30 +123,22 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">3x</span>
-<span class="cline-any cline-yes">3x</span>
-<span class="cline-any cline-yes">3x</span>
-<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">3x</span>
-<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">3x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -154,8 +146,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -164,7 +155,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -172,28 +163,37 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">/**
  * PersonaRoutes - Persona management and chat functionality routes
  * Includes rate limiting, validation, and authentication
  */
 &nbsp;
-const express = require("express");
-const router = express.Router();
-const personaController = require("../controllers/personaController");
-const authMiddleware = require("../middlewares/authMiddleware");
+const express = <span class="cstat-no" title="statement not covered" >require("express");</span>
+const router = <span class="cstat-no" title="statement not covered" >express.Router();</span>
+const personaController = <span class="cstat-no" title="statement not covered" >require("../controllers/personaController");</span>
+const authMiddleware = <span class="cstat-no" title="statement not covered" >require("../middlewares/authMiddleware");</span>
 const {
   validatePersonaId,
   validateChatMessage,
   validateFavouriteToggle,
-} = require("../middlewares/validationMiddleware");
-const { chatLimiter, personaLimiter } = require("../middlewares/rateLimiter");
+} = <span class="cstat-no" title="statement not covered" >require("../middlewares/validationMiddleware");</span>
+const { chatLimiter, personaLimiter } = <span class="cstat-no" title="statement not covered" >require("../middlewares/rateLimiter");</span>
 &nbsp;
 // All routes require authentication
-const authenticatedOnly = [authMiddleware];
+const authenticatedOnly = <span class="cstat-no" title="statement not covered" >[authMiddleware];</span>
 &nbsp;
 // GET /api/personas - List all personas
-router.get(
+<span class="cstat-no" title="statement not covered" >router.get(</span>
   "/",
   authenticatedOnly,
   personaLimiter,
@@ -201,7 +201,7 @@ router.get(
 );
 &nbsp;
 // GET /api/personas/:id - Get persona details
-router.get(
+<span class="cstat-no" title="statement not covered" >router.get(</span>
   "/:id",
   authenticatedOnly,
   personaLimiter,
@@ -210,7 +210,7 @@ router.get(
 );
 &nbsp;
 // POST /api/personas/:id/favourite - Toggle favourite
-router.post(
+<span class="cstat-no" title="statement not covered" >router.post(</span>
   "/:id/favourite",
   authenticatedOnly,
   personaLimiter,
@@ -219,7 +219,7 @@ router.post(
 );
 &nbsp;
 // POST /api/personas/:id/chat - Send message
-router.post(
+<span class="cstat-no" title="statement not covered" >router.post(</span>
   "/:id/chat",
   authenticatedOnly,
   chatLimiter,
@@ -227,7 +227,7 @@ router.post(
   personaController.sendMessage
 );
 &nbsp;
-module.exports = router;
+<span class="cstat-no" title="statement not covered" >module.exports = router;</span>
 &nbsp;</pre></td></tr></table></pre>
 
                 <div class='push'></div><!-- for sticky footer -->
@@ -235,7 +235,7 @@ module.exports = router;
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-08-05T11:44:06.130Z
+                at 2025-08-07T06:46:15.253Z
             </div>
         <script src="../../prettify.js"></script>
         <script>

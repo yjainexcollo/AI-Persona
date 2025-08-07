@@ -1,11 +1,17 @@
 const asyncHandler = require("../../../src/utils/asyncHandler");
 
-// Mock logger
+// Mock logger - move jest.mock before mockLogger declaration
 jest.mock("../../../src/utils/logger", () => ({
   error: jest.fn(),
 }));
 
+const mockLogger = require("../../../src/utils/logger");
+
 describe("AsyncHandler", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
   describe("asyncHandler", () => {
     it("should handle successful async function", async () => {
       const mockReq = {};
@@ -161,6 +167,82 @@ describe("AsyncHandler", () => {
       expect(() => {
         asyncHandler("not a function");
       }).toThrow(TypeError);
+    });
+
+    it("should handle function that returns null", async () => {
+      const mockReq = {};
+      const mockRes = {};
+      const mockNext = jest.fn();
+
+      const asyncFunction = async (req, res, next) => {
+        return null;
+      };
+
+      const wrappedFunction = asyncHandler(asyncFunction);
+
+      const result = await wrappedFunction(mockReq, mockRes, mockNext);
+
+      expect(result).toBeUndefined();
+      expect(mockNext).not.toHaveBeenCalled();
+    });
+
+    it("should handle function that returns undefined", async () => {
+      const mockReq = {};
+      const mockRes = {};
+      const mockNext = jest.fn();
+
+      const asyncFunction = async (req, res, next) => {
+        return undefined;
+      };
+
+      const wrappedFunction = asyncHandler(asyncFunction);
+
+      const result = await wrappedFunction(mockReq, mockRes, mockNext);
+
+      expect(result).toBeUndefined();
+      expect(mockNext).not.toHaveBeenCalled();
+    });
+
+    it("should handle function that returns a non-promise value", async () => {
+      const mockReq = {};
+      const mockRes = {};
+      const mockNext = jest.fn();
+
+      const syncFunction = (req, res, next) => {
+        return "non-promise value";
+      };
+
+      const wrappedFunction = asyncHandler(syncFunction);
+
+      const result = await wrappedFunction(mockReq, mockRes, mockNext);
+
+      expect(result).toBeUndefined();
+      expect(mockNext).not.toHaveBeenCalled();
+    });
+
+    it("should log errors with proper context", async () => {
+      const mockReq = {
+        method: "POST",
+        originalUrl: "/api/test",
+      };
+      const mockRes = {};
+      const mockNext = jest.fn();
+
+      const asyncFunction = async (req, res, next) => {
+        throw new Error("Test error for logging");
+      };
+
+      const wrappedFunction = asyncHandler(asyncFunction);
+
+      await wrappedFunction(mockReq, mockRes, mockNext);
+
+      expect(mockNext).toHaveBeenCalledWith(expect.any(Error));
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        "Async error in route %s %s: %o",
+        "POST",
+        "/api/test",
+        expect.any(Error)
+      );
     });
   });
 });

@@ -23,30 +23,30 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">100% </span>
+                <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>12/12</span>
+                <span class='fraction'>0/12</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">100% </span>
+                <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>7/7</span>
+                <span class='fraction'>0/7</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">100% </span>
+                <span class="strong">0% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>3/3</span>
+                <span class='fraction'>0/3</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">100% </span>
+                <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>12/12</span>
+                <span class='fraction'>0/12</span>
             </div>
         
             
@@ -61,7 +61,7 @@
             </div>
         </template>
     </div>
-    <div class='status-line high'></div>
+    <div class='status-line low'></div>
     <pre><table class="coverage">
 <tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
 <a name='L2'></a><a href='#L2'>2</a>
@@ -118,8 +118,8 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">6x</span>
-<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -127,13 +127,11 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">26x</span>
-<span class="cline-any cline-yes">26x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -141,13 +139,15 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">11x</span>
-<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">8x</span>
-<span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -155,10 +155,10 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -168,20 +168,20 @@
  * Generates secure, unique tokens for conversation sharing
  */
 &nbsp;
-const crypto = require("crypto");
-const logger = require("./logger");
+const crypto = <span class="cstat-no" title="statement not covered" >require("crypto");</span>
+const logger = <span class="cstat-no" title="statement not covered" >require("./logger");</span>
 &nbsp;
 /**
  * Generate a secure random token for shared links
  * @param {number} length - Token length (default: 32)
  * @returns {string} - Secure random token
  */
-function generateToken(length = 32) {
-  try {
-    return crypto.randomBytes(length).toString("base64url");
+function <span class="fstat-no" title="function not covered" >generateToken(</span>length = <span class="branch-0 cbranch-no" title="branch not covered" >32)</span> {
+<span class="cstat-no" title="statement not covered" >  try {</span>
+<span class="cstat-no" title="statement not covered" >    return crypto.randomBytes(length).toString("base64url");</span>
   } catch (error) {
-    logger.error("Error generating token:", error);
-    throw new Error("Failed to generate token");
+<span class="cstat-no" title="statement not covered" >    logger.error("Error generating token:", error);</span>
+<span class="cstat-no" title="statement not covered" >    throw new Error("Failed to generate token");</span>
   }
 }
 &nbsp;
@@ -190,25 +190,25 @@ function generateToken(length = 32) {
  * @param {string} token - Token to validate
  * @returns {boolean} - True if valid
  */
-function validateToken(token) {
-  if (!token || typeof token !== "string") {
-    return false;
+function <span class="fstat-no" title="function not covered" >validateToken(</span>token) {
+<span class="cstat-no" title="statement not covered" >  if (!token || typeof token !== "string") {</span>
+<span class="cstat-no" title="statement not covered" >    return false;</span>
   }
 &nbsp;
   // Check if token matches expected format (base64url)
-  const tokenRegex = /^[A-Za-z0-9_-]+$/;
-  return tokenRegex.test(token) &amp;&amp; token.length &gt;= 16;
+  const tokenRegex = <span class="cstat-no" title="statement not covered" >/^[A-Za-z0-9_-]+$/;</span>
+<span class="cstat-no" title="statement not covered" >  return tokenRegex.test(token) &amp;&amp; token.length &gt;= 16;</span>
 }
 &nbsp;
 /**
  * Generate a unique conversation token
  * @returns {string} - Unique token for conversation sharing
  */
-function generateConversationToken() {
-  return generateToken(32);
+function <span class="fstat-no" title="function not covered" >generateConversationToken(</span>) {
+<span class="cstat-no" title="statement not covered" >  return generateToken(32);</span>
 }
 &nbsp;
-module.exports = {
+<span class="cstat-no" title="statement not covered" >module.exports = {</span>
   generateToken,
   validateToken,
   generateConversationToken,
@@ -220,7 +220,7 @@ module.exports = {
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-08-05T11:44:06.130Z
+                at 2025-08-07T06:46:15.253Z
             </div>
         <script src="../../prettify.js"></script>
         <script>

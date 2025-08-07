@@ -48,7 +48,13 @@ class CircuitBreaker {
     this.failures++;
     this.lastFailureTime = Date.now();
 
-    if (this.failures >= this.failureThreshold) {
+    if (this.state === "HALF_OPEN") {
+      // If we're in HALF_OPEN state and get a failure, go back to OPEN
+      this.state = "OPEN";
+      logger.warn(
+        "Circuit breaker returned to OPEN state after HALF_OPEN failure"
+      );
+    } else if (this.failures >= this.failureThreshold) {
       this.state = "OPEN";
       logger.warn(
         `Circuit breaker opened after ${this.failures} consecutive failures`
@@ -79,6 +85,22 @@ class CircuitBreaker {
     this.lastFailureTime = null;
     logger.info("Circuit breaker manually reset");
   }
+
+  /**
+   * Check if the circuit breaker is in HALF_OPEN state
+   * @returns {boolean}
+   */
+  isHalfOpen() {
+    return this.state === "HALF_OPEN";
+  }
+
+  /**
+   * Check if the circuit breaker is in CLOSED state
+   * @returns {boolean}
+   */
+  isClosed() {
+    return this.state === "CLOSED";
+  }
 }
 
 // Global circuit breaker registry
@@ -90,6 +112,10 @@ const circuitBreakers = new Map();
  * @returns {CircuitBreaker}
  */
 function getCircuitBreaker(personaId) {
+  if (!personaId || typeof personaId !== "string") {
+    throw new Error("Persona ID must be a non-empty string");
+  }
+
   if (!circuitBreakers.has(personaId)) {
     circuitBreakers.set(personaId, new CircuitBreaker());
   }
@@ -118,9 +144,43 @@ function resetAllCircuitBreakers() {
   logger.info("All circuit breakers reset");
 }
 
+/**
+ * Clear all circuit breakers from the registry (for testing)
+ */
+function clearAllCircuitBreakers() {
+  circuitBreakers.clear();
+  logger.info("All circuit breakers cleared from registry");
+}
+
+/**
+ * Remove a specific circuit breaker from the registry
+ * @param {string} personaId - Persona ID
+ */
+function removeCircuitBreaker(personaId) {
+  if (!personaId || typeof personaId !== "string") {
+    throw new Error("Persona ID must be a non-empty string");
+  }
+
+  if (circuitBreakers.has(personaId)) {
+    circuitBreakers.delete(personaId);
+    logger.info(`Circuit breaker removed for persona: ${personaId}`);
+  }
+}
+
+/**
+ * Get the number of active circuit breakers
+ * @returns {number}
+ */
+function getCircuitBreakerCount() {
+  return circuitBreakers.size;
+}
+
 module.exports = {
   CircuitBreaker,
   getCircuitBreaker,
   getAllCircuitBreakerStates,
   resetAllCircuitBreakers,
+  clearAllCircuitBreakers,
+  removeCircuitBreaker,
+  getCircuitBreakerCount,
 };

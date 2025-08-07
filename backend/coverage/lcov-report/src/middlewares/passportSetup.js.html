@@ -23,30 +23,30 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">45.45% </span>
+                <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>10/22</span>
+                <span class='fraction'>0/22</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">16.66% </span>
+                <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>3/18</span>
+                <span class='fraction'>0/18</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">25% </span>
+                <span class="strong">0% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>1/4</span>
+                <span class='fraction'>0/4</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">45.45% </span>
+                <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>10/22</span>
+                <span class='fraction'>0/22</span>
             </div>
         
             
@@ -133,16 +133,16 @@
 <a name='L68'></a><a href='#L68'>68</a>
 <a name='L69'></a><a href='#L69'>69</a>
 <a name='L70'></a><a href='#L70'>70</a>
-<a name='L71'></a><a href='#L71'>71</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">3x</span>
-<span class="cline-any cline-yes">3x</span>
-<span class="cline-any cline-yes">3x</span>
-<span class="cline-any cline-yes">3x</span>
-<span class="cline-any cline-yes">3x</span>
+<a name='L71'></a><a href='#L71'>71</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">3x</span>
-<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -189,30 +189,30 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">3x</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">3x</span>
-<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">3x</span>
-<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">const passport = require("passport");
-const GoogleStrategy = require("passport-google-oauth20").Strategy;
-const oauthProviders = require("../utils/oauthProviders");
-const { PrismaClient } = require("@prisma/client");
-const prisma = new PrismaClient();
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">const passport = <span class="cstat-no" title="statement not covered" >require("passport");</span>
+const GoogleStrategy = <span class="cstat-no" title="statement not covered" >require("passport-google-oauth20").Strategy;</span>
+const oauthProviders = <span class="cstat-no" title="statement not covered" >require("../utils/oauthProviders");</span>
+const { PrismaClient } = <span class="cstat-no" title="statement not covered" >require("@prisma/client");</span>
+const prisma = <span class="cstat-no" title="statement not covered" >new PrismaClient();</span>
 &nbsp;
-function initializePassport() {
+function <span class="fstat-no" title="function not covered" >initializePassport(</span>) {
   // Google OAuth Strategy
-  <span class="missing-if-branch" title="else path not taken" >E</span>if (oauthProviders.google.clientID &amp;&amp; oauthProviders.google.clientSecret) {
-    passport.use(
+<span class="cstat-no" title="statement not covered" >  if (oauthProviders.google.clientID &amp;&amp; oauthProviders.google.clientSecret) {</span>
+<span class="cstat-no" title="statement not covered" >    passport.use(</span>
       new GoogleStrategy(
         {
           clientID: oauthProviders.google.clientID,
@@ -259,10 +259,10 @@ function initializePassport() {
   }
   
   // Minimal serialize/deserialize for JWT (not sessions)
-  passport.serializeUser(<span class="fstat-no" title="function not covered" >(o</span>bj, done) =&gt;
+<span class="cstat-no" title="statement not covered" >  passport.serializeUser(<span class="fstat-no" title="function not covered" >(o</span>bj, done) =&gt;</span>
 <span class="cstat-no" title="statement not covered" >    done(null, obj.user ? obj.user.id : obj.id)</span>
   );
-  passport.deserializeUser(<span class="fstat-no" title="function not covered" >as</span>ync (id, done) =&gt; {
+<span class="cstat-no" title="statement not covered" >  passport.deserializeUser(<span class="fstat-no" title="function not covered" >as</span>ync (id, done) =&gt; {</span>
 <span class="cstat-no" title="statement not covered" >    try {</span>
       const user = <span class="cstat-no" title="statement not covered" >await prisma.user.findUnique({ where: { id } });</span>
 <span class="cstat-no" title="statement not covered" >      done(null, user);</span>
@@ -272,7 +272,7 @@ function initializePassport() {
   });
 }
 &nbsp;
-module.exports = initializePassport;
+<span class="cstat-no" title="statement not covered" >module.exports = initializePassport;</span>
 &nbsp;</pre></td></tr></table></pre>
 
                 <div class='push'></div><!-- for sticky footer -->
@@ -280,7 +280,7 @@ module.exports = initializePassport;
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-08-05T11:44:06.130Z
+                at 2025-08-07T06:46:15.253Z
             </div>
         <script src="../../prettify.js"></script>
         <script>

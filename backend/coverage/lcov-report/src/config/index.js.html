@@ -23,30 +23,30 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">88.88% </span>
+                <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>8/9</span>
+                <span class='fraction'>0/9</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">56.66% </span>
+                <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>17/30</span>
+                <span class='fraction'>0/30</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">100% </span>
+                <span class="strong">0% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>1/1</span>
+                <span class='fraction'>0/1</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">88.88% </span>
+                <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>8/9</span>
+                <span class='fraction'>0/9</span>
             </div>
         
             
@@ -61,7 +61,7 @@
             </div>
         </template>
     </div>
-    <div class='status-line high'></div>
+    <div class='status-line low'></div>
     <pre><table class="coverage">
 <tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
 <a name='L2'></a><a href='#L2'>2</a>
@@ -101,30 +101,20 @@
 <a name='L36'></a><a href='#L36'>36</a>
 <a name='L37'></a><a href='#L37'>37</a>
 <a name='L38'></a><a href='#L38'>38</a>
-<a name='L39'></a><a href='#L39'>39</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">9x</span>
-<span class="cline-any cline-yes">9x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">9x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">189x</span>
-<span class="cline-any cline-yes">189x</span>
+<a name='L39'></a><a href='#L39'>39</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">189x</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -138,23 +128,33 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">9x</span>
-<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">const dotenv = require("dotenv");
-const path = require("path");
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">const dotenv = <span class="cstat-no" title="statement not covered" >require("dotenv");</span>
+const path = <span class="cstat-no" title="statement not covered" >require("path");</span>
 &nbsp;
-dotenv.config({ path: path.resolve(process.cwd(), ".env") });
+<span class="cstat-no" title="statement not covered" >dotenv.config({ path: path.resolve(process.cwd(), ".env") });</span>
 &nbsp;
-function getEnvVar(key, required = true) {
-  const value = process.env[key];
-  <span class="missing-if-branch" title="if path not taken" >I</span>if (required &amp;&amp; (value === undefined || value === "")) {
+function <span class="fstat-no" title="function not covered" >getEnvVar(</span>key, required = <span class="branch-0 cbranch-no" title="branch not covered" >true)</span> {
+  const value = <span class="cstat-no" title="statement not covered" >process.env[key];</span>
+<span class="cstat-no" title="statement not covered" >  if (required &amp;&amp; (value === undefined || value === "")) {</span>
 <span class="cstat-no" title="statement not covered" >    throw new Error(`Missing required environment variable: ${key}`);</span>
   }
-  return value;
+<span class="cstat-no" title="statement not covered" >  return value;</span>
 }
 &nbsp;
-const config = {
-  env: getEnvVar("NODE_ENV", false) || <span class="branch-1 cbranch-no" title="branch not covered" >"development",</span>
-  port: parseInt(getEnvVar("PORT", false), 10) || <span class="branch-1 cbranch-no" title="branch not covered" >3000,</span>
+const config = <span class="cstat-no" title="statement not covered" >{</span>
+  env: getEnvVar("NODE_ENV", false) || "development",
+  port: parseInt(getEnvVar("PORT", false), 10) || 3000,
   databaseUrl: getEnvVar("DATABASE_URL"),
   jwtSecret: getEnvVar("JWT_SECRET"),
   sessionSecret: getEnvVar("SESSION_SECRET"),
@@ -164,19 +164,19 @@ const config = {
   microsoftClientId: getEnvVar("MICROSOFT_CLIENT_ID", false),
   microsoftClientSecret: getEnvVar("MICROSOFT_CLIENT_SECRET", false),
   microsoftCallbackUrl: getEnvVar("MICROSOFT_CALLBACK_URL", false),
-  corsOrigin: getEnvVar("CORS_ORIGIN", false) || <span class="branch-1 cbranch-no" title="branch not covered" >"*",</span>
-  bcryptSaltRounds: parseInt(getEnvVar("BCRYPT_SALT_ROUNDS", false), 10) || <span class="branch-1 cbranch-no" title="branch not covered" >12,</span>
-  jwtExpiresIn: getEnvVar("JWT_EXPIRES_IN", false) || <span class="branch-1 cbranch-no" title="branch not covered" >"1d",</span>
-  jwtRefreshExpiresIn: getEnvVar("JWT_REFRESH_EXPIRES_IN", false) || <span class="branch-1 cbranch-no" title="branch not covered" >"7d",</span>
-  smtpHost: getEnvVar("SMTP_HOST", false) || <span class="branch-1 cbranch-no" title="branch not covered" >"smtp.example.com",</span>
-  smtpPort: parseInt(getEnvVar("SMTP_PORT", false), 10) || <span class="branch-1 cbranch-no" title="branch not covered" >587,</span>
-  smtpUser: getEnvVar("SMTP_USER", false) || <span class="branch-1 cbranch-no" title="branch not covered" >"user@example.com",</span>
-  smtpPass: getEnvVar("SMTP_PASS", false) || <span class="branch-1 cbranch-no" title="branch not covered" >"password",</span>
-  smtpFrom: getEnvVar("SMTP_FROM", false) || <span class="branch-1 cbranch-no" title="branch not covered" >"no-reply@example.com",</span>
-  appBaseUrl: getEnvVar("APP_BASE_URL", false) || <span class="branch-1 cbranch-no" title="branch not covered" >"http://localhost:5173",</span>
+  corsOrigin: getEnvVar("CORS_ORIGIN", false) || "*",
+  bcryptSaltRounds: parseInt(getEnvVar("BCRYPT_SALT_ROUNDS", false), 10) || 12,
+  jwtExpiresIn: getEnvVar("JWT_EXPIRES_IN", false) || "1d",
+  jwtRefreshExpiresIn: getEnvVar("JWT_REFRESH_EXPIRES_IN", false) || "7d",
+  smtpHost: getEnvVar("SMTP_HOST", false) || "smtp.example.com",
+  smtpPort: parseInt(getEnvVar("SMTP_PORT", false), 10) || 587,
+  smtpUser: getEnvVar("SMTP_USER", false) || "user@example.com",
+  smtpPass: getEnvVar("SMTP_PASS", false) || "password",
+  smtpFrom: getEnvVar("SMTP_FROM", false) || "no-reply@example.com",
+  appBaseUrl: getEnvVar("APP_BASE_URL", false) || "http://localhost:5173",
 };
 &nbsp;
-module.exports = config;
+<span class="cstat-no" title="statement not covered" >module.exports = config;</span>
 &nbsp;</pre></td></tr></table></pre>
 
                 <div class='push'></div><!-- for sticky footer -->
@@ -184,7 +184,7 @@ module.exports = config;
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-08-05T11:44:06.130Z
+                at 2025-08-07T06:46:15.253Z
             </div>
         <script src="../../prettify.js"></script>
         <script>

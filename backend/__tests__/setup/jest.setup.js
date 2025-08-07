@@ -223,28 +223,32 @@ jest.mock("bcrypt", () => ({
   compare: jest.fn().mockResolvedValue(true),
 }));
 
-// Mock crypto for tests
-jest.mock("crypto", () => ({
-  randomBytes: jest.fn((size) => ({
-    toString: jest.fn((encoding) => {
-      if (encoding === "hex") {
-        return "mock-random-hex-string";
+// Mock crypto for tests - only mock specific functions, leave others intact
+jest.mock("crypto", () => {
+  const originalCrypto = jest.requireActual("crypto");
+
+  return {
+    ...originalCrypto,
+    // Only mock specific functions that need custom behavior
+    createHash: jest.fn((algorithm) => {
+      if (algorithm === "sha256") {
+        // For sha256, use the real implementation
+        return originalCrypto.createHash(algorithm);
       }
-      if (encoding === "base64url") {
-        return "mock-token-base64url";
-      }
-      return "mock-random-string";
+      // For other algorithms, use mock
+      return {
+        update: jest.fn(() => ({
+          digest: jest.fn(() => ({
+            toString: jest.fn(() => "ABCDEF1234567890ABCDEF1234567890ABCDEF12"),
+            toUpperCase: jest.fn(
+              () => "ABCDEF1234567890ABCDEF1234567890ABCDEF12"
+            ),
+          })),
+        })),
+      };
     }),
-  })),
-  createHash: jest.fn(() => ({
-    update: jest.fn(() => ({
-      digest: jest.fn(() => ({
-        toString: jest.fn(() => "ABCDEF1234567890ABCDEF1234567890ABCDEF12"),
-        toUpperCase: jest.fn(() => "ABCDEF1234567890ABCDEF1234567890ABCDEF12"),
-      })),
-    })),
-  })),
-}));
+  };
+});
 
 // Mock path for tests
 jest.mock("path", () => ({
