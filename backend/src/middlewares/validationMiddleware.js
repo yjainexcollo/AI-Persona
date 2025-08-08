@@ -1,8 +1,3 @@
-/**
- * ValidationMiddleware - Input validation and sanitization
- * Uses express-validator for comprehensive validation
- */
-
 const { body, param, query, validationResult } = require("express-validator");
 const ApiError = require("../utils/apiError");
 
@@ -302,8 +297,8 @@ const validateChatMessage = [
     .withMessage("Message must be between 1 and 10000 characters"),
   body("conversationId")
     .optional()
-    .isUUID()
-    .withMessage("Conversation ID must be a valid UUID"),
+    .matches(/^[a-z0-9]{25}$/)
+    .withMessage("Conversation ID must be a valid cuid"),
   handleValidationErrors,
 ];
 
@@ -314,12 +309,12 @@ const validateFavouriteToggle = [
 
 // Conversation validation schemas
 const validateConversationId = [
-  param("id").isUUID().withMessage("Conversation ID must be a valid UUID"),
+  param("id").matches(/^[a-z0-9]{25}$/).withMessage("Conversation ID must be a valid cuid"),
   handleValidationErrors,
 ];
 
 const validateConversationVisibility = [
-  param("id").isUUID().withMessage("Conversation ID must be a valid UUID"),
+  param("id").matches(/^[a-z0-9]{25}$/).withMessage("Conversation ID must be a valid cuid"),
   body("visibility")
     .isIn(["PRIVATE", "SHARED"])
     .withMessage("Visibility must be either PRIVATE or SHARED"),
@@ -336,12 +331,12 @@ const validateConversationQuery = [
 
 // Message validation schemas
 const validateMessageId = [
-  param("id").isUUID().withMessage("Message ID must be a valid UUID"),
+  param("id").matches(/^[a-z0-9]{25}$/).withMessage("Message ID must be a valid cuid"),
   handleValidationErrors,
 ];
 
 const validateMessageEdit = [
-  param("id").isUUID().withMessage("Message ID must be a valid UUID"),
+  param("id").matches(/^[a-z0-9]{25}$/).withMessage("Message ID must be a valid cuid"),
   body("content")
     .trim()
     .notEmpty()
@@ -353,7 +348,7 @@ const validateMessageEdit = [
 
 // File upload validation schemas
 const validateFileUpload = [
-  param("id").isUUID().withMessage("Conversation ID must be a valid UUID"),
+  param("id").matches(/^[a-z0-9]{25}$/).withMessage("Conversation ID must be a valid cuid"),
   body("filename")
     .trim()
     .notEmpty()
@@ -374,7 +369,7 @@ const validateFileUpload = [
 
 // Reaction validation schemas
 const validateReaction = [
-  param("id").isUUID().withMessage("Message ID must be a valid UUID"),
+  param("id").matches(/^[a-z0-9]{25}$/).withMessage("Message ID must be a valid cuid"),
   body("type")
     .isIn(["LIKE", "DISLIKE"])
     .withMessage("Reaction type must be LIKE or DISLIKE"),
@@ -383,14 +378,14 @@ const validateReaction = [
 
 // Archive validation schemas
 const validateArchive = [
-  param("id").isUUID().withMessage("Conversation ID must be a valid UUID"),
+  param("id").matches(/^[a-z0-9]{25}$/).withMessage("Conversation ID must be a valid cuid"),
   body("archived").isBoolean().withMessage("Archived must be a boolean"),
   handleValidationErrors,
 ];
 
 // Share link validation schemas
 const validateShareLink = [
-  param("id").isUUID().withMessage("Conversation ID must be a valid UUID"),
+  param("id").matches(/^[a-z0-9]{25}$/).withMessage("Conversation ID must be a valid cuid"),
   body("expiresInDays")
     .optional()
     .isInt({ min: 1, max: 365 })

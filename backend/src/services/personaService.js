@@ -1,3 +1,4 @@
+//Personna Service -
 /**
  * PersonaService - Persona management and chat functionality
  * Includes webhook communication, circuit breaker, and encryption
@@ -15,7 +16,7 @@ const chatSessionService = require("./chatSessionService");
 const prisma = new PrismaClient();
 
 // Webhook timeout and retry configuration
-const WEBHOOK_TIMEOUT = 10000; // 10 seconds
+const WEBHOOK_TIMEOUT = 30000; // 30 seconds
 const WEBHOOK_RETRIES = 2;
 const WEBHOOK_RETRY_DELAY = 1000; // 1 second base delay
 
@@ -387,7 +388,12 @@ async function sendMessage(
     const reply =
       webhookResponse.data?.reply ||
       webhookResponse.data?.message ||
-      "No response received";
+      webhookResponse.data?.response ||
+      webhookResponse.data?.output ||
+      webhookResponse.data?.data ||
+      (typeof webhookResponse.data === "string"
+        ? webhookResponse.data
+        : "No response received");
 
     // Insert assistant message
     const assistantMessage = await prisma.message.create({
@@ -763,7 +769,12 @@ async function editMessage(messageId, userId, newContent) {
           content:
             webhookResponse.data?.reply ||
             webhookResponse.data?.message ||
-            "No response received",
+            webhookResponse.data?.response ||
+            webhookResponse.data?.output ||
+            webhookResponse.data?.data ||
+            (typeof webhookResponse.data === "string"
+              ? webhookResponse.data
+              : "No response received"),
           role: "ASSISTANT",
         },
       });
