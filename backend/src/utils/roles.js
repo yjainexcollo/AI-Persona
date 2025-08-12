@@ -8,6 +8,7 @@ const roles = {
     "view_workspace",
     "view_persona",
     "delete_persona",
+    "update_self",
   ],
   MEMBER: ["view_workspace", "view_persona", "delete_persona", "update_self"],
 };

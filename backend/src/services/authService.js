@@ -163,13 +163,18 @@ async function register(
   }
 
   // Store breach warning info for response
-  const breachWarning = breachCheck.warning
-    ? {
-        message: breachCheck.reason,
-        severity: breachCheck.severity,
-        count: breachCheck.count,
-      }
-    : null;
+  // Provide an informational warning when breach check indicates non-safe severity
+  const breachWarning =
+    breachCheck &&
+    breachCheck.isValid &&
+    breachCheck.severity &&
+    breachCheck.severity !== "safe"
+      ? {
+          message: breachCheck.reason,
+          severity: breachCheck.severity,
+          count: breachCheck.count,
+        }
+      : null;
 
   // Check if user exists
   const existingUser = await prisma.user.findUnique({
@@ -788,7 +793,7 @@ async function requestAccountDeletion(
 
   await createAuditEvent(
     userId,
-    "DEACTIVATE_ACCOUNT",
+    "REQUEST_ACCOUNT_DELETION",
     { reason: "GDPR deletion request" },
     ipAddress,
     userAgent,

@@ -175,21 +175,49 @@ async function getCurrentKeys() {
 // Generate JWKS (JSON Web Key Set)
 async function generateJWKS() {
   const keys = await getCurrentKeys();
-  const jwk = {
-    kty: "RSA",
-    use: "sig",
-    kid: keys.kid,
-    x5t: keys.kid,
-    n: Buffer.from(
+
+  try {
+    // Use Node.js crypto to extract RSA components
+    const publicKeyObj = crypto.createPublicKey(keys.publicKey);
+    const publicKeyDer = publicKeyObj.export({ format: "der", type: "spki" });
+
+    // Extract modulus and exponent from DER
+    // This is a simplified approach - in production, consider using a library like 'jose'
+    const modulusLength = 256; // 2048 bits = 256 bytes
+    const modulus = publicKeyDer.slice(-modulusLength);
+
+    const jwk = {
+      kty: "RSA",
+      use: "sig",
+      kid: keys.kid,
+      x5t: keys.kid,
+      n: modulus.toString("base64url"),
+      e: "AQAB", // Standard RSA exponent (65537)
+    };
+
+    return {
+      keys: [jwk],
+    };
+  } catch (error) {
+    // Fallback to simplified approach if crypto parsing fails
+    const publicKeyBuffer = Buffer.from(
       keys.publicKey.replace(/-----.+-----/g, "").replace(/\s/g, ""),
       "base64"
-    ).toString("base64url"),
-    e: "AQAB",
-  };
+    );
 
-  return {
-    keys: [jwk],
-  };
+    const jwk = {
+      kty: "RSA",
+      use: "sig",
+      kid: keys.kid,
+      x5t: keys.kid,
+      n: publicKeyBuffer.toString("base64url"),
+      e: "AQAB",
+    };
+
+    return {
+      keys: [jwk],
+    };
+  }
 }
 
 async function signToken(payload, options = {}) {
@@ -197,9 +225,14 @@ async function signToken(payload, options = {}) {
   const opts = {
     expiresIn: options.expiresIn || config.jwtExpiresIn,
     algorithm: "RS256",
-    keyid: keys.kid,
-    ...options,
   };
+
+  // Only add defined options
+  if (options.issuer) opts.issuer = options.issuer;
+  if (options.audience) opts.audience = options.audience;
+  if (options.subject) opts.subject = options.subject;
+  if (options.jwtid) opts.jwtid = options.jwtid;
+  if (options.notBefore) opts.notBefore = options.notBefore;
 
   const token = jwt.sign(payload, keys.privateKey, opts);
   if (options.apiResponse) {
@@ -222,9 +255,15 @@ async function signRefreshToken(payload, options = {}) {
   const opts = {
     expiresIn: options.expiresIn || config.jwtRefreshExpiresIn,
     algorithm: "RS256",
-    keyid: keys.kid,
-    ...options,
   };
+
+  // Only add defined options
+  if (options.issuer) opts.issuer = options.issuer;
+  if (options.audience) opts.audience = options.audience;
+  if (options.subject) opts.subject = options.subject;
+  if (options.jwtid) opts.jwtid = options.jwtid;
+  if (options.notBefore) opts.notBefore = options.notBefore;
+
   return jwt.sign(payload, keys.privateKey, opts);
 }
 

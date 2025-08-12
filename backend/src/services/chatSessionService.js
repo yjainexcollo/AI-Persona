@@ -25,6 +25,14 @@ async function createChatSession(
   metadata = {}
 ) {
   try {
+    // Validate required parameters
+    if (!conversationId || !personaId || !userId) {
+      throw new ApiError(
+        400,
+        "Missing required parameters: conversationId, personaId, or userId"
+      );
+    }
+
     // Generate unique session ID
     const sessionId = crypto.randomBytes(16).toString("hex");
 
@@ -38,7 +46,7 @@ async function createChatSession(
         metadata: {
           userAgent: metadata.userAgent,
           ipAddress: metadata.ipAddress,
-          deviceInfo: metadata.deviceInfo,
+          deviceInfo: metadata.deviceInfo ?? null,
           ...metadata,
         },
       },
@@ -61,6 +69,7 @@ async function createChatSession(
 
     return chatSession;
   } catch (error) {
+    if (error instanceof ApiError) throw error;
     logger.error("Error creating chat session:", error);
     throw new ApiError(500, "Failed to create chat session");
   }
@@ -73,6 +82,11 @@ async function createChatSession(
  */
 async function getChatSession(sessionId) {
   try {
+    // Validate required parameter
+    if (!sessionId) {
+      throw new ApiError(400, "Missing required parameter: sessionId");
+    }
+
     const chatSession = await prisma.chatSession.findUnique({
       where: { sessionId },
       include: {
@@ -110,6 +124,70 @@ async function getChatSession(sessionId) {
 }
 
 /**
+ * Update a chat session's status and timestamps
+ * @param {string} sessionId - Session ID
+ * @param {"ACTIVE"|"COMPLETED"|"FAILED"|"TIMEOUT"} status - New status
+ * @param {string|null} errorMessage - Optional error message
+ * @returns {Promise<object>} Updated chat session
+ */
+async function updateChatSessionStatus(sessionId, status, errorMessage = null) {
+  try {
+    // Validate required parameters
+    if (!sessionId || !status) {
+      throw new ApiError(
+        400,
+        "Missing required parameters: sessionId or status"
+      );
+    }
+
+    // Validate status enum
+    const validStatuses = [
+      "ACTIVE",
+      "COMPLETED",
+      "FAILED",
+      "TIMEOUT",
+      "CANCELLED",
+    ];
+    if (!validStatuses.includes(status)) {
+      throw new ApiError(
+        400,
+        `Invalid status. Must be one of: ${validStatuses.join(", ")}`
+      );
+    }
+
+    const now = new Date();
+    const isTerminal =
+      status === "COMPLETED" ||
+      status === "FAILED" ||
+      status === "TIMEOUT" ||
+      status === "CANCELLED";
+
+    const chatSession = await prisma.chatSession.update({
+      where: { sessionId },
+      data: {
+        status,
+        lastActivityAt: now,
+        endedAt: isTerminal ? now : undefined,
+        ...(status === "FAILED" && errorMessage ? { errorMessage } : {}),
+      },
+      include: {
+        conversation: true,
+        persona: true,
+        user: {
+          select: { id: true, email: true, name: true },
+        },
+      },
+    });
+
+    return chatSession;
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    logger.error("Error updating chat session status:", error);
+    throw new ApiError(500, "Failed to update chat session status");
+  }
+}
+
+/**
  * Get chat sessions for a user
  * @param {string} userId - User ID
  * @param {object} options - Query options
@@ -117,10 +195,37 @@ async function getChatSession(sessionId) {
  */
 async function getUserChatSessions(userId, options = {}) {
   try {
+    // Validate required parameter
+    if (!userId) {
+      throw new ApiError(400, "Missing required parameter: userId");
+    }
+
     const { status, limit = 50, offset = 0 } = options;
+
+    // Validate limit and offset
+    if (limit < 1 || limit > 100) {
+      throw new ApiError(400, "Limit must be between 1 and 100");
+    }
+    if (offset < 0) {
+      throw new ApiError(400, "Offset must be non-negative");
+    }
 
     const where = { userId };
     if (status) {
+      // Validate status if provided
+      const validStatuses = [
+        "ACTIVE",
+        "COMPLETED",
+        "FAILED",
+        "TIMEOUT",
+        "CANCELLED",
+      ];
+      if (!validStatuses.includes(status)) {
+        throw new ApiError(
+          400,
+          `Invalid status. Must be one of: ${validStatuses.join(", ")}`
+        );
+      }
       where.status = status;
     }
 
@@ -146,8 +251,65 @@ async function getUserChatSessions(userId, options = {}) {
 
     return chatSessions;
   } catch (error) {
+    if (error instanceof ApiError) throw error;
     logger.error("Error getting user chat sessions:", error);
     throw new ApiError(500, "Failed to get user chat sessions");
+  }
+}
+
+/**
+ * Mark sessions as timed out if inactive beyond the provided hours
+ * @param {number} inactiveHours - Hours of inactivity threshold
+ * @returns {Promise<number>} Number of sessions updated
+ */
+async function cleanupExpiredSessions(inactiveHours = 24) {
+  try {
+    const cutoff = new Date(Date.now() - inactiveHours * 60 * 60 * 1000);
+    const result = await prisma.chatSession.updateMany({
+      where: {
+        status: "ACTIVE",
+        lastActivityAt: { lt: cutoff },
+      },
+      data: {
+        status: "TIMEOUT",
+        endedAt: new Date(),
+        errorMessage: "Session timed out due to inactivity",
+      },
+    });
+
+    return result.count;
+  } catch (error) {
+    logger.error("Error cleaning up expired chat sessions:", error);
+    throw new ApiError(500, "Failed to cleanup expired chat sessions");
+  }
+}
+
+/**
+ * Get chat session statistics for a user
+ * @param {string} userId - User ID
+ * @returns {Promise<{ total: number, active: number, byStatus: Record<string, number> }>} Stats
+ */
+async function getChatSessionStats(userId) {
+  try {
+    const [byStatusRaw, total, active] = await Promise.all([
+      prisma.chatSession.groupBy({
+        by: ["status"],
+        where: { userId },
+        _count: { id: true },
+      }),
+      prisma.chatSession.count({ where: { userId } }),
+      prisma.chatSession.count({ where: { userId, status: "ACTIVE" } }),
+    ]);
+
+    const byStatus = {};
+    for (const row of byStatusRaw) {
+      byStatus[row.status] = row._count.id;
+    }
+
+    return { total, active, byStatus };
+  } catch (error) {
+    logger.error("Error getting chat session stats:", error);
+    throw new ApiError(500, "Failed to get chat session stats");
   }
 }
 
@@ -206,5 +368,8 @@ module.exports = {
   createChatSession,
   getChatSession,
   getUserChatSessions,
+  updateChatSessionStatus,
+  cleanupExpiredSessions,
+  getChatSessionStats,
   deleteChatSession,
 };

@@ -28,6 +28,11 @@ const WEBHOOK_RETRY_DELAY = 1000; // 1 second base delay
  */
 async function getPersonas(userId, options = {}) {
   try {
+    // Validate required parameter
+    if (!userId || typeof userId !== "string") {
+      throw new ApiError(400, "Valid userId is required");
+    }
+
     const { favouritesOnly = false } = options;
 
     const where = {
@@ -82,6 +87,7 @@ async function getPersonas(userId, options = {}) {
       isFavourited: persona.favourites.length > 0,
     }));
   } catch (error) {
+    if (error instanceof ApiError) throw error;
     logger.error("Error fetching personas:", error);
     throw new ApiError(500, "Failed to fetch personas");
   }
@@ -95,6 +101,15 @@ async function getPersonas(userId, options = {}) {
  */
 async function getPersonaById(personaId, userId) {
   try {
+    // Validate required parameters
+    if (!personaId || typeof personaId !== "string") {
+      throw new ApiError(400, "Valid personaId is required");
+    }
+
+    if (!userId || typeof userId !== "string") {
+      throw new ApiError(400, "Valid userId is required");
+    }
+
     const persona = await prisma.persona.findUnique({
       where: { id: personaId },
       include: {
@@ -152,6 +167,15 @@ async function getPersonaById(personaId, userId) {
  */
 async function toggleFavourite(personaId, userId) {
   try {
+    // Validate required parameters
+    if (!personaId || typeof personaId !== "string") {
+      throw new ApiError(400, "Valid personaId is required");
+    }
+
+    if (!userId || typeof userId !== "string") {
+      throw new ApiError(400, "Valid userId is required");
+    }
+
     // Check if persona exists
     const persona = await prisma.persona.findUnique({
       where: { id: personaId },
@@ -233,6 +257,19 @@ async function sendMessage(
   let chatSession = null;
 
   try {
+    // Validate required parameters
+    if (!personaId || typeof personaId !== "string") {
+      throw new ApiError(400, "Valid personaId is required");
+    }
+
+    if (!message || typeof message !== "string") {
+      throw new ApiError(400, "Valid message is required");
+    }
+
+    if (!userId || typeof userId !== "string") {
+      throw new ApiError(400, "Valid userId is required");
+    }
+
     // Validate persona exists and is active
     const persona = await prisma.persona.findUnique({
       where: { id: personaId },
@@ -441,7 +478,7 @@ async function sendMessage(
     // }
 
     if (error instanceof ApiError) throw error;
-    logger.error("Error sending message:", error);
+    logger.error("Error sending message:", error.message, error.stack);
     throw new ApiError(500, "Failed to send message");
   }
 }
@@ -455,6 +492,15 @@ async function sendMessage(
  */
 async function getConversations(userId, workspaceId, options = {}) {
   try {
+    // Validate required parameters
+    if (!userId || typeof userId !== "string") {
+      throw new ApiError(400, "Valid userId is required");
+    }
+
+    if (!workspaceId || typeof workspaceId !== "string") {
+      throw new ApiError(400, "Valid workspaceId is required");
+    }
+
     const { archived = false } = options;
 
     // Build where clause for visibility logic
@@ -528,6 +574,7 @@ async function getConversations(userId, workspaceId, options = {}) {
       updatedAt: conversation.updatedAt,
     }));
   } catch (error) {
+    if (error instanceof ApiError) throw error;
     logger.error("Error fetching conversations:", error);
     throw new ApiError(500, "Failed to fetch conversations");
   }

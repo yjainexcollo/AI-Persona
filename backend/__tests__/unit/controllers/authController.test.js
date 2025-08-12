@@ -163,8 +163,8 @@ describe("AuthController", () => {
     });
 
     it("should handle registration errors", async () => {
-      const error = new Error("Email already exists");
-      error.statusCode = 400;
+      const ApiError = require("../../../src/utils/apiError");
+      const error = new ApiError(400, "Email already exists");
       mockAuthService.register.mockRejectedValue(error);
 
       const response = await request(app).post("/register").send({
@@ -174,7 +174,7 @@ describe("AuthController", () => {
       });
 
       expect(response.status).toBe(500);
-      expect(response.body.error.message).toBe("Email already exists");
+      expect(response.body.error).toBe("Email already exists");
     });
 
     it("should handle user reactivation", async () => {
@@ -254,8 +254,8 @@ describe("AuthController", () => {
     });
 
     it("should handle login errors", async () => {
-      const error = new Error("Invalid credentials");
-      error.statusCode = 401;
+      const ApiError = require("../../../src/utils/apiError");
+      const error = new ApiError(401, "Invalid credentials");
       mockAuthService.login.mockRejectedValue(error);
 
       const response = await request(app)
@@ -266,7 +266,7 @@ describe("AuthController", () => {
         })
         .expect(500);
 
-      expect(response.body.error.message).toBe("Invalid credentials");
+      expect(response.body.error).toBe("Invalid credentials");
     });
   });
 
@@ -299,8 +299,8 @@ describe("AuthController", () => {
     });
 
     it("should handle invalid verification token", async () => {
-      const error = new Error("Invalid or expired token");
-      error.statusCode = 400;
+      const ApiError = require("../../../src/utils/apiError");
+      const error = new ApiError(400, "Invalid or expired token");
       mockAuthService.verifyEmail.mockRejectedValue(error);
 
       const response = await request(app)
@@ -308,7 +308,7 @@ describe("AuthController", () => {
         .query({ token: "invalid-token" })
         .expect(500);
 
-      expect(response.body.error.message).toBe("Invalid or expired token");
+      expect(response.body.error).toBe("Invalid or expired token");
     });
   });
 
@@ -337,8 +337,8 @@ describe("AuthController", () => {
     });
 
     it("should handle invalid refresh token", async () => {
-      const error = new Error("Invalid refresh token");
-      error.statusCode = 401;
+      const ApiError = require("../../../src/utils/apiError");
+      const error = new ApiError(401, "Invalid refresh token");
       mockAuthService.refreshTokens.mockRejectedValue(error);
 
       const response = await request(app)
@@ -348,7 +348,7 @@ describe("AuthController", () => {
         })
         .expect(500);
 
-      expect(response.body.error.message).toBe("Invalid refresh token");
+      expect(response.body.error).toBe("Invalid refresh token");
     });
   });
 

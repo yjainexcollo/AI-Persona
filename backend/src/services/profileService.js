@@ -98,6 +98,15 @@ async function processAvatarUpload(userId, file) {
     throw new ApiError(400, "No file uploaded");
   }
 
+  // Check if user exists first
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+  });
+
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+
   // Validate file type
   const allowedMimeTypes = [
     "image/jpeg",
@@ -158,6 +167,10 @@ async function processAvatarUpload(userId, file) {
     logger.info(`User ${userId} uploaded avatar: ${fileName}`);
     return avatarUrl;
   } catch (error) {
+    // Re-throw ApiError instances directly
+    if (error instanceof ApiError) {
+      throw error;
+    }
     logger.error(`Avatar upload failed for user ${userId}:`, error);
     throw new ApiError(500, "Failed to process avatar upload");
   }
@@ -167,6 +180,15 @@ async function processAvatarUpload(userId, file) {
 async function processPresignedAvatar(userId, presignedUrl) {
   if (!presignedUrl) {
     throw new ApiError(400, "Presigned URL is required");
+  }
+
+  // Check if user exists
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+  });
+
+  if (!user) {
+    throw new ApiError(404, "User not found");
   }
 
   // Validate URL format
@@ -288,8 +310,19 @@ function isValidTimezone(timezone) {
 // Helper function to validate locale
 function isValidLocale(locale) {
   try {
-    Intl.DateTimeFormat(locale);
-    return true;
+    // Check if locale is a valid format (language-country or just language)
+    const localeRegex = /^[a-z]{2,3}(-[A-Z]{2})?$/;
+    if (!localeRegex.test(locale)) {
+      return false;
+    }
+
+    // Try to create a DateTimeFormat with the locale
+    // This will throw if the locale is not supported
+    new Intl.DateTimeFormat(locale);
+
+    // Additional check: make sure the resolved locale is similar to the input
+    const resolved = new Intl.DateTimeFormat(locale).resolvedOptions().locale;
+    return resolved.startsWith(locale.split("-")[0]);
   } catch {
     return false;
   }

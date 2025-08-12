@@ -10,6 +10,22 @@ jest.mock("../../../src/utils/logger", () => ({
 describe("WorkspaceService", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+
+    // Reset mock implementations
+    global.mockFindUnique.mockReset();
+    global.mockFindMany.mockReset();
+    global.mockCreate.mockReset();
+    global.mockUpdate.mockReset();
+    global.mockDelete.mockReset();
+    global.mockCount.mockReset();
+    if (global.mockUpdateMany) {
+      global.mockUpdateMany.mockReset();
+    }
+
+    // Reset transaction mock
+    global.mockPrisma.$transaction.mockImplementation((callback) =>
+      callback(global.mockPrisma)
+    );
   });
 
   describe("getWorkspace", () => {
@@ -91,6 +107,34 @@ describe("WorkspaceService", () => {
         workspaceService.getWorkspace(workspaceId, userId)
       ).rejects.toThrow("Workspace not found");
     });
+
+    it("should throw error for invalid workspaceId", async () => {
+      await expect(
+        workspaceService.getWorkspace(null, "user123")
+      ).rejects.toThrow("Valid workspaceId is required");
+
+      await expect(
+        workspaceService.getWorkspace("", "user123")
+      ).rejects.toThrow("Valid workspaceId is required");
+
+      await expect(
+        workspaceService.getWorkspace(123, "user123")
+      ).rejects.toThrow("Valid workspaceId is required");
+    });
+
+    it("should throw error for invalid userId", async () => {
+      await expect(
+        workspaceService.getWorkspace("workspace123", null)
+      ).rejects.toThrow("Valid userId is required");
+
+      await expect(
+        workspaceService.getWorkspace("workspace123", "")
+      ).rejects.toThrow("Valid userId is required");
+
+      await expect(
+        workspaceService.getWorkspace("workspace123", 123)
+      ).rejects.toThrow("Valid userId is required");
+    });
   });
 
   describe("updateWorkspace", () => {
@@ -124,9 +168,8 @@ describe("WorkspaceService", () => {
 
       // Mock the first call to findUnique (user lookup)
       global.mockFindUnique.mockResolvedValueOnce(mockUser);
-      // Mock the second call to findUnique (workspace lookup)
-      global.mockFindUnique.mockResolvedValueOnce(mockWorkspace);
       global.mockUpdate.mockResolvedValue(mockWorkspace);
+      global.mockCreate.mockResolvedValue({}); // For audit event creation
 
       const result = await workspaceService.updateWorkspace(
         workspaceId,
@@ -191,12 +234,23 @@ describe("WorkspaceService", () => {
 
       global.mockFindUnique.mockResolvedValue(mockUser);
 
-      // Mock the update to throw an error for invalid locale
-      global.mockUpdate.mockRejectedValue(new Error("Invalid locale"));
-
       await expect(
         workspaceService.updateWorkspace(workspaceId, userId, updateData)
       ).rejects.toThrow("Invalid locale");
+    });
+
+    it("should throw error for invalid input parameters", async () => {
+      await expect(
+        workspaceService.updateWorkspace(null, "user123", {})
+      ).rejects.toThrow("Valid workspaceId is required");
+
+      await expect(
+        workspaceService.updateWorkspace("workspace123", null, {})
+      ).rejects.toThrow("Valid userId is required");
+
+      await expect(
+        workspaceService.updateWorkspace("workspace123", "user123", null)
+      ).rejects.toThrow("Valid updateData is required");
     });
   });
 
@@ -264,6 +318,23 @@ describe("WorkspaceService", () => {
         workspaceService.listMembers(workspaceId, userId)
       ).rejects.toThrow("Access denied to this workspace");
     });
+
+    it("should throw error for non-admin user", async () => {
+      const workspaceId = "workspace123";
+      const userId = "user123";
+
+      const mockUser = {
+        id: userId,
+        workspaceId: workspaceId,
+        role: "MEMBER",
+      };
+
+      global.mockFindUnique.mockResolvedValue(mockUser);
+
+      await expect(
+        workspaceService.listMembers(workspaceId, userId)
+      ).rejects.toThrow("Only workspace admins can view member list");
+    });
   });
 
   describe("changeMemberRole", () => {
@@ -294,6 +365,7 @@ describe("WorkspaceService", () => {
         ...mockMember,
         role: newRole,
       });
+      global.mockCreate.mockResolvedValue({}); // For audit event creation
 
       const result = await workspaceService.changeMemberRole(
         workspaceId,
@@ -360,6 +432,84 @@ describe("WorkspaceService", () => {
         )
       ).rejects.toThrow("Member not found");
     });
+
+    it("should throw error for invalid input parameters", async () => {
+      await expect(
+        workspaceService.changeMemberRole(null, "user123", "member123", "ADMIN")
+      ).rejects.toThrow("Valid workspaceId is required");
+
+      await expect(
+        workspaceService.changeMemberRole(
+          "workspace123",
+          null,
+          "member123",
+          "ADMIN"
+        )
+      ).rejects.toThrow("Valid userId is required");
+
+      await expect(
+        workspaceService.changeMemberRole(
+          "workspace123",
+          "user123",
+          null,
+          "ADMIN"
+        )
+      ).rejects.toThrow("Valid memberId is required");
+
+      await expect(
+        workspaceService.changeMemberRole(
+          "workspace123",
+          "user123",
+          "member123",
+          "INVALID"
+        )
+      ).rejects.toThrow("Valid newRole is required");
+
+      await expect(
+        workspaceService.changeMemberRole(
+          "workspace123",
+          "user123",
+          "member123",
+          null
+        )
+      ).rejects.toThrow("Valid newRole is required");
+    });
+
+    it("should prevent admin from demoting themselves if they're the only admin", async () => {
+      const workspaceId = "workspace123";
+      const userId = "admin123";
+      const memberId = "admin123"; // Same as userId
+      const newRole = "MEMBER";
+
+      const mockAdmin = {
+        id: userId,
+        workspaceId: workspaceId,
+        role: "ADMIN",
+      };
+
+      const mockMember = {
+        id: memberId,
+        workspaceId: workspaceId,
+        role: "ADMIN",
+        status: "ACTIVE",
+      };
+
+      // Mock the first call to findUnique (admin lookup)
+      global.mockFindUnique.mockResolvedValueOnce(mockAdmin);
+      // Mock the second call to findUnique (member lookup)
+      global.mockFindUnique.mockResolvedValueOnce(mockMember);
+      // Mock count to return 1 (only one admin)
+      global.mockCount.mockResolvedValue(1);
+
+      await expect(
+        workspaceService.changeMemberRole(
+          workspaceId,
+          userId,
+          memberId,
+          newRole
+        )
+      ).rejects.toThrow("Cannot demote the only admin in the workspace");
+    });
   });
 
   describe("changeMemberStatus", () => {
@@ -401,6 +551,7 @@ describe("WorkspaceService", () => {
         lastLoginAt: new Date(),
         createdAt: new Date(),
       });
+      global.mockCreate.mockResolvedValue({}); // For audit event creation
 
       const result = await workspaceService.changeMemberStatus(
         workspaceId,
@@ -440,6 +591,99 @@ describe("WorkspaceService", () => {
         )
       ).rejects.toThrow("Only workspace admins can change member status");
     });
+
+    it("should prevent deactivating the last admin", async () => {
+      const workspaceId = "workspace123";
+      const userId = "admin123";
+      const memberId = "admin123";
+      const newStatus = "DEACTIVATED";
+
+      const mockAdmin = {
+        id: userId,
+        workspaceId: workspaceId,
+        role: "ADMIN",
+      };
+
+      const mockMember = {
+        id: memberId,
+        workspaceId: workspaceId,
+        role: "ADMIN",
+        status: "ACTIVE",
+      };
+
+      // Mock the first call to findUnique (admin lookup)
+      global.mockFindUnique.mockResolvedValueOnce(mockAdmin);
+      // Mock the second call to findUnique (member lookup)
+      global.mockFindUnique.mockResolvedValueOnce(mockMember);
+      // Mock count to return 1 (only one active admin)
+      global.mockCount.mockResolvedValue(1);
+
+      await expect(
+        workspaceService.changeMemberStatus(
+          workspaceId,
+          userId,
+          memberId,
+          newStatus
+        )
+      ).rejects.toThrow("Cannot deactivate the last admin in the workspace");
+    });
+
+    it("should revoke sessions when deactivating member", async () => {
+      const workspaceId = "workspace123";
+      const userId = "admin123";
+      const memberId = "member123";
+      const newStatus = "DEACTIVATED";
+
+      const mockAdmin = {
+        id: userId,
+        workspaceId: workspaceId,
+        role: "ADMIN",
+      };
+
+      const mockMember = {
+        id: memberId,
+        workspaceId: workspaceId,
+        role: "MEMBER",
+        status: "ACTIVE",
+      };
+
+      // Mock the first call to findUnique (admin lookup)
+      global.mockFindUnique.mockResolvedValueOnce(mockAdmin);
+      // Mock the second call to findUnique (member lookup)
+      global.mockFindUnique.mockResolvedValueOnce(mockMember);
+      // Mock count for admin count check
+      global.mockCount.mockResolvedValue(2);
+
+      // Mock the transaction
+      global.mockPrisma.$transaction.mockImplementation(async (callback) => {
+        return await callback(global.mockPrisma);
+      });
+
+      global.mockUpdate.mockResolvedValue({
+        id: memberId,
+        email: "member@example.com",
+        name: "Test Member",
+        role: "MEMBER",
+        status: newStatus,
+        lastLoginAt: new Date(),
+        createdAt: new Date(),
+      });
+      global.mockUpdateMany.mockResolvedValue({ count: 3 }); // 3 sessions revoked
+      global.mockCreate.mockResolvedValue({}); // For audit event creation
+
+      const result = await workspaceService.changeMemberStatus(
+        workspaceId,
+        userId,
+        memberId,
+        newStatus
+      );
+
+      expect(result.status).toBe(newStatus);
+      expect(global.mockUpdateMany).toHaveBeenCalledWith({
+        where: { userId: memberId },
+        data: { isActive: false },
+      });
+    });
   });
 
   describe("removeMember", () => {
@@ -467,8 +711,9 @@ describe("WorkspaceService", () => {
       global.mockFindUnique.mockResolvedValueOnce(mockMember);
       global.mockUpdate.mockResolvedValue({
         ...mockMember,
-        status: "PENDING_DELETION",
+        status: "DEACTIVATED",
       });
+      global.mockCreate.mockResolvedValue({}); // For audit event creation
 
       await workspaceService.removeMember(workspaceId, userId, memberId);
 
@@ -498,7 +743,7 @@ describe("WorkspaceService", () => {
   });
 
   describe("requestDeletion", () => {
-    it.skip("should request workspace deletion successfully", async () => {
+    it("should request workspace deletion successfully", async () => {
       const workspaceId = "workspace123";
       const userId = "admin123";
       const reason = "No longer needed";
@@ -509,31 +754,26 @@ describe("WorkspaceService", () => {
         role: "ADMIN",
       };
 
-      const mockWorkspace = {
-        id: workspaceId,
-        name: "Test Workspace",
-        status: "ACTIVE",
-      };
-
-      // Clear all mocks and set up fresh ones
-      jest.clearAllMocks();
-
-      // Mock the first call to findUnique (admin lookup)
+      // Mock user lookup (admin check)
       global.mockFindUnique.mockResolvedValueOnce(mockAdmin);
-      // Mock the second call to findUnique (workspace lookup)
-      global.mockFindUnique.mockResolvedValueOnce(mockWorkspace);
-      // Mock the third call to findUnique (existing deletion check) - returns null
+      // Mock existing deletion check (returns null - no existing deletion)
       global.mockFindUnique.mockResolvedValueOnce(null);
-      // Mock the fourth call to findUnique (workspace lookup for update)
-      global.mockFindUnique.mockResolvedValueOnce(mockWorkspace);
-      // Mock the fifth call to findUnique (audit event creation)
-      global.mockFindUnique.mockResolvedValueOnce(null);
-      global.mockCreate.mockResolvedValue({
-        id: "deletion123",
-        workspaceId: workspaceId,
-        requestedBy: userId,
-        reason: reason,
-        requestedAt: new Date(),
+
+      // Mock workspace deletion creation
+      global.mockCreate
+        .mockResolvedValueOnce({
+          id: "deletion123",
+          workspaceId: workspaceId,
+          requestedBy: userId,
+          reason: reason,
+          requestedAt: new Date(),
+        })
+        .mockResolvedValueOnce({}); // For audit event creation
+
+      // Mock workspace status update
+      global.mockUpdate.mockResolvedValue({
+        id: workspaceId,
+        status: "PENDING_DELETION",
       });
 
       await workspaceService.requestDeletion(workspaceId, userId, reason);
@@ -545,6 +785,11 @@ describe("WorkspaceService", () => {
           reason: reason,
           purgeAfter: expect.any(Date),
         },
+      });
+
+      expect(global.mockUpdate).toHaveBeenCalledWith({
+        where: { id: workspaceId },
+        data: { status: "PENDING_DELETION" },
       });
     });
 
@@ -564,6 +809,89 @@ describe("WorkspaceService", () => {
       await expect(
         workspaceService.requestDeletion(workspaceId, userId, reason)
       ).rejects.toThrow("Only workspace admins can request workspace deletion");
+    });
+
+    it("should throw error for already requested deletion", async () => {
+      const workspaceId = "workspace123";
+      const userId = "admin123";
+      const reason = "No longer needed";
+
+      const mockAdmin = {
+        id: userId,
+        workspaceId: workspaceId,
+        role: "ADMIN",
+      };
+
+      const existingDeletion = {
+        id: "deletion123",
+        workspaceId: workspaceId,
+      };
+
+      // Mock user lookup (admin check)
+      global.mockFindUnique.mockResolvedValueOnce(mockAdmin);
+      // Mock existing deletion check (returns existing deletion)
+      global.mockFindUnique.mockResolvedValueOnce(existingDeletion);
+
+      await expect(
+        workspaceService.requestDeletion(workspaceId, userId, reason)
+      ).rejects.toThrow("Workspace deletion has already been requested");
+    });
+  });
+
+  describe("isValidTimezone", () => {
+    it("should validate correct timezone", () => {
+      const result = workspaceService.isValidTimezone("America/New_York");
+      expect(result).toBe(true);
+    });
+
+    it("should validate UTC timezone", () => {
+      const result = workspaceService.isValidTimezone("UTC");
+      expect(result).toBe(true);
+    });
+
+    it("should reject invalid timezone", () => {
+      const result = workspaceService.isValidTimezone("Invalid/Timezone");
+      expect(result).toBe(false);
+    });
+
+    it("should reject malformed timezones", () => {
+      expect(workspaceService.isValidTimezone("")).toBe(false);
+      expect(workspaceService.isValidTimezone("not-a-timezone")).toBe(false);
+      expect(workspaceService.isValidTimezone(null)).toBe(false);
+      expect(workspaceService.isValidTimezone(undefined)).toBe(false);
+    });
+  });
+
+  describe("isValidLocale", () => {
+    it("should validate correct locale", () => {
+      const result = workspaceService.isValidLocale("en-US");
+      expect(result).toBe(true);
+    });
+
+    it("should validate language-only locale", () => {
+      const result = workspaceService.isValidLocale("en");
+      expect(result).toBe(true);
+    });
+
+    it("should validate different valid locales", () => {
+      expect(workspaceService.isValidLocale("fr-FR")).toBe(true);
+      expect(workspaceService.isValidLocale("de-DE")).toBe(true);
+      expect(workspaceService.isValidLocale("es")).toBe(true);
+    });
+
+    it("should reject invalid locale", () => {
+      const result = workspaceService.isValidLocale("invalid-locale");
+      expect(result).toBe(false);
+    });
+
+    it("should reject malformed locales", () => {
+      expect(workspaceService.isValidLocale("e")).toBe(false); // Too short
+      expect(workspaceService.isValidLocale("EN-us")).toBe(false); // Wrong case
+      expect(workspaceService.isValidLocale("en-us-extra")).toBe(false); // Too many parts
+      expect(workspaceService.isValidLocale("123-45")).toBe(false); // Numbers
+      expect(workspaceService.isValidLocale("")).toBe(false);
+      expect(workspaceService.isValidLocale(null)).toBe(false);
+      expect(workspaceService.isValidLocale(undefined)).toBe(false);
     });
   });
 });

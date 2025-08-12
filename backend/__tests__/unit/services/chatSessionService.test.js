@@ -4,32 +4,12 @@
  */
 
 const chatSessionService = require("../../../src/services/chatSessionService");
-const { PrismaClient } = require("@prisma/client");
-
-// Mock Prisma
-jest.mock("@prisma/client", () => ({
-  PrismaClient: jest.fn().mockImplementation(() => ({
-    chatSession: {
-      create: jest.fn(),
-      update: jest.fn(),
-      findUnique: jest.fn(),
-      findMany: jest.fn(),
-      updateMany: jest.fn(),
-      groupBy: jest.fn(),
-      count: jest.fn(),
-    },
-    message: {
-      update: jest.fn(),
-    },
-  })),
-}));
 
 describe("ChatSessionService", () => {
   let mockPrisma;
 
   beforeEach(() => {
-    mockPrisma = new PrismaClient();
-    global.testPrisma = mockPrisma;
+    mockPrisma = global.mockPrisma;
   });
 
   afterEach(() => {
@@ -85,6 +65,30 @@ describe("ChatSessionService", () => {
           },
         },
       });
+    });
+
+    it("should throw error for missing conversationId", async () => {
+      await expect(
+        chatSessionService.createChatSession(null, "persona123", "user123")
+      ).rejects.toThrow(
+        "Missing required parameters: conversationId, personaId, or userId"
+      );
+    });
+
+    it("should throw error for missing personaId", async () => {
+      await expect(
+        chatSessionService.createChatSession("conv123", null, "user123")
+      ).rejects.toThrow(
+        "Missing required parameters: conversationId, personaId, or userId"
+      );
+    });
+
+    it("should throw error for missing userId", async () => {
+      await expect(
+        chatSessionService.createChatSession("conv123", "persona123", null)
+      ).rejects.toThrow(
+        "Missing required parameters: conversationId, personaId, or userId"
+      );
     });
 
     it("should handle creation errors", async () => {
@@ -174,6 +178,56 @@ describe("ChatSessionService", () => {
         },
       });
     });
+
+    it("should throw error for missing sessionId", async () => {
+      await expect(
+        chatSessionService.updateChatSessionStatus(null, "COMPLETED")
+      ).rejects.toThrow("Missing required parameters: sessionId or status");
+    });
+
+    it("should throw error for missing status", async () => {
+      await expect(
+        chatSessionService.updateChatSessionStatus("abc123def456", null)
+      ).rejects.toThrow("Missing required parameters: sessionId or status");
+    });
+
+    it("should throw error for invalid status", async () => {
+      await expect(
+        chatSessionService.updateChatSessionStatus(
+          "abc123def456",
+          "INVALID_STATUS"
+        )
+      ).rejects.toThrow(
+        "Invalid status. Must be one of: ACTIVE, COMPLETED, FAILED, TIMEOUT, CANCELLED"
+      );
+    });
+
+    it("should handle CANCELLED status as terminal", async () => {
+      const mockUpdatedSession = {
+        id: "session123",
+        sessionId: "abc123def456",
+        status: "CANCELLED",
+        endedAt: new Date(),
+      };
+
+      mockPrisma.chatSession.update.mockResolvedValue(mockUpdatedSession);
+
+      const result = await chatSessionService.updateChatSessionStatus(
+        "abc123def456",
+        "CANCELLED"
+      );
+
+      expect(result).toEqual(mockUpdatedSession);
+      expect(mockPrisma.chatSession.update).toHaveBeenCalledWith({
+        where: { sessionId: "abc123def456" },
+        data: {
+          status: "CANCELLED",
+          lastActivityAt: expect.any(Date),
+          endedAt: expect.any(Date),
+        },
+        include: expect.any(Object),
+      });
+    });
   });
 
   describe("getChatSession", () => {
@@ -224,6 +278,12 @@ describe("ChatSessionService", () => {
       await expect(
         chatSessionService.getChatSession("nonexistent")
       ).rejects.toThrow("Chat session not found");
+    });
+
+    it("should throw error for missing sessionId", async () => {
+      await expect(chatSessionService.getChatSession(null)).rejects.toThrow(
+        "Missing required parameter: sessionId"
+      );
     });
   });
 
@@ -295,6 +355,36 @@ describe("ChatSessionService", () => {
         skip: 0,
       });
     });
+
+    it("should throw error for missing userId", async () => {
+      await expect(
+        chatSessionService.getUserChatSessions(null)
+      ).rejects.toThrow("Missing required parameter: userId");
+    });
+
+    it("should throw error for invalid status", async () => {
+      await expect(
+        chatSessionService.getUserChatSessions("user123", { status: "INVALID" })
+      ).rejects.toThrow(
+        "Invalid status. Must be one of: ACTIVE, COMPLETED, FAILED, TIMEOUT, CANCELLED"
+      );
+    });
+
+    it("should throw error for invalid limit", async () => {
+      await expect(
+        chatSessionService.getUserChatSessions("user123", { limit: 0 })
+      ).rejects.toThrow("Limit must be between 1 and 100");
+
+      await expect(
+        chatSessionService.getUserChatSessions("user123", { limit: 101 })
+      ).rejects.toThrow("Limit must be between 1 and 100");
+    });
+
+    it("should throw error for negative offset", async () => {
+      await expect(
+        chatSessionService.getUserChatSessions("user123", { offset: -1 })
+      ).rejects.toThrow("Offset must be non-negative");
+    });
   });
 
   describe("cleanupExpiredSessions", () => {
@@ -344,6 +434,277 @@ describe("ChatSessionService", () => {
           FAILED: 2,
         },
       });
+    });
+
+    it("should handle empty statistics", async () => {
+      mockPrisma.chatSession.groupBy.mockResolvedValue([]);
+      mockPrisma.chatSession.count
+        .mockResolvedValueOnce(0) // total
+        .mockResolvedValueOnce(0); // active
+
+      const result = await chatSessionService.getChatSessionStats("user123");
+
+      expect(result).toEqual({
+        total: 0,
+        active: 0,
+        byStatus: {},
+      });
+    });
+
+    it("should handle database errors", async () => {
+      mockPrisma.chatSession.groupBy.mockRejectedValue(
+        new Error("Database error")
+      );
+
+      await expect(
+        chatSessionService.getChatSessionStats("user123")
+      ).rejects.toThrow("Failed to get chat session stats");
+    });
+  });
+
+  describe("deleteChatSession", () => {
+    it("should delete a chat session with messages", async () => {
+      const mockSession = {
+        id: "session123",
+        sessionId: "abc123def456",
+        userId: "user123",
+        messages: [
+          { id: "msg1", content: "Hello" },
+          { id: "msg2", content: "World" },
+        ],
+      };
+
+      mockPrisma.chatSession.findUnique.mockResolvedValue(mockSession);
+      mockPrisma.$transaction.mockImplementation((callback) =>
+        callback(mockPrisma)
+      );
+      mockPrisma.message.deleteMany.mockResolvedValue({ count: 2 });
+      mockPrisma.chatSession.delete.mockResolvedValue(mockSession);
+
+      const result = await chatSessionService.deleteChatSession(
+        "abc123def456",
+        "user123"
+      );
+
+      expect(result).toEqual({
+        sessionId: "abc123def456",
+        deletedAt: expect.any(Date),
+        messageCount: 2,
+      });
+
+      expect(mockPrisma.chatSession.findUnique).toHaveBeenCalledWith({
+        where: { sessionId: "abc123def456" },
+        include: { messages: true },
+      });
+
+      expect(mockPrisma.message.deleteMany).toHaveBeenCalledWith({
+        where: { chatSessionId: "session123" },
+      });
+
+      expect(mockPrisma.chatSession.delete).toHaveBeenCalledWith({
+        where: { id: "session123" },
+      });
+    });
+
+    it("should throw error when session not found", async () => {
+      mockPrisma.chatSession.findUnique.mockResolvedValue(null);
+
+      await expect(
+        chatSessionService.deleteChatSession("nonexistent", "user123")
+      ).rejects.toThrow("Chat session not found");
+    });
+
+    it("should throw error when user doesn't own session", async () => {
+      const mockSession = {
+        id: "session123",
+        sessionId: "abc123def456",
+        userId: "otheruser",
+        messages: [],
+      };
+
+      mockPrisma.chatSession.findUnique.mockResolvedValue(mockSession);
+
+      await expect(
+        chatSessionService.deleteChatSession("abc123def456", "user123")
+      ).rejects.toThrow("You can only delete your own chat sessions");
+    });
+
+    it("should handle database errors during deletion", async () => {
+      const mockSession = {
+        id: "session123",
+        sessionId: "abc123def456",
+        userId: "user123",
+        messages: [],
+      };
+
+      mockPrisma.chatSession.findUnique.mockResolvedValue(mockSession);
+      mockPrisma.$transaction.mockRejectedValue(new Error("Database error"));
+
+      await expect(
+        chatSessionService.deleteChatSession("abc123def456", "user123")
+      ).rejects.toThrow("Failed to delete chat session");
+    });
+  });
+
+  describe("Edge cases and error handling", () => {
+    it("should handle createChatSession with empty metadata", async () => {
+      const mockSession = {
+        id: "session123",
+        sessionId: "abc123def456",
+        conversationId: "conv123",
+        personaId: "persona123",
+        userId: "user123",
+        metadata: { deviceInfo: null },
+      };
+
+      mockPrisma.chatSession.create.mockResolvedValue(mockSession);
+
+      const result = await chatSessionService.createChatSession(
+        "conv123",
+        "persona123",
+        "user123"
+      );
+
+      expect(result).toEqual(mockSession);
+      expect(mockPrisma.chatSession.create).toHaveBeenCalledWith({
+        data: {
+          conversationId: "conv123",
+          personaId: "persona123",
+          userId: "user123",
+          sessionId: expect.any(String),
+          metadata: {
+            userAgent: undefined,
+            ipAddress: undefined,
+            deviceInfo: null,
+          },
+        },
+        include: expect.any(Object),
+      });
+    });
+
+    it("should handle updateChatSessionStatus with ACTIVE status", async () => {
+      const mockUpdatedSession = {
+        id: "session123",
+        sessionId: "abc123def456",
+        status: "ACTIVE",
+        lastActivityAt: new Date(),
+      };
+
+      mockPrisma.chatSession.update.mockResolvedValue(mockUpdatedSession);
+
+      const result = await chatSessionService.updateChatSessionStatus(
+        "abc123def456",
+        "ACTIVE"
+      );
+
+      expect(result).toEqual(mockUpdatedSession);
+      expect(mockPrisma.chatSession.update).toHaveBeenCalledWith({
+        where: { sessionId: "abc123def456" },
+        data: {
+          status: "ACTIVE",
+          lastActivityAt: expect.any(Date),
+          endedAt: undefined,
+        },
+        include: expect.any(Object),
+      });
+    });
+
+    it("should handle updateChatSessionStatus database error", async () => {
+      mockPrisma.chatSession.update.mockRejectedValue(
+        new Error("Database error")
+      );
+
+      await expect(
+        chatSessionService.updateChatSessionStatus("abc123def456", "COMPLETED")
+      ).rejects.toThrow("Failed to update chat session status");
+    });
+
+    it("should handle getChatSession database error", async () => {
+      mockPrisma.chatSession.findUnique.mockRejectedValue(
+        new Error("Database error")
+      );
+
+      await expect(
+        chatSessionService.getChatSession("abc123def456")
+      ).rejects.toThrow("Failed to get chat session");
+    });
+
+    it("should handle getUserChatSessions database error", async () => {
+      mockPrisma.chatSession.findMany.mockRejectedValue(
+        new Error("Database error")
+      );
+
+      await expect(
+        chatSessionService.getUserChatSessions("user123")
+      ).rejects.toThrow("Failed to get user chat sessions");
+    });
+
+    it("should handle cleanupExpiredSessions database error", async () => {
+      mockPrisma.chatSession.updateMany.mockRejectedValue(
+        new Error("Database error")
+      );
+
+      await expect(
+        chatSessionService.cleanupExpiredSessions(24)
+      ).rejects.toThrow("Failed to cleanup expired chat sessions");
+    });
+
+    it("should generate unique session IDs", async () => {
+      const mockSession = {
+        id: "session123",
+        sessionId: expect.any(String),
+      };
+
+      mockPrisma.chatSession.create.mockResolvedValue(mockSession);
+
+      await chatSessionService.createChatSession(
+        "conv123",
+        "persona123",
+        "user123"
+      );
+
+      const sessionIdCall =
+        mockPrisma.chatSession.create.mock.calls[0][0].data.sessionId;
+      expect(sessionIdCall).toMatch(/^[a-f0-9]{32}$/); // 32 hex chars
+    });
+
+    it("should use default values for getUserChatSessions options", async () => {
+      mockPrisma.chatSession.findMany.mockResolvedValue([]);
+
+      await chatSessionService.getUserChatSessions("user123");
+
+      expect(mockPrisma.chatSession.findMany).toHaveBeenCalledWith({
+        where: { userId: "user123" },
+        include: expect.any(Object),
+        orderBy: { startedAt: "desc" },
+        take: 50,
+        skip: 0,
+      });
+    });
+
+    it("should calculate correct cutoff time for cleanupExpiredSessions", async () => {
+      const mockDate = new Date("2023-01-01T12:00:00Z");
+      jest.spyOn(Date, "now").mockReturnValue(mockDate.getTime());
+
+      mockPrisma.chatSession.updateMany.mockResolvedValue({ count: 0 });
+
+      await chatSessionService.cleanupExpiredSessions(2); // 2 hours
+
+      const expectedCutoff = new Date(mockDate.getTime() - 2 * 60 * 60 * 1000);
+
+      expect(mockPrisma.chatSession.updateMany).toHaveBeenCalledWith({
+        where: {
+          status: "ACTIVE",
+          lastActivityAt: { lt: expectedCutoff },
+        },
+        data: {
+          status: "TIMEOUT",
+          endedAt: expect.any(Date),
+          errorMessage: "Session timed out due to inactivity",
+        },
+      });
+
+      Date.now.mockRestore();
     });
   });
 });

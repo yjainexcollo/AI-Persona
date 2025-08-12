@@ -6,6 +6,15 @@ const prisma = new PrismaClient();
 
 // Get workspace details
 async function getWorkspace(workspaceId, userId) {
+  // Validate input parameters
+  if (!workspaceId || typeof workspaceId !== "string") {
+    throw new ApiError(400, "Valid workspaceId is required");
+  }
+
+  if (!userId || typeof userId !== "string") {
+    throw new ApiError(400, "Valid userId is required");
+  }
+
   // Verify user belongs to this workspace
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -41,6 +50,19 @@ async function getWorkspace(workspaceId, userId) {
 
 // Update workspace
 async function updateWorkspace(workspaceId, userId, updateData) {
+  // Validate input parameters
+  if (!workspaceId || typeof workspaceId !== "string") {
+    throw new ApiError(400, "Valid workspaceId is required");
+  }
+
+  if (!userId || typeof userId !== "string") {
+    throw new ApiError(400, "Valid userId is required");
+  }
+
+  if (!updateData || typeof updateData !== "object") {
+    throw new ApiError(400, "Valid updateData is required");
+  }
+
   // Verify user is admin of this workspace
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -165,6 +187,23 @@ async function listMembers(workspaceId, userId, options = {}) {
 
 // Change member role
 async function changeMemberRole(workspaceId, userId, memberId, newRole) {
+  // Validate input parameters
+  if (!workspaceId || typeof workspaceId !== "string") {
+    throw new ApiError(400, "Valid workspaceId is required");
+  }
+
+  if (!userId || typeof userId !== "string") {
+    throw new ApiError(400, "Valid userId is required");
+  }
+
+  if (!memberId || typeof memberId !== "string") {
+    throw new ApiError(400, "Valid memberId is required");
+  }
+
+  if (!newRole || !["ADMIN", "MEMBER"].includes(newRole)) {
+    throw new ApiError(400, "Valid newRole is required (ADMIN or MEMBER)");
+  }
+
   // Verify user is admin of this workspace
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -428,6 +467,11 @@ async function requestDeletion(workspaceId, userId, reason) {
 // Helper function to validate timezone
 function isValidTimezone(timezone) {
   try {
+    // Check if timezone is a valid string
+    if (!timezone || typeof timezone !== "string") {
+      return false;
+    }
+
     Intl.DateTimeFormat(undefined, { timeZone: timezone });
     return true;
   } catch {
@@ -438,8 +482,24 @@ function isValidTimezone(timezone) {
 // Helper function to validate locale
 function isValidLocale(locale) {
   try {
-    Intl.DateTimeFormat(locale);
-    return true;
+    // Check if locale is a valid string
+    if (!locale || typeof locale !== "string") {
+      return false;
+    }
+
+    // Check if locale is a valid format (language-country or just language)
+    const localeRegex = /^[a-z]{2,3}(-[A-Z]{2})?$/;
+    if (!localeRegex.test(locale)) {
+      return false;
+    }
+
+    // Try to create a DateTimeFormat with the locale
+    // This will throw if the locale is not supported
+    new Intl.DateTimeFormat(locale);
+
+    // Additional check: make sure the resolved locale is similar to the input
+    const resolved = new Intl.DateTimeFormat(locale).resolvedOptions().locale;
+    return resolved.startsWith(locale.split("-")[0]);
   } catch {
     return false;
   }
@@ -470,4 +530,6 @@ module.exports = {
   changeMemberStatus,
   removeMember,
   requestDeletion,
+  isValidTimezone,
+  isValidLocale,
 };

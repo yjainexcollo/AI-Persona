@@ -147,10 +147,17 @@ const personaLimiter = rateLimit({
 // Utility function to check Redis health
 const checkRedisHealth = async () => {
   try {
+    // Ensure Redis is connected before pinging
+    if (redis.status !== "ready") {
+      await redis.connect();
+    }
     await redis.ping();
     return { healthy: true, message: "Redis connected" };
   } catch (error) {
-    return { healthy: false, message: error.message };
+    return {
+      healthy: false,
+      message: error.message || "Redis connection failed",
+    };
   }
 };
 
@@ -173,6 +180,11 @@ const clearRateLimit = async (key, prefix = "rl:") => {
 // Get current rate limit status for a key
 const getRateLimitStatus = async (key, prefix = "rl:") => {
   try {
+    // Ensure Redis is connected
+    if (redis.status !== "ready") {
+      await redis.connect();
+    }
+
     const redisKey = `${prefix}${key}`;
     const count = await redis.zcard(redisKey);
     const ttl = await redis.ttl(redisKey);
@@ -184,7 +196,13 @@ const getRateLimitStatus = async (key, prefix = "rl:") => {
       exists: count > 0,
     };
   } catch (error) {
-    return { error: error.message };
+    return {
+      key: `${prefix}${key}`,
+      currentCount: 0,
+      ttlSeconds: -1,
+      exists: false,
+      error: error.message || "Redis connection failed",
+    };
   }
 };
 

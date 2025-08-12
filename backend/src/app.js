@@ -60,21 +60,45 @@ app.use("/api/chat-sessions", chatSessionRoutes);
 // Public Routes (no authentication required)
 app.use("/p", publicRoutes);
 
-// Load the swagger.yaml file
-const swaggerDocument = YAML.load(path.join(__dirname, "../docs/swagger.yaml"));
+// Load the swagger.yaml file - with error handling for tests
+let swaggerDocument = {};
+if (process.env.NODE_ENV !== "test") {
+  try {
+    const fs = require("fs");
+    const swaggerPath = path.join(__dirname, "../docs/swagger.yaml");
+    if (fs.existsSync(swaggerPath)) {
+      swaggerDocument = YAML.load(swaggerPath);
+    } else {
+      console.warn(
+        "Swagger documentation file not found, skipping swagger setup"
+      );
+    }
+  } catch (error) {
+    console.warn("Failed to load swagger documentation:", error.message);
+  }
+}
 
 // Serve Swagger UI at /docs
-app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+if (Object.keys(swaggerDocument).length > 0) {
+  app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+}
 
 // Centralized error handler
 app.use((err, req, res, next) => {
   logger.error("Unhandled error: %o", err);
-  res.status(err.statusCode || err.status || 500).json({
-    error: {
-      message: err.message || "Internal Server Error",
-      details: process.env.NODE_ENV === "production" ? undefined : err.stack,
-    },
-  });
+
+  // For tests and API consistency, return error message directly
+  const errorResponse = {
+    error: err.message || "Internal Server Error",
+    status: "error",
+  };
+
+  // Add stack trace in development
+  if (process.env.NODE_ENV !== "production") {
+    errorResponse.details = err.stack;
+  }
+
+  res.status(err.statusCode || err.status || 500).json(errorResponse);
 });
 
 module.exports = app;

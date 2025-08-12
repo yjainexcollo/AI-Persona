@@ -5,8 +5,11 @@ const mockCreate = jest.fn();
 const mockUpdate = jest.fn();
 const mockDelete = jest.fn();
 const mockDeleteMany = jest.fn();
+const mockUpdateMany = jest.fn();
 const mockCount = jest.fn();
 const mockFindFirst = jest.fn();
+const mockGroupBy = jest.fn();
+const mockUpsert = jest.fn();
 
 // Create mock Prisma client
 const mockPrismaClient = {
@@ -65,6 +68,7 @@ const mockPrismaClient = {
   conversation: {
     findUnique: mockFindUnique,
     findMany: mockFindMany,
+    findFirst: mockFindFirst,
     create: mockCreate,
     update: mockUpdate,
     delete: mockDelete,
@@ -80,9 +84,21 @@ const mockPrismaClient = {
     deleteMany: mockDeleteMany,
     count: mockCount,
   },
+  chatSession: {
+    findUnique: mockFindUnique,
+    findMany: mockFindMany,
+    create: mockCreate,
+    update: mockUpdate,
+    updateMany: mockUpdateMany,
+    delete: mockDelete,
+    deleteMany: mockDeleteMany,
+    count: mockCount,
+    groupBy: mockGroupBy,
+  },
   file: {
     findUnique: mockFindUnique,
     findMany: mockFindMany,
+    findFirst: mockFindFirst,
     create: mockCreate,
     update: mockUpdate,
     delete: mockDelete,
@@ -94,6 +110,7 @@ const mockPrismaClient = {
     findMany: mockFindMany,
     create: mockCreate,
     update: mockUpdate,
+    upsert: mockUpsert,
     delete: mockDelete,
     deleteMany: mockDeleteMany,
     count: mockCount,
@@ -130,7 +147,8 @@ const mockPrismaClient = {
     findMany: mockFindMany,
     create: mockCreate,
     update: mockUpdate,
-    updateMany: mockUpdate,
+    updateMany: mockUpdateMany,
+    findFirst: mockFindFirst,
     delete: mockDelete,
     deleteMany: mockDeleteMany,
     count: mockCount,
@@ -153,10 +171,13 @@ global.mockFindUnique = mockFindUnique;
 global.mockFindMany = mockFindMany;
 global.mockCreate = mockCreate;
 global.mockUpdate = mockUpdate;
+global.mockUpdateMany = mockUpdateMany;
 global.mockDelete = mockDelete;
 global.mockDeleteMany = mockDeleteMany;
 global.mockCount = mockCount;
 global.mockFindFirst = mockFindFirst;
+global.mockGroupBy = mockGroupBy;
+global.mockUpsert = mockUpsert;
 
 // Mock rate limiter middleware for tests
 jest.mock("../../src/middlewares/rateLimiter", () => ({
@@ -231,19 +252,14 @@ jest.mock("crypto", () => {
     ...originalCrypto,
     // Only mock specific functions that need custom behavior
     createHash: jest.fn((algorithm) => {
-      if (algorithm === "sha256") {
-        // For sha256, use the real implementation
+      if (algorithm === "sha256" || algorithm === "sha1") {
+        // For sha256 and sha1, use the real implementation
         return originalCrypto.createHash(algorithm);
       }
       // For other algorithms, use mock
       return {
         update: jest.fn(() => ({
-          digest: jest.fn(() => ({
-            toString: jest.fn(() => "ABCDEF1234567890ABCDEF1234567890ABCDEF12"),
-            toUpperCase: jest.fn(
-              () => "ABCDEF1234567890ABCDEF1234567890ABCDEF12"
-            ),
-          })),
+          digest: jest.fn(() => "ABCDEF1234567890ABCDEF1234567890ABCDEF12"),
         })),
       };
     }),

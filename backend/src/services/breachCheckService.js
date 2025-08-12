@@ -37,11 +37,13 @@ class BreachCheckService {
       });
 
       // Parse response and check if our suffix exists
-      const hashes = response.data.split("\r\n");
+      const data = typeof response?.data === "string" ? response.data : "";
+      const hashes = data ? data.split("\r\n") : [];
       const foundHash = hashes.find((hash) => hash.startsWith(suffix));
 
       if (foundHash) {
-        const count = parseInt(foundHash.split(":")[1]);
+        const parts = foundHash.split(":");
+        const count = parts.length > 1 ? parseInt(parts[1]) : 0;
         logger.warn(`Password breach detected: ${count} occurrences`);
         return {
           breached: true,
@@ -71,10 +73,10 @@ class BreachCheckService {
    * Get severity level based on breach count
    */
   getSeverityLevel(count) {
-    if (count > 100000) return "critical";
-    if (count > 10000) return "high";
-    if (count > 1000) return "medium";
-    if (count > 100) return "low";
+    if (count > 10000) return "critical";
+    if (count > 1000) return "high";
+    if (count > 10) return "medium";
+    if (count > 0) return "low";
     return "safe";
   }
 

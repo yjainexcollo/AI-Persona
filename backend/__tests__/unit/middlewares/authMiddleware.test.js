@@ -37,10 +37,10 @@ describe("AuthMiddleware", () => {
 
       await authMiddleware(mockReq, mockRes, mockNext);
 
-      // The testAuthMiddleware passes JWT errors directly to next()
+      // The testAuthMiddleware wraps JWT errors in ApiError
       expect(mockNext).toHaveBeenCalledWith(
         expect.objectContaining({
-          message: "jwt malformed",
+          message: "Invalid or expired token",
         })
       );
     });

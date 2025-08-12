@@ -13,6 +13,10 @@ jest.mock("../../../src/services/emailService", () => ({
   createEmailVerification: jest
     .fn()
     .mockResolvedValue("mock-verification-token"),
+  createPasswordResetToken: jest
+    .fn()
+    .mockResolvedValue("mock-password-reset-token"),
+  sendPasswordResetEmail: jest.fn().mockResolvedValue(true),
 }));
 
 // Mock bcrypt
@@ -44,6 +48,21 @@ describe("AuthService", () => {
     global.mockCreate.mockReset();
     global.mockUpdate.mockReset();
     global.mockCount.mockReset();
+
+    // Ensure JWT async functions resolve concrete tokens
+    const jwt = require("../../../src/utils/jwt");
+    if (
+      jwt.signToken &&
+      typeof jwt.signToken.mockResolvedValue === "function"
+    ) {
+      jwt.signToken.mockResolvedValue("mock-access-token");
+    }
+    if (
+      jwt.signRefreshToken &&
+      typeof jwt.signRefreshToken.mockResolvedValue === "function"
+    ) {
+      jwt.signRefreshToken.mockResolvedValue("mock-refresh-token");
+    }
   });
 
   describe("register", () => {
@@ -154,7 +173,7 @@ describe("AuthService", () => {
   });
 
   describe("login", () => {
-    it.skip("should login successfully with valid credentials", async () => {
+    it("should login successfully with valid credentials", async () => {
       const credentials = {
         email: "test@example.com",
         password: "SecurePassword123!",
@@ -169,6 +188,7 @@ describe("AuthService", () => {
         status: "ACTIVE",
         role: "MEMBER",
         workspaceId: "workspace123",
+        workspace: { id: "workspace123", name: "Example" },
       };
 
       global.mockFindUnique.mockResolvedValue(mockUser);
@@ -204,6 +224,314 @@ describe("AuthService", () => {
       await expect(authService.login(loginData)).rejects.toThrow(
         "Please verify your email before logging in"
       );
+    });
+
+    it("should reject when account is locked", async () => {
+      const credentials = { email: "locked@example.com", password: "x" };
+      const future = new Date(Date.now() + 10 * 60 * 1000);
+      global.mockFindUnique.mockResolvedValue({
+        id: "user1",
+        email: credentials.email,
+        passwordHash: "hash",
+        status: "ACTIVE",
+        emailVerified: true,
+        lockedUntil: future,
+        workspace: { id: "w1", name: "W" },
+      });
+
+      await expect(authService.login(credentials)).rejects.toThrow(
+        /temporarily locked/i
+      );
+    });
+
+    it("should handle invalid password with attempts remaining", async () => {
+      const credentials = { email: "user@example.com", password: "bad" };
+      const user = {
+        id: "user1",
+        email: credentials.email,
+        passwordHash: "hash",
+        status: "ACTIVE",
+        emailVerified: true,
+        failedLoginCount: 1,
+        workspace: { id: "w1", name: "W" },
+      };
+
+      // First findUnique for login, second for lockAccount internals
+      global.mockFindUnique
+        .mockResolvedValueOnce(user)
+        .mockResolvedValueOnce(user);
+
+      const bcrypt = require("bcrypt");
+      bcrypt.compare.mockResolvedValue(false);
+
+      await expect(authService.login(credentials)).rejects.toThrow(
+        /attempts remaining/i
+      );
+      expect(global.mockUpdate).toHaveBeenCalled();
+    });
+
+    it("should lock account on too many failed attempts", async () => {
+      const credentials = { email: "user@example.com", password: "bad" };
+      const user = {
+        id: "user1",
+        email: credentials.email,
+        passwordHash: "hash",
+        status: "ACTIVE",
+        emailVerified: true,
+        failedLoginCount: 4,
+        workspace: { id: "w1", name: "W" },
+      };
+
+      global.mockFindUnique
+        .mockResolvedValueOnce(user)
+        .mockResolvedValueOnce(user);
+
+      const bcrypt = require("bcrypt");
+      bcrypt.compare.mockResolvedValue(false);
+
+      await expect(authService.login(credentials)).rejects.toThrow(
+        /temporarily locked/i
+      );
+    });
+
+    it("should reject deactivated users", async () => {
+      const user = {
+        id: "user2",
+        email: "x@example.com",
+        passwordHash: "hash",
+        emailVerified: true,
+        status: "DEACTIVATED",
+      };
+      global.mockFindUnique.mockResolvedValue(user);
+
+      await expect(
+        authService.login({ email: user.email, password: "x" })
+      ).rejects.toThrow(/deactivated/i);
+    });
+
+    it("should reject pending deletion users", async () => {
+      const user = {
+        id: "user2",
+        email: "x@example.com",
+        passwordHash: "hash",
+        emailVerified: true,
+        status: "PENDING_DELETION",
+      };
+      global.mockFindUnique.mockResolvedValue(user);
+
+      await expect(
+        authService.login({ email: user.email, password: "x" })
+      ).rejects.toThrow(/pending deletion/i);
+    });
+  });
+
+  describe("refreshTokens", () => {
+    it("should reject invalid or expired refresh token", async () => {
+      global.mockFindUnique.mockResolvedValue(null);
+      await expect(
+        authService.refreshTokens({ refreshToken: "bad" })
+      ).rejects.toThrow(/Invalid or expired refresh token/);
+    });
+
+    it("should reject when user is not active", async () => {
+      global.mockFindUnique.mockResolvedValue({
+        id: "s1",
+        isActive: true,
+        expiresAt: new Date(Date.now() + 1000),
+        deviceId: "dev1",
+        user: { id: "u1", status: "DEACTIVATED" },
+      });
+
+      await expect(
+        authService.refreshTokens({ refreshToken: "ok" })
+      ).rejects.toThrow(/Account is not active/);
+      expect(global.mockUpdate).toHaveBeenCalled();
+    });
+
+    it("should rotate tokens and sessions on success", async () => {
+      global.mockFindUnique.mockResolvedValue({
+        id: "s1",
+        isActive: true,
+        expiresAt: new Date(Date.now() + 1000),
+        deviceId: "dev1",
+        user: {
+          id: "u1",
+          email: "u@example.com",
+          status: "ACTIVE",
+          workspaceId: "w1",
+        },
+      });
+
+      const result = await authService.refreshTokens({ refreshToken: "ok" });
+
+      expect(result.accessToken).toBeDefined();
+      expect(result.refreshToken).toBeDefined();
+      expect(global.mockUpdate).toHaveBeenCalled();
+      expect(global.mockCreate).toHaveBeenCalled();
+    });
+  });
+
+  describe("logout", () => {
+    it("should revoke active session and succeed", async () => {
+      const jwt = require("../../../src/utils/jwt");
+      jwt.verifyToken.mockReturnValue({ userId: "user123" });
+
+      global.mockFindFirst.mockResolvedValue({ id: "s1", deviceId: "dev1" });
+
+      const result = await authService.logout({ token: "token" });
+      expect(result.status).toBe("success");
+      expect(global.mockUpdate).toHaveBeenCalled();
+    });
+
+    it("should succeed even with invalid token", async () => {
+      const jwt = require("../../../src/utils/jwt");
+      jwt.verifyToken.mockImplementationOnce(() => {
+        throw new Error("bad token");
+      });
+
+      const result = await authService.logout({ token: "bad" });
+      expect(result.status).toBe("success");
+    });
+  });
+
+  describe("sessions", () => {
+    it("should list user sessions", async () => {
+      global.mockFindMany.mockResolvedValue([{ id: "s1" }, { id: "s2" }]);
+      const sessions = await authService.getUserSessions("u1");
+      expect(sessions).toHaveLength(2);
+    });
+
+    it("should revoke specific session", async () => {
+      global.mockFindFirst.mockResolvedValue({ id: "s1" });
+      const result = await authService.revokeSession("u1", "s1");
+      expect(result).toEqual({ success: true });
+      expect(global.mockUpdate).toHaveBeenCalled();
+    });
+
+    it("should error when session not found to revoke", async () => {
+      global.mockFindFirst.mockResolvedValue(null);
+      await expect(authService.revokeSession("u1", "s1")).rejects.toThrow(
+        /Session not found/
+      );
+    });
+  });
+
+  describe("email verification and password reset", () => {
+    it("should verify email with valid token", async () => {
+      const record = {
+        token: "t1",
+        userId: "u1",
+        user: { id: "u1" },
+      };
+      global.mockFindUnique.mockResolvedValue(record);
+
+      const result = await authService.verifyEmail("t1");
+      expect(result).toEqual(record.user);
+      expect(global.mockUpdate).toHaveBeenCalled();
+      expect(global.mockDelete).toHaveBeenCalled();
+    });
+
+    it("should reject invalid verification token", async () => {
+      global.mockFindUnique.mockResolvedValue(null);
+      await expect(authService.verifyEmail("bad")).rejects.toThrow(
+        /Invalid or expired verification token/
+      );
+    });
+
+    it("should request password reset when user exists", async () => {
+      global.mockFindUnique.mockResolvedValue({ id: "u1", email: "x@x.com" });
+      const emailService = require("../../../src/services/emailService");
+      const result = await authService.requestPasswordReset({
+        email: "x@x.com",
+      });
+      expect(emailService.createPasswordResetToken).toHaveBeenCalled();
+      expect(emailService.sendPasswordResetEmail).toHaveBeenCalled();
+      expect(result.status).toBe("success");
+    });
+
+    it("should always succeed for password reset request even if user missing", async () => {
+      global.mockFindUnique.mockResolvedValue(null);
+      const emailService = require("../../../src/services/emailService");
+      const result = await authService.requestPasswordReset({
+        email: "x@x.com",
+      });
+      expect(emailService.sendPasswordResetEmail).not.toHaveBeenCalled();
+      expect(result.status).toBe("success");
+    });
+
+    it("should reset password with valid token", async () => {
+      const record = {
+        id: "prt1",
+        userId: "u1",
+        user: { id: "u1" },
+        expiresAt: new Date(Date.now() + 1000),
+        used: false,
+      };
+      global.mockFindUnique.mockResolvedValue(record);
+
+      const result = await authService.resetPassword({
+        token: "tok",
+        newPassword: "StrongP@ssw0rd",
+      });
+      expect(result).toEqual({ success: true });
+      expect(global.mockUpdate).toHaveBeenCalled();
+      expect(global.mockUpdate).toHaveBeenCalled();
+      expect(global.mockUpdateMany).toBeDefined();
+    });
+
+    it("should reject invalid or expired reset token", async () => {
+      global.mockFindUnique.mockResolvedValue(null);
+      await expect(
+        authService.resetPassword({
+          token: "bad",
+          newPassword: "StrongP@ssw0rd",
+        })
+      ).rejects.toThrow(/Invalid or expired reset token/);
+    });
+  });
+
+  describe("account status changes", () => {
+    it("should deactivate account", async () => {
+      global.mockFindUnique.mockResolvedValue({ id: "u1" });
+      const result = await authService.deactivateAccount("u1");
+      expect(result).toEqual({ success: true });
+      expect(global.mockUpdate).toHaveBeenCalled();
+      expect(global.mockUpdateMany).toBeDefined();
+    });
+
+    it("should error deactivating unknown account", async () => {
+      global.mockFindUnique.mockResolvedValue(null);
+      await expect(authService.deactivateAccount("uX")).rejects.toThrow(
+        /User not found/
+      );
+    });
+
+    it("should request account deletion", async () => {
+      global.mockFindUnique.mockResolvedValue({ id: "u1" });
+      const result = await authService.requestAccountDeletion("u1");
+      expect(result).toEqual({ success: true });
+      expect(global.mockUpdate).toHaveBeenCalled();
+      expect(global.mockUpdateMany).toBeDefined();
+    });
+  });
+
+  describe("cleanup jobs", () => {
+    it("should cleanup unverified users", async () => {
+      global.mockDeleteMany.mockResolvedValue({ count: 5 });
+      const count = await authService.cleanupUnverifiedUsers(7);
+      expect(count).toBe(5);
+    });
+
+    it("should cleanup pending deletion users", async () => {
+      global.mockDeleteMany.mockResolvedValue({ count: 3 });
+      const count = await authService.cleanupPendingDeletionUsers(30);
+      expect(count).toBe(3);
+    });
+
+    it("should cleanup expired sessions", async () => {
+      global.mockDeleteMany.mockResolvedValue({ count: 7 });
+      const count = await authService.cleanupExpiredSessions();
+      expect(count).toBe(7);
     });
   });
 });

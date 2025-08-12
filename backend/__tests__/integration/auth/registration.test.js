@@ -67,7 +67,7 @@ describe("Authentication Integration Tests", () => {
         })
         .expect(400);
 
-      expect(response.body.error.message).toContain(
+      expect(response.body.error).toContain(
         "Please provide a valid email address"
       );
     });
@@ -82,15 +82,15 @@ describe("Authentication Integration Tests", () => {
         })
         .expect(400);
 
-      expect(response.body.error.message).toContain(
+      expect(response.body.error).toContain(
         "Password must be at least 8 characters long"
       );
-      expect(response.body.error.message).toContain(
+      expect(response.body.error).toContain(
         "Password must contain at least one uppercase letter"
       );
-      expect(response.body.error.message).toContain("one lowercase letter");
-      expect(response.body.error.message).toContain("one number");
-      expect(response.body.error.message).toContain("one special character");
+      expect(response.body.error).toContain("one lowercase letter");
+      expect(response.body.error).toContain("one number");
+      expect(response.body.error).toContain("one special character");
     });
 
     it("should handle duplicate email", async () => {

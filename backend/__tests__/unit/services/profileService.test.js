@@ -58,6 +58,18 @@ describe("ProfileService", () => {
     global.mockFindUnique.mockReset();
     global.mockUpdate.mockReset();
     global.mockCreate.mockReset();
+
+    // Reset sharp mock
+    const sharp = require("sharp");
+    sharp.mockReturnValue({
+      resize: jest.fn().mockReturnThis(),
+      jpeg: jest.fn().mockReturnThis(),
+      toBuffer: jest.fn().mockResolvedValue(Buffer.from("mock-image")),
+    });
+
+    // Reset path mock
+    const path = require("path");
+    path.extname.mockReturnValue(".jpg");
   });
 
   describe("getProfile", () => {
@@ -124,6 +136,7 @@ describe("ProfileService", () => {
 
       global.mockFindUnique.mockResolvedValue(mockUser);
       global.mockUpdate.mockResolvedValue(updatedUser);
+      global.mockCreate.mockResolvedValue({}); // For audit event creation
 
       const result = await profileService.updateProfile(userId, updateData);
 
@@ -202,6 +215,7 @@ describe("ProfileService", () => {
         ...mockUser,
         avatarUrl: "/uploads/avatars/mock-file.jpg",
       });
+      global.mockCreate.mockResolvedValue({}); // For audit event creation
 
       // Mock file system operations
       const fs = require("fs");
@@ -279,6 +293,18 @@ describe("ProfileService", () => {
         profileService.processAvatarUpload(userId, mockFile)
       ).rejects.toThrow("File size too large");
     });
+
+    it("should throw error for missing file", async () => {
+      const userId = "user123";
+
+      await expect(
+        profileService.processAvatarUpload(userId, null)
+      ).rejects.toThrow("No file uploaded");
+
+      await expect(
+        profileService.processAvatarUpload(userId, undefined)
+      ).rejects.toThrow("No file uploaded");
+    });
   });
 
   describe("processPresignedAvatar", () => {
@@ -297,6 +323,7 @@ describe("ProfileService", () => {
         ...mockUser,
         avatarUrl: presignedUrl,
       });
+      global.mockCreate.mockResolvedValue({}); // For audit event creation
 
       const result = await profileService.processPresignedAvatar(
         userId,
@@ -338,6 +365,18 @@ describe("ProfileService", () => {
         profileService.processPresignedAvatar(userId, invalidUrl)
       ).rejects.toThrow("Invalid presigned URL format");
     });
+
+    it("should throw error for missing presigned URL", async () => {
+      const userId = "user123";
+
+      await expect(
+        profileService.processPresignedAvatar(userId, null)
+      ).rejects.toThrow("Presigned URL is required");
+
+      await expect(
+        profileService.processPresignedAvatar(userId, "")
+      ).rejects.toThrow("Presigned URL is required");
+    });
   });
 
   describe("changePassword", () => {
@@ -370,6 +409,7 @@ describe("ProfileService", () => {
         ...mockUser,
         passwordHash: "hashed-new-password",
       });
+      global.mockCreate.mockResolvedValue({}); // For audit event creation
 
       await profileService.changePassword(userId, currentPassword, newPassword);
 
@@ -487,6 +527,70 @@ describe("ProfileService", () => {
         profileService.changePassword(userId, currentPassword, newPassword)
       ).rejects.toThrow("This password has been compromised in a data breach");
     });
+
+    it("should throw error for OAuth-only users", async () => {
+      const userId = "user123";
+      const currentPassword = "password";
+      const newPassword = "NewPassword123!";
+
+      const mockUser = {
+        id: userId,
+        email: "test@example.com",
+        passwordHash: null, // OAuth-only user
+      };
+
+      global.mockFindUnique.mockResolvedValue(mockUser);
+
+      await expect(
+        profileService.changePassword(userId, currentPassword, newPassword)
+      ).rejects.toThrow("Cannot change password for OAuth-only users");
+    });
+
+    it("should throw error for password without uppercase letter", async () => {
+      const userId = "user123";
+      const currentPassword = "OldPassword123!";
+      const newPassword = "newpassword123!"; // No uppercase
+
+      const mockUser = {
+        id: userId,
+        email: "test@example.com",
+        passwordHash: "hashed-old-password",
+      };
+
+      const bcrypt = require("bcrypt");
+      bcrypt.compare
+        .mockResolvedValueOnce(true) // Current password check
+        .mockResolvedValueOnce(false); // New password different check
+
+      global.mockFindUnique.mockResolvedValue(mockUser);
+
+      await expect(
+        profileService.changePassword(userId, currentPassword, newPassword)
+      ).rejects.toThrow("Password must contain at least one uppercase letter");
+    });
+
+    it("should throw error for password without special character", async () => {
+      const userId = "user123";
+      const currentPassword = "OldPassword123!";
+      const newPassword = "NewPassword123"; // No special character
+
+      const mockUser = {
+        id: userId,
+        email: "test@example.com",
+        passwordHash: "hashed-old-password",
+      };
+
+      const bcrypt = require("bcrypt");
+      bcrypt.compare
+        .mockResolvedValueOnce(true) // Current password check
+        .mockResolvedValueOnce(false); // New password different check
+
+      global.mockFindUnique.mockResolvedValue(mockUser);
+
+      await expect(
+        profileService.changePassword(userId, currentPassword, newPassword)
+      ).rejects.toThrow("Password must contain at least one uppercase letter");
+    });
   });
 
   describe("isValidTimezone", () => {
@@ -507,9 +611,27 @@ describe("ProfileService", () => {
       expect(result).toBe(true);
     });
 
+    it("should validate language-only locale", () => {
+      const result = profileService.isValidLocale("en");
+      expect(result).toBe(true);
+    });
+
+    it("should validate different valid locales", () => {
+      expect(profileService.isValidLocale("fr-FR")).toBe(true);
+      expect(profileService.isValidLocale("de-DE")).toBe(true);
+      expect(profileService.isValidLocale("es")).toBe(true);
+    });
+
     it("should reject invalid locale", () => {
       const result = profileService.isValidLocale("invalid-locale");
       expect(result).toBe(false);
+    });
+
+    it("should reject malformed locales", () => {
+      expect(profileService.isValidLocale("e")).toBe(false); // Too short
+      expect(profileService.isValidLocale("EN-us")).toBe(false); // Wrong case
+      expect(profileService.isValidLocale("en-us-extra")).toBe(false); // Too many parts
+      expect(profileService.isValidLocale("123-45")).toBe(false); // Numbers
     });
   });
 });

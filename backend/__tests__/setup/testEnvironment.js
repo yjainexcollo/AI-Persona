@@ -101,6 +101,10 @@ global.testUtils = {
       }
     }
 
+    if (!workspace) {
+      throw new Error("Failed to create or find workspace for test user");
+    }
+
     try {
       return await global.testPrisma.user.create({
         data: {
