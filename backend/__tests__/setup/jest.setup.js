@@ -184,6 +184,7 @@ jest.mock("../../src/middlewares/rateLimiter", () => ({
   resendVerificationLimiter: (req, res, next) => next(),
   chatLimiter: (req, res, next) => next(),
   personaLimiter: (req, res, next) => next(),
+  publicLimiter: (req, res, next) => next(),
   registerLimiter: (req, res, next) => next(),
   loginLimiter: (req, res, next) => next(),
   passwordResetLimiter: (req, res, next) => next(),

@@ -231,6 +231,28 @@ const personaLimiter = rateLimit({
   skipFailedRequests: true,
 });
 
+// Rate limiting for public routes (stricter limits) - SLIDING WINDOW
+const publicLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 30, // 30 requests per minute (stricter for public routes)
+  message: {
+    error: {
+      message: "Too many requests from this IP, please try again later.",
+    },
+  },
+  keyGenerator: (req) => {
+    // Rate limit per IP for public routes (no user authentication)
+    return `public:${ipKeyGenerator(req)}`;
+  },
+  store: new SlidingWindowRedisStore({
+    prefix: "rl:public:",
+    windowMs: 60 * 1000,
+  }),
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipFailedRequests: true,
+});
+
 /**
  * Check Redis health and connection status
  * @returns {Promise<Object>} Health status object
@@ -495,6 +517,7 @@ module.exports = {
   resendVerificationLimiter,
   chatLimiter,
   personaLimiter,
+  publicLimiter,
   // Auth rate limiters
   registerLimiter,
   loginLimiter,
