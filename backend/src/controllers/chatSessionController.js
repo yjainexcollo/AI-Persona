@@ -6,6 +6,7 @@
 const chatSessionService = require("../services/chatSessionService");
 const apiResponse = require("../utils/apiResponse");
 const asyncHandler = require("../utils/asyncHandler");
+const ApiError = require("../utils/apiError");
 const logger = require("../utils/logger");
 
 /**
@@ -14,12 +15,29 @@ const logger = require("../utils/logger");
  */
 const getUserChatSessions = asyncHandler(async (req, res) => {
   const userId = req.user.id;
-  const { status, limit = 50, offset = 0 } = req.query;
+  const { status, limit = "50", offset = "0" } = req.query;
+
+  // Validate and sanitize query parameters
+  const parsedLimit = parseInt(limit);
+  const parsedOffset = parseInt(offset);
+
+  if (isNaN(parsedLimit) || parsedLimit < 1 || parsedLimit > 100) {
+    throw new ApiError(400, "Limit must be a number between 1 and 100");
+  }
+
+  if (isNaN(parsedOffset) || parsedOffset < 0) {
+    throw new ApiError(400, "Offset must be a non-negative number");
+  }
+
+  // Validate status if provided
+  if (status && typeof status !== "string") {
+    throw new ApiError(400, "Status must be a string");
+  }
 
   const options = {
     status: status || undefined,
-    limit: parseInt(limit),
-    offset: parseInt(offset),
+    limit: parsedLimit,
+    offset: parsedOffset,
   };
 
   const chatSessions = await chatSessionService.getUserChatSessions(
@@ -43,16 +61,19 @@ const getChatSession = asyncHandler(async (req, res) => {
   const { sessionId } = req.params;
   const userId = req.user.id;
 
-  const chatSession = await chatSessionService.getChatSession(sessionId);
+  // Validate sessionId parameter
+  if (!sessionId || typeof sessionId !== "string" || sessionId.trim() === "") {
+    throw new ApiError(
+      400,
+      "Session ID is required and must be a non-empty string"
+    );
+  }
+
+  const chatSession = await chatSessionService.getChatSession(sessionId.trim());
 
   // Ensure user can only access their own sessions
   if (chatSession.userId !== userId) {
-    return res.status(403).json(
-      apiResponse({
-        error: "Access denied",
-        message: "You can only access your own chat sessions",
-      })
-    );
+    throw new ApiError(403, "You can only access your own chat sessions");
   }
 
   res.status(200).json(
@@ -71,7 +92,18 @@ const deleteChatSession = asyncHandler(async (req, res) => {
   const { sessionId } = req.params;
   const userId = req.user.id;
 
-  const result = await chatSessionService.deleteChatSession(sessionId, userId);
+  // Validate sessionId parameter
+  if (!sessionId || typeof sessionId !== "string" || sessionId.trim() === "") {
+    throw new ApiError(
+      400,
+      "Session ID is required and must be a non-empty string"
+    );
+  }
+
+  const result = await chatSessionService.deleteChatSession(
+    sessionId.trim(),
+    userId
+  );
 
   res.status(200).json(
     apiResponse({

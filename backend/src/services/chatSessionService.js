@@ -25,13 +25,40 @@ async function createChatSession(
   metadata = {}
 ) {
   try {
-    // Validate required parameters
-    if (!conversationId || !personaId || !userId) {
-      throw new ApiError(
-        400,
-        "Missing required parameters: conversationId, personaId, or userId"
-      );
+    // Validate required parameters and types
+    if (
+      !conversationId ||
+      typeof conversationId !== "string" ||
+      conversationId.trim() === ""
+    ) {
+      throw new ApiError(400, "conversationId must be a non-empty string");
     }
+
+    if (
+      !personaId ||
+      typeof personaId !== "string" ||
+      personaId.trim() === ""
+    ) {
+      throw new ApiError(400, "personaId must be a non-empty string");
+    }
+
+    if (!userId || typeof userId !== "string" || userId.trim() === "") {
+      throw new ApiError(400, "userId must be a non-empty string");
+    }
+
+    // Validate metadata if provided (null is acceptable)
+    if (
+      metadata !== null &&
+      metadata !== undefined &&
+      typeof metadata !== "object"
+    ) {
+      throw new ApiError(400, "metadata must be an object");
+    }
+
+    // Sanitize inputs
+    conversationId = conversationId.trim();
+    personaId = personaId.trim();
+    userId = userId.trim();
 
     // Generate unique session ID
     const sessionId = crypto.randomBytes(16).toString("hex");
@@ -43,12 +70,18 @@ async function createChatSession(
         personaId,
         userId,
         sessionId,
-        metadata: {
-          userAgent: metadata.userAgent,
-          ipAddress: metadata.ipAddress,
-          deviceInfo: metadata.deviceInfo ?? null,
-          ...metadata,
-        },
+        metadata: metadata
+          ? {
+              userAgent: metadata.userAgent,
+              ipAddress: metadata.ipAddress,
+              deviceInfo: metadata.deviceInfo ?? null,
+              ...metadata,
+            }
+          : {
+              userAgent: undefined,
+              ipAddress: undefined,
+              deviceInfo: null,
+            },
       },
       include: {
         conversation: true,
@@ -82,10 +115,17 @@ async function createChatSession(
  */
 async function getChatSession(sessionId) {
   try {
-    // Validate required parameter
-    if (!sessionId) {
-      throw new ApiError(400, "Missing required parameter: sessionId");
+    // Validate required parameter and type
+    if (
+      !sessionId ||
+      typeof sessionId !== "string" ||
+      sessionId.trim() === ""
+    ) {
+      throw new ApiError(400, "sessionId must be a non-empty string");
     }
+
+    // Sanitize input
+    sessionId = sessionId.trim();
 
     const chatSession = await prisma.chatSession.findUnique({
       where: { sessionId },
@@ -132,13 +172,27 @@ async function getChatSession(sessionId) {
  */
 async function updateChatSessionStatus(sessionId, status, errorMessage = null) {
   try {
-    // Validate required parameters
-    if (!sessionId || !status) {
-      throw new ApiError(
-        400,
-        "Missing required parameters: sessionId or status"
-      );
+    // Validate required parameters and types
+    if (
+      !sessionId ||
+      typeof sessionId !== "string" ||
+      sessionId.trim() === ""
+    ) {
+      throw new ApiError(400, "sessionId must be a non-empty string");
     }
+
+    if (!status || typeof status !== "string" || status.trim() === "") {
+      throw new ApiError(400, "status must be a non-empty string");
+    }
+
+    // Validate error message type if provided
+    if (errorMessage !== null && typeof errorMessage !== "string") {
+      throw new ApiError(400, "errorMessage must be a string or null");
+    }
+
+    // Sanitize inputs
+    sessionId = sessionId.trim();
+    status = status.trim().toUpperCase();
 
     // Validate status enum
     const validStatuses = [
@@ -195,24 +249,42 @@ async function updateChatSessionStatus(sessionId, status, errorMessage = null) {
  */
 async function getUserChatSessions(userId, options = {}) {
   try {
-    // Validate required parameter
-    if (!userId) {
-      throw new ApiError(400, "Missing required parameter: userId");
+    // Validate required parameter and type
+    if (!userId || typeof userId !== "string" || userId.trim() === "") {
+      throw new ApiError(400, "userId must be a non-empty string");
     }
+
+    // Validate options parameter
+    if (options && typeof options !== "object") {
+      throw new ApiError(400, "options must be an object");
+    }
+
+    // Sanitize input
+    userId = userId.trim();
 
     const { status, limit = 50, offset = 0 } = options;
 
-    // Validate limit and offset
-    if (limit < 1 || limit > 100) {
-      throw new ApiError(400, "Limit must be between 1 and 100");
+    // Validate limit and offset types and values
+    if (
+      typeof limit !== "number" ||
+      !Number.isInteger(limit) ||
+      limit < 1 ||
+      limit > 100
+    ) {
+      throw new ApiError(400, "Limit must be an integer between 1 and 100");
     }
-    if (offset < 0) {
-      throw new ApiError(400, "Offset must be non-negative");
+    if (typeof offset !== "number" || !Number.isInteger(offset) || offset < 0) {
+      throw new ApiError(400, "Offset must be a non-negative integer");
     }
 
     const where = { userId };
-    if (status) {
-      // Validate status if provided
+    if (status !== undefined && status !== null) {
+      // Validate status type and value if provided
+      if (typeof status !== "string" || status.trim() === "") {
+        throw new ApiError(400, "status must be a non-empty string");
+      }
+
+      const normalizedStatus = status.trim().toUpperCase();
       const validStatuses = [
         "ACTIVE",
         "COMPLETED",
@@ -220,13 +292,13 @@ async function getUserChatSessions(userId, options = {}) {
         "TIMEOUT",
         "CANCELLED",
       ];
-      if (!validStatuses.includes(status)) {
+      if (!validStatuses.includes(normalizedStatus)) {
         throw new ApiError(
           400,
           `Invalid status. Must be one of: ${validStatuses.join(", ")}`
         );
       }
-      where.status = status;
+      where.status = normalizedStatus;
     }
 
     const chatSessions = await prisma.chatSession.findMany({
@@ -264,6 +336,15 @@ async function getUserChatSessions(userId, options = {}) {
  */
 async function cleanupExpiredSessions(inactiveHours = 24) {
   try {
+    // Validate inactiveHours parameter
+    if (
+      typeof inactiveHours !== "number" ||
+      inactiveHours <= 0 ||
+      !Number.isFinite(inactiveHours)
+    ) {
+      throw new ApiError(400, "inactiveHours must be a positive number");
+    }
+
     const cutoff = new Date(Date.now() - inactiveHours * 60 * 60 * 1000);
     const result = await prisma.chatSession.updateMany({
       where: {
@@ -279,6 +360,7 @@ async function cleanupExpiredSessions(inactiveHours = 24) {
 
     return result.count;
   } catch (error) {
+    if (error instanceof ApiError) throw error;
     logger.error("Error cleaning up expired chat sessions:", error);
     throw new ApiError(500, "Failed to cleanup expired chat sessions");
   }
@@ -291,6 +373,14 @@ async function cleanupExpiredSessions(inactiveHours = 24) {
  */
 async function getChatSessionStats(userId) {
   try {
+    // Validate required parameter and type
+    if (!userId || typeof userId !== "string" || userId.trim() === "") {
+      throw new ApiError(400, "userId must be a non-empty string");
+    }
+
+    // Sanitize input
+    userId = userId.trim();
+
     const [byStatusRaw, total, active] = await Promise.all([
       prisma.chatSession.groupBy({
         by: ["status"],
@@ -308,6 +398,7 @@ async function getChatSessionStats(userId) {
 
     return { total, active, byStatus };
   } catch (error) {
+    if (error instanceof ApiError) throw error;
     logger.error("Error getting chat session stats:", error);
     throw new ApiError(500, "Failed to get chat session stats");
   }
@@ -321,6 +412,23 @@ async function getChatSessionStats(userId) {
  */
 async function deleteChatSession(sessionId, userId) {
   try {
+    // Validate required parameters and types
+    if (
+      !sessionId ||
+      typeof sessionId !== "string" ||
+      sessionId.trim() === ""
+    ) {
+      throw new ApiError(400, "sessionId must be a non-empty string");
+    }
+
+    if (!userId || typeof userId !== "string" || userId.trim() === "") {
+      throw new ApiError(400, "userId must be a non-empty string");
+    }
+
+    // Sanitize inputs
+    sessionId = sessionId.trim();
+    userId = userId.trim();
+
     // Get session and verify ownership
     const chatSession = await prisma.chatSession.findUnique({
       where: { sessionId },

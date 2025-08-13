@@ -1,54 +1,108 @@
 const rateLimit = require("express-rate-limit");
 const { ipKeyGenerator } = require("express-rate-limit");
 const Redis = require("ioredis");
+const logger = require("../utils/logger");
 
-// Initialize Redis client
+// Initialize Redis client with enhanced configuration
 const redis = new Redis(process.env.REDIS_URL || "redis://localhost:6379", {
   retryDelayOnFailover: 100,
   maxRetriesPerRequest: 3,
   lazyConnect: true,
+  connectTimeout: 10000,
+  commandTimeout: 5000,
+  // Reconnection settings
+  retryDelayOnClusterDown: 300,
+  maxRetriesPerRequest: null,
+  enableReadyCheck: false,
 });
 
-// Redis connection error handling
+// Redis connection event handling
 redis.on("error", (err) => {
-  console.warn("Redis rate limiter error:", err.message);
-  // Fallback to memory-based rate limiting if Redis fails
+  logger.warn("Redis rate limiter error:", err.message);
 });
 
 redis.on("connect", () => {
-  console.log("Redis connected for rate limiting");
+  logger.info("Redis connected for rate limiting");
+});
+
+redis.on("ready", () => {
+  logger.info("Redis ready for rate limiting operations");
+});
+
+redis.on("close", () => {
+  logger.warn("Redis connection closed for rate limiting");
+});
+
+redis.on("reconnecting", () => {
+  logger.info("Redis reconnecting for rate limiting");
 });
 
 // Custom sliding window store using Redis
 class SlidingWindowRedisStore {
   constructor(options = {}) {
-    this.prefix = options.prefix || "rl:";
-    this.windowMs = options.windowMs || 60000;
+    // Validate options
+    if (options && typeof options !== "object") {
+      throw new Error("Options must be an object");
+    }
+
+    this.prefix = (options && options.prefix) || "rl:";
+    this.windowMs = (options && options.windowMs) || 60000;
     this.redis = redis;
+
+    // Validate windowMs
+    if (typeof this.windowMs !== "number" || this.windowMs <= 0) {
+      throw new Error("windowMs must be a positive number");
+    }
+
+    // Validate prefix
+    if (typeof this.prefix !== "string") {
+      throw new Error("prefix must be a string");
+    }
   }
 
   async increment(key) {
+    // Input validation
+    if (!key || typeof key !== "string") {
+      throw new Error("Key must be a non-empty string");
+    }
+
     const now = Date.now();
     const window = this.windowMs;
     const redisKey = `${this.prefix}${key}`;
 
     try {
+      // Ensure Redis is connected
+      if (this.redis.status !== "ready") {
+        await this.redis.connect();
+      }
+
       // Use Redis pipeline for atomic operations
       const pipeline = this.redis.pipeline();
 
       // Remove expired entries (sliding window)
       pipeline.zremrangebyscore(redisKey, 0, now - window);
 
-      // Add current request with timestamp
-      pipeline.zadd(redisKey, now, `${now}-${Math.random()}`);
+      // Add current request with timestamp and unique identifier
+      const uniqueId = `${now}-${Math.random().toString(36).substring(2)}`;
+      pipeline.zadd(redisKey, now, uniqueId);
 
       // Count current entries
       pipeline.zcard(redisKey);
 
-      // Set expiration for cleanup
-      pipeline.expire(redisKey, Math.ceil(window / 1000) + 1);
+      // Set expiration for cleanup (add buffer time)
+      pipeline.expire(redisKey, Math.ceil(window / 1000) + 10);
 
       const results = await pipeline.exec();
+
+      // Check for pipeline errors
+      const hasError = results.some((result) => result[0] !== null);
+      if (hasError) {
+        const errors = results
+          .filter((result) => result[0] !== null)
+          .map((result) => result[0]);
+        throw new Error(`Pipeline errors: ${errors.join(", ")}`);
+      }
+
       const count = results[2][1]; // Get count from zcard result
 
       return {
@@ -56,25 +110,58 @@ class SlidingWindowRedisStore {
         resetTime: new Date(now + window),
       };
     } catch (error) {
-      console.warn("Sliding window Redis error:", error.message);
+      logger.warn("Sliding window Redis error:", error.message);
       // Return safe defaults if Redis fails
       return {
         totalHits: 1,
         resetTime: new Date(now + window),
+        error: error.message,
       };
     }
   }
 
   async decrement(key) {
-    // Not needed for sliding window, but required by interface
-    return {};
+    // Input validation
+    if (!key || typeof key !== "string") {
+      throw new Error("Key must be a non-empty string");
+    }
+
+    try {
+      // Ensure Redis is connected
+      if (this.redis.status !== "ready") {
+        await this.redis.connect();
+      }
+
+      const redisKey = `${this.prefix}${key}`;
+      const now = Date.now();
+
+      // Remove the most recent entry
+      await this.redis.zremrangebyrank(redisKey, -1, -1);
+
+      return { success: true };
+    } catch (error) {
+      logger.warn("Redis decrement error:", error.message);
+      return { success: false, error: error.message };
+    }
   }
 
   async resetKey(key) {
+    // Input validation
+    if (!key || typeof key !== "string") {
+      throw new Error("Key must be a non-empty string");
+    }
+
     try {
-      await this.redis.del(`${this.prefix}${key}`);
+      // Ensure Redis is connected
+      if (this.redis.status !== "ready") {
+        await this.redis.connect();
+      }
+
+      const result = await this.redis.del(`${this.prefix}${key}`);
+      return { success: true, deletedCount: result };
     } catch (error) {
-      console.warn("Redis reset error:", error.message);
+      logger.warn("Redis reset error:", error.message);
+      return { success: false, error: error.message };
     }
   }
 }
@@ -144,64 +231,179 @@ const personaLimiter = rateLimit({
   skipFailedRequests: true,
 });
 
-// Utility function to check Redis health
+/**
+ * Check Redis health and connection status
+ * @returns {Promise<Object>} Health status object
+ */
 const checkRedisHealth = async () => {
   try {
-    // Ensure Redis is connected before pinging
-    if (redis.status !== "ready") {
-      await redis.connect();
+    // Check current connection status
+    const status = redis.status;
+
+    // Try to connect if not ready
+    if (status !== "ready") {
+      try {
+        await redis.connect();
+      } catch (connectError) {
+        logger.warn("Redis connection attempt failed:", connectError.message);
+        return {
+          healthy: false,
+          status,
+          message: `Redis connection failed: ${connectError.message}`,
+        };
+      }
     }
-    await redis.ping();
-    return { healthy: true, message: "Redis connected" };
+
+    // Ping Redis to verify it's responding
+    const pingResult = await redis.ping();
+    const finalStatus = redis.status;
+
+    return {
+      healthy: true,
+      status: finalStatus,
+      message: "Redis connected and responding",
+      pingResult,
+    };
   } catch (error) {
+    logger.error("Redis health check failed:", error.message);
     return {
       healthy: false,
-      message: error.message || "Redis connection failed",
+      status: redis.status,
+      message: error.message || "Redis health check failed",
+      error: error.name || "UnknownError",
     };
   }
 };
 
-// Utility function to clear rate limits (for admin/testing)
+/**
+ * Clear rate limits for a specific key pattern (for admin/testing)
+ * @param {string} key - The key pattern to clear
+ * @param {string} prefix - The prefix to use (default: "rl:")
+ * @returns {Promise<Object>} Result of the clear operation
+ */
 const clearRateLimit = async (key, prefix = "rl:") => {
-  try {
-    const pattern = `${prefix}${key}*`;
-    const keys = await redis.keys(pattern);
-    if (keys.length > 0) {
-      await redis.del(...keys);
-      return { cleared: keys.length };
-    }
-    return { cleared: 0 };
-  } catch (error) {
-    console.warn("Error clearing rate limits:", error.message);
-    return { error: error.message };
+  // Input validation
+  if (!key || typeof key !== "string") {
+    return { error: "Key must be a non-empty string" };
   }
-};
 
-// Get current rate limit status for a key
-const getRateLimitStatus = async (key, prefix = "rl:") => {
+  if (typeof prefix !== "string") {
+    return { error: "Prefix must be a string" };
+  }
+
   try {
     // Ensure Redis is connected
     if (redis.status !== "ready") {
       await redis.connect();
     }
 
-    const redisKey = `${prefix}${key}`;
-    const count = await redis.zcard(redisKey);
-    const ttl = await redis.ttl(redisKey);
+    const pattern = `${prefix}${key}*`;
+    const keys = await redis.keys(pattern);
+
+    if (keys.length > 0) {
+      const deletedCount = await redis.del(...keys);
+      logger.info(
+        `Cleared ${deletedCount} rate limit keys for pattern: ${pattern}`
+      );
+      return {
+        success: true,
+        cleared: deletedCount,
+        pattern,
+        keys: keys.length,
+      };
+    }
+
+    return {
+      success: true,
+      cleared: 0,
+      pattern,
+      message: "No keys found to clear",
+    };
+  } catch (error) {
+    logger.warn("Error clearing rate limits:", error.message);
+    return {
+      success: false,
+      error: error.message,
+      pattern: `${prefix}${key}*`,
+    };
+  }
+};
+
+/**
+ * Get current rate limit status for a key
+ * @param {string} key - The key to check
+ * @param {string} prefix - The prefix to use (default: "rl:")
+ * @returns {Promise<Object>} Rate limit status object
+ */
+const getRateLimitStatus = async (key, prefix = "rl:") => {
+  // Input validation
+  if (!key || typeof key !== "string") {
+    return {
+      error: "Key must be a non-empty string",
+      key: null,
+      currentCount: 0,
+      ttlSeconds: -1,
+      exists: false,
+    };
+  }
+
+  if (typeof prefix !== "string") {
+    return {
+      error: "Prefix must be a string",
+      key: null,
+      currentCount: 0,
+      ttlSeconds: -1,
+      exists: false,
+    };
+  }
+
+  const redisKey = `${prefix}${key}`;
+
+  try {
+    // Ensure Redis is connected
+    if (redis.status !== "ready") {
+      await redis.connect();
+    }
+
+    // Use pipeline for atomic operations
+    const pipeline = redis.pipeline();
+    pipeline.zcard(redisKey);
+    pipeline.ttl(redisKey);
+    pipeline.exists(redisKey);
+
+    const results = await pipeline.exec();
+
+    // Check for pipeline errors
+    const hasError = results.some((result) => result[0] !== null);
+    if (hasError) {
+      const errors = results
+        .filter((result) => result[0] !== null)
+        .map((result) => result[0]);
+      throw new Error(`Pipeline errors: ${errors.join(", ")}`);
+    }
+
+    const count = results[0][1];
+    const ttl = results[1][1];
+    const exists = results[2][1] === 1;
 
     return {
       key: redisKey,
       currentCount: count,
       ttlSeconds: ttl,
-      exists: count > 0,
+      exists,
+      status: redis.status,
+      timestamp: new Date().toISOString(),
     };
   } catch (error) {
+    logger.warn("Error getting rate limit status:", error.message);
     return {
-      key: `${prefix}${key}`,
+      key: redisKey,
       currentCount: 0,
       ttlSeconds: -1,
       exists: false,
-      error: error.message || "Redis connection failed",
+      status: redis.status,
+      error: error.message || "Redis operation failed",
+      timestamp: new Date().toISOString(),
     };
   }
 };
@@ -258,6 +460,36 @@ const passwordResetLimiter = rateLimit({
   skipFailedRequests: true,
 });
 
+/**
+ * Cleanup Redis connection and resources
+ * @returns {Promise<void>}
+ */
+const cleanup = async () => {
+  try {
+    if (redis && redis.status !== "end") {
+      await redis.disconnect();
+      logger.info("Redis connection closed for rate limiting");
+    }
+  } catch (error) {
+    logger.warn("Error during Redis cleanup:", error.message);
+  }
+};
+
+/**
+ * Get Redis connection status
+ * @returns {Object} Connection status information
+ */
+const getRedisStatus = () => {
+  return {
+    status: redis.status,
+    connected: redis.status === "ready",
+    uptime:
+      redis.status === "ready"
+        ? Date.now() - (redis.connectTime || Date.now())
+        : 0,
+  };
+};
+
 module.exports = {
   // Persona & Chat rate limiters
   resendVerificationLimiter,
@@ -272,5 +504,8 @@ module.exports = {
   checkRedisHealth,
   clearRateLimit,
   getRateLimitStatus,
+  cleanup,
+  getRedisStatus,
+  // Classes for testing and extension
   SlidingWindowRedisStore,
 };

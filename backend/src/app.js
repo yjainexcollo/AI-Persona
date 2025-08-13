@@ -3,10 +3,9 @@ const helmet = require("helmet");
 const cors = require("cors");
 const morgan = require("morgan");
 const logger = require("./utils/logger");
-
 const passport = require("passport");
-const passportSetup = require("./middlewares/passportSetup");
-passportSetup();
+const { initializePassport } = require("./middlewares/passportSetup");
+initializePassport();
 
 const authRoutes = require("./routes/authRoutes");
 const profileRoutes = require("./routes/profileRoutes");

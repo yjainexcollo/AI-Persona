@@ -36,8 +36,18 @@ const register = asyncHandler(async (req, res) => {
   const { email, password, name } = req.body;
   const { ipAddress, userAgent, traceId } = getClientInfo(req);
 
-  if (!email || !password) {
-    throw new ApiError(400, "Email and password are required");
+  if (!email || typeof email !== "string" || email.trim() === "") {
+    throw new ApiError(400, "Email is required");
+  }
+
+  if (!password || typeof password !== "string" || password.trim() === "") {
+    throw new ApiError(400, "Password is required");
+  }
+
+  // Basic email format validation
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email.trim())) {
+    throw new ApiError(400, "Invalid email format");
   }
 
   const result = await authService.register(
@@ -74,8 +84,18 @@ const login = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
   const { ipAddress, userAgent, traceId } = getClientInfo(req);
 
-  if (!email || !password) {
-    throw new ApiError(400, "Email and password are required");
+  if (!email || typeof email !== "string" || email.trim() === "") {
+    throw new ApiError(400, "Email is required");
+  }
+
+  if (!password || typeof password !== "string" || password.trim() === "") {
+    throw new ApiError(400, "Password is required");
+  }
+
+  // Basic email format validation
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email.trim())) {
+    throw new ApiError(400, "Invalid email format");
   }
 
   const result = await authService.login(
@@ -110,7 +130,11 @@ const refreshTokens = asyncHandler(async (req, res) => {
   const { refreshToken } = req.body;
   const { ipAddress, userAgent, traceId } = getClientInfo(req);
 
-  if (!refreshToken) {
+  if (
+    !refreshToken ||
+    typeof refreshToken !== "string" ||
+    refreshToken.trim() === ""
+  ) {
     throw new ApiError(400, "Refresh token is required");
   }
 
@@ -163,7 +187,7 @@ const verifyEmail = asyncHandler(async (req, res) => {
   const { token } = req.query;
   const { ipAddress, userAgent, traceId } = getClientInfo(req);
 
-  if (!token) {
+  if (!token || typeof token !== "string" || token.trim() === "") {
     throw new ApiError(400, "Verification token is required");
   }
 
@@ -195,12 +219,18 @@ const resendVerification = asyncHandler(async (req, res) => {
   const { email } = req.body;
   const { ipAddress, userAgent, traceId } = getClientInfo(req);
 
-  if (!email) {
+  if (!email || typeof email !== "string" || email.trim() === "") {
     throw new ApiError(400, "Email is required");
   }
 
+  // Basic email format validation
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email.trim())) {
+    throw new ApiError(400, "Invalid email format");
+  }
+
   const user = await prisma.user.findFirst({
-    where: { email },
+    where: { email: email.trim().toLowerCase() },
   });
 
   if (!user) {
@@ -218,7 +248,7 @@ const resendVerification = asyncHandler(async (req, res) => {
   await emailService.resendVerificationEmail(user);
   await authService.createAuditEvent(
     user.id,
-    "REQUEST_PASSWORD_RESET",
+    "RESEND_VERIFICATION",
     null,
     ipAddress,
     userAgent,

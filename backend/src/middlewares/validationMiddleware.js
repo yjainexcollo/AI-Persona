@@ -1,14 +1,30 @@
 const { body, param, query, validationResult } = require("express-validator");
 const ApiError = require("../utils/apiError");
 
-// Handle validation errors
+/**
+ * Handle validation errors from express-validator
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ * @param {Function} next - Express next function
+ */
 const handleValidationErrors = (req, res, next) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    const errorMessages = errors.array().map((error) => error.msg);
-    throw new ApiError(400, `Validation failed: ${errorMessages.join(", ")}`);
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      const errorMessages = errors.array().map((error) => {
+        // Include field name in error message for better UX
+        const fieldName = error.param || "field";
+        return `${fieldName}: ${error.msg}`;
+      });
+      return next(
+        new ApiError(400, `Validation failed: ${errorMessages.join(", ")}`)
+      );
+    }
+    next();
+  } catch (error) {
+    // Handle unexpected errors in validation processing
+    return next(new ApiError(500, "Validation processing failed"));
   }
-  next();
 };
 
 // Registration validation
@@ -255,31 +271,71 @@ const validateStatusPatch = [
   handleValidationErrors,
 ];
 
-// Generic string validation
-const validateString = (fieldName, minLength = 1, maxLength = 255) => [
-  body(fieldName)
-    .trim()
-    .isLength({ min: minLength, max: maxLength })
-    .withMessage(
-      `${fieldName} must be between ${minLength} and ${maxLength} characters`
-    ),
-  handleValidationErrors,
-];
+/**
+ * Generic string validation factory
+ * @param {string} fieldName - Name of the field to validate
+ * @param {number} minLength - Minimum length (default: 1)
+ * @param {number} maxLength - Maximum length (default: 255)
+ * @returns {Array} Validation middleware array
+ */
+const validateString = (fieldName, minLength = 1, maxLength = 255) => {
+  if (typeof fieldName !== "string" || !fieldName.trim()) {
+    throw new Error("Field name must be a non-empty string");
+  }
+  if (typeof minLength !== "number" || minLength < 0) {
+    throw new Error("Min length must be a non-negative number");
+  }
+  if (typeof maxLength !== "number" || maxLength < minLength) {
+    throw new Error(
+      "Max length must be a number greater than or equal to min length"
+    );
+  }
 
-// Generic email validation
-const validateEmail = (fieldName) => [
-  body(fieldName)
-    .isEmail()
-    .normalizeEmail()
-    .withMessage("Please provide a valid email address"),
-  handleValidationErrors,
-];
+  return [
+    body(fieldName)
+      .trim()
+      .isLength({ min: minLength, max: maxLength })
+      .withMessage(
+        `${fieldName} must be between ${minLength} and ${maxLength} characters`
+      ),
+    handleValidationErrors,
+  ];
+};
 
-// Generic UUID/CUID validation
-const validateId = (fieldName) => [
-  param(fieldName).notEmpty().withMessage(`${fieldName} is required`),
-  handleValidationErrors,
-];
+/**
+ * Generic email validation factory
+ * @param {string} fieldName - Name of the field to validate
+ * @returns {Array} Validation middleware array
+ */
+const validateEmail = (fieldName) => {
+  if (typeof fieldName !== "string" || !fieldName.trim()) {
+    throw new Error("Field name must be a non-empty string");
+  }
+
+  return [
+    body(fieldName)
+      .isEmail()
+      .normalizeEmail()
+      .withMessage("Please provide a valid email address"),
+    handleValidationErrors,
+  ];
+};
+
+/**
+ * Generic ID validation factory
+ * @param {string} fieldName - Name of the field to validate
+ * @returns {Array} Validation middleware array
+ */
+const validateId = (fieldName) => {
+  if (typeof fieldName !== "string" || !fieldName.trim()) {
+    throw new Error("Field name must be a non-empty string");
+  }
+
+  return [
+    param(fieldName).notEmpty().withMessage(`${fieldName} is required`),
+    handleValidationErrors,
+  ];
+};
 
 // Persona validation schemas
 const validatePersonaId = [
@@ -309,12 +365,16 @@ const validateFavouriteToggle = [
 
 // Conversation validation schemas
 const validateConversationId = [
-  param("id").matches(/^[a-z0-9]{25}$/).withMessage("Conversation ID must be a valid cuid"),
+  param("id")
+    .matches(/^[a-z0-9]{25}$/)
+    .withMessage("Conversation ID must be a valid cuid"),
   handleValidationErrors,
 ];
 
 const validateConversationVisibility = [
-  param("id").matches(/^[a-z0-9]{25}$/).withMessage("Conversation ID must be a valid cuid"),
+  param("id")
+    .matches(/^[a-z0-9]{25}$/)
+    .withMessage("Conversation ID must be a valid cuid"),
   body("visibility")
     .isIn(["PRIVATE", "SHARED"])
     .withMessage("Visibility must be either PRIVATE or SHARED"),
@@ -331,12 +391,16 @@ const validateConversationQuery = [
 
 // Message validation schemas
 const validateMessageId = [
-  param("id").matches(/^[a-z0-9]{25}$/).withMessage("Message ID must be a valid cuid"),
+  param("id")
+    .matches(/^[a-z0-9]{25}$/)
+    .withMessage("Message ID must be a valid cuid"),
   handleValidationErrors,
 ];
 
 const validateMessageEdit = [
-  param("id").matches(/^[a-z0-9]{25}$/).withMessage("Message ID must be a valid cuid"),
+  param("id")
+    .matches(/^[a-z0-9]{25}$/)
+    .withMessage("Message ID must be a valid cuid"),
   body("content")
     .trim()
     .notEmpty()
@@ -348,7 +412,9 @@ const validateMessageEdit = [
 
 // File upload validation schemas
 const validateFileUpload = [
-  param("id").matches(/^[a-z0-9]{25}$/).withMessage("Conversation ID must be a valid cuid"),
+  param("id")
+    .matches(/^[a-z0-9]{25}$/)
+    .withMessage("Conversation ID must be a valid cuid"),
   body("filename")
     .trim()
     .notEmpty()
@@ -369,7 +435,9 @@ const validateFileUpload = [
 
 // Reaction validation schemas
 const validateReaction = [
-  param("id").matches(/^[a-z0-9]{25}$/).withMessage("Message ID must be a valid cuid"),
+  param("id")
+    .matches(/^[a-z0-9]{25}$/)
+    .withMessage("Message ID must be a valid cuid"),
   body("type")
     .isIn(["LIKE", "DISLIKE"])
     .withMessage("Reaction type must be LIKE or DISLIKE"),
@@ -378,14 +446,18 @@ const validateReaction = [
 
 // Archive validation schemas
 const validateArchive = [
-  param("id").matches(/^[a-z0-9]{25}$/).withMessage("Conversation ID must be a valid cuid"),
+  param("id")
+    .matches(/^[a-z0-9]{25}$/)
+    .withMessage("Conversation ID must be a valid cuid"),
   body("archived").isBoolean().withMessage("Archived must be a boolean"),
   handleValidationErrors,
 ];
 
 // Share link validation schemas
 const validateShareLink = [
-  param("id").matches(/^[a-z0-9]{25}$/).withMessage("Conversation ID must be a valid cuid"),
+  param("id")
+    .matches(/^[a-z0-9]{25}$/)
+    .withMessage("Conversation ID must be a valid cuid"),
   body("expiresInDays")
     .optional()
     .isInt({ min: 1, max: 365 })

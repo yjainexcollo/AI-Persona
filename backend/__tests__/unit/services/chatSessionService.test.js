@@ -70,25 +70,129 @@ describe("ChatSessionService", () => {
     it("should throw error for missing conversationId", async () => {
       await expect(
         chatSessionService.createChatSession(null, "persona123", "user123")
-      ).rejects.toThrow(
-        "Missing required parameters: conversationId, personaId, or userId"
-      );
+      ).rejects.toThrow("conversationId must be a non-empty string");
+    });
+
+    it("should throw error for empty conversationId", async () => {
+      await expect(
+        chatSessionService.createChatSession("", "persona123", "user123")
+      ).rejects.toThrow("conversationId must be a non-empty string");
+    });
+
+    it("should throw error for non-string conversationId", async () => {
+      await expect(
+        chatSessionService.createChatSession(123, "persona123", "user123")
+      ).rejects.toThrow("conversationId must be a non-empty string");
+    });
+
+    it("should throw error for whitespace-only conversationId", async () => {
+      await expect(
+        chatSessionService.createChatSession("   ", "persona123", "user123")
+      ).rejects.toThrow("conversationId must be a non-empty string");
     });
 
     it("should throw error for missing personaId", async () => {
       await expect(
         chatSessionService.createChatSession("conv123", null, "user123")
-      ).rejects.toThrow(
-        "Missing required parameters: conversationId, personaId, or userId"
-      );
+      ).rejects.toThrow("personaId must be a non-empty string");
+    });
+
+    it("should throw error for empty personaId", async () => {
+      await expect(
+        chatSessionService.createChatSession("conv123", "", "user123")
+      ).rejects.toThrow("personaId must be a non-empty string");
+    });
+
+    it("should throw error for non-string personaId", async () => {
+      await expect(
+        chatSessionService.createChatSession("conv123", 123, "user123")
+      ).rejects.toThrow("personaId must be a non-empty string");
     });
 
     it("should throw error for missing userId", async () => {
       await expect(
         chatSessionService.createChatSession("conv123", "persona123", null)
-      ).rejects.toThrow(
-        "Missing required parameters: conversationId, personaId, or userId"
+      ).rejects.toThrow("userId must be a non-empty string");
+    });
+
+    it("should throw error for empty userId", async () => {
+      await expect(
+        chatSessionService.createChatSession("conv123", "persona123", "")
+      ).rejects.toThrow("userId must be a non-empty string");
+    });
+
+    it("should throw error for non-string userId", async () => {
+      await expect(
+        chatSessionService.createChatSession("conv123", "persona123", 123)
+      ).rejects.toThrow("userId must be a non-empty string");
+    });
+
+    it("should throw error for invalid metadata type", async () => {
+      await expect(
+        chatSessionService.createChatSession(
+          "conv123",
+          "persona123",
+          "user123",
+          "invalid"
+        )
+      ).rejects.toThrow("metadata must be an object");
+    });
+
+    it("should handle metadata as null", async () => {
+      const mockSession = {
+        id: "session123",
+        sessionId: "abc123def456",
+        conversationId: "conv123",
+        personaId: "persona123",
+        userId: "user123",
+        metadata: { deviceInfo: null },
+      };
+
+      mockPrisma.chatSession.create.mockResolvedValue(mockSession);
+
+      const result = await chatSessionService.createChatSession(
+        "conv123",
+        "persona123",
+        "user123",
+        null
       );
+
+      expect(result).toEqual(mockSession);
+    });
+
+    it("should sanitize input parameters", async () => {
+      const mockSession = {
+        id: "session123",
+        sessionId: "abc123def456",
+        conversationId: "conv123",
+        personaId: "persona123",
+        userId: "user123",
+      };
+
+      mockPrisma.chatSession.create.mockResolvedValue(mockSession);
+
+      await chatSessionService.createChatSession(
+        "  conv123  ",
+        "  persona123  ",
+        "  user123  ",
+        { test: "data" }
+      );
+
+      expect(mockPrisma.chatSession.create).toHaveBeenCalledWith({
+        data: {
+          conversationId: "conv123",
+          personaId: "persona123",
+          userId: "user123",
+          sessionId: expect.any(String),
+          metadata: {
+            userAgent: undefined,
+            ipAddress: undefined,
+            deviceInfo: null,
+            test: "data",
+          },
+        },
+        include: expect.any(Object),
+      });
     });
 
     it("should handle creation errors", async () => {
@@ -182,13 +286,95 @@ describe("ChatSessionService", () => {
     it("should throw error for missing sessionId", async () => {
       await expect(
         chatSessionService.updateChatSessionStatus(null, "COMPLETED")
-      ).rejects.toThrow("Missing required parameters: sessionId or status");
+      ).rejects.toThrow("sessionId must be a non-empty string");
+    });
+
+    it("should throw error for empty sessionId", async () => {
+      await expect(
+        chatSessionService.updateChatSessionStatus("", "COMPLETED")
+      ).rejects.toThrow("sessionId must be a non-empty string");
+    });
+
+    it("should throw error for non-string sessionId", async () => {
+      await expect(
+        chatSessionService.updateChatSessionStatus(123, "COMPLETED")
+      ).rejects.toThrow("sessionId must be a non-empty string");
     });
 
     it("should throw error for missing status", async () => {
       await expect(
         chatSessionService.updateChatSessionStatus("abc123def456", null)
-      ).rejects.toThrow("Missing required parameters: sessionId or status");
+      ).rejects.toThrow("status must be a non-empty string");
+    });
+
+    it("should throw error for empty status", async () => {
+      await expect(
+        chatSessionService.updateChatSessionStatus("abc123def456", "")
+      ).rejects.toThrow("status must be a non-empty string");
+    });
+
+    it("should throw error for non-string status", async () => {
+      await expect(
+        chatSessionService.updateChatSessionStatus("abc123def456", 123)
+      ).rejects.toThrow("status must be a non-empty string");
+    });
+
+    it("should throw error for invalid errorMessage type", async () => {
+      await expect(
+        chatSessionService.updateChatSessionStatus(
+          "abc123def456",
+          "FAILED",
+          123
+        )
+      ).rejects.toThrow("errorMessage must be a string or null");
+    });
+
+    it("should normalize status to uppercase", async () => {
+      const mockUpdatedSession = {
+        id: "session123",
+        sessionId: "abc123def456",
+        status: "COMPLETED",
+        endedAt: new Date(),
+      };
+
+      mockPrisma.chatSession.update.mockResolvedValue(mockUpdatedSession);
+
+      const result = await chatSessionService.updateChatSessionStatus(
+        "abc123def456",
+        "completed"
+      );
+
+      expect(result).toEqual(mockUpdatedSession);
+      expect(mockPrisma.chatSession.update).toHaveBeenCalledWith({
+        where: { sessionId: "abc123def456" },
+        data: {
+          status: "COMPLETED",
+          lastActivityAt: expect.any(Date),
+          endedAt: expect.any(Date),
+        },
+        include: expect.any(Object),
+      });
+    });
+
+    it("should sanitize sessionId input", async () => {
+      const mockUpdatedSession = {
+        id: "session123",
+        sessionId: "abc123def456",
+        status: "COMPLETED",
+      };
+
+      mockPrisma.chatSession.update.mockResolvedValue(mockUpdatedSession);
+
+      await chatSessionService.updateChatSessionStatus(
+        "  abc123def456  ",
+        "COMPLETED"
+      );
+
+      expect(mockPrisma.chatSession.update).toHaveBeenCalledWith({
+        where: { sessionId: "abc123def456" },
+        data: expect.any(Object),
+        include: expect.any(Object),
+      });
     });
 
     it("should throw error for invalid status", async () => {
@@ -282,8 +468,44 @@ describe("ChatSessionService", () => {
 
     it("should throw error for missing sessionId", async () => {
       await expect(chatSessionService.getChatSession(null)).rejects.toThrow(
-        "Missing required parameter: sessionId"
+        "sessionId must be a non-empty string"
       );
+    });
+
+    it("should throw error for empty sessionId", async () => {
+      await expect(chatSessionService.getChatSession("")).rejects.toThrow(
+        "sessionId must be a non-empty string"
+      );
+    });
+
+    it("should throw error for non-string sessionId", async () => {
+      await expect(chatSessionService.getChatSession(123)).rejects.toThrow(
+        "sessionId must be a non-empty string"
+      );
+    });
+
+    it("should throw error for whitespace-only sessionId", async () => {
+      await expect(chatSessionService.getChatSession("   ")).rejects.toThrow(
+        "sessionId must be a non-empty string"
+      );
+    });
+
+    it("should sanitize sessionId input", async () => {
+      const mockSession = {
+        id: "session123",
+        sessionId: "abc123def456",
+        userId: "user123",
+        messages: [],
+      };
+
+      mockPrisma.chatSession.findUnique.mockResolvedValue(mockSession);
+
+      await chatSessionService.getChatSession("  abc123def456  ");
+
+      expect(mockPrisma.chatSession.findUnique).toHaveBeenCalledWith({
+        where: { sessionId: "abc123def456" },
+        include: expect.any(Object),
+      });
     });
   });
 
@@ -359,7 +581,25 @@ describe("ChatSessionService", () => {
     it("should throw error for missing userId", async () => {
       await expect(
         chatSessionService.getUserChatSessions(null)
-      ).rejects.toThrow("Missing required parameter: userId");
+      ).rejects.toThrow("userId must be a non-empty string");
+    });
+
+    it("should throw error for empty userId", async () => {
+      await expect(chatSessionService.getUserChatSessions("")).rejects.toThrow(
+        "userId must be a non-empty string"
+      );
+    });
+
+    it("should throw error for non-string userId", async () => {
+      await expect(chatSessionService.getUserChatSessions(123)).rejects.toThrow(
+        "userId must be a non-empty string"
+      );
+    });
+
+    it("should throw error for invalid options type", async () => {
+      await expect(
+        chatSessionService.getUserChatSessions("user123", "invalid")
+      ).rejects.toThrow("options must be an object");
     });
 
     it("should throw error for invalid status", async () => {
@@ -370,20 +610,87 @@ describe("ChatSessionService", () => {
       );
     });
 
+    it("should throw error for empty status", async () => {
+      await expect(
+        chatSessionService.getUserChatSessions("user123", { status: "" })
+      ).rejects.toThrow("status must be a non-empty string");
+    });
+
+    it("should throw error for non-string status", async () => {
+      await expect(
+        chatSessionService.getUserChatSessions("user123", { status: 123 })
+      ).rejects.toThrow("status must be a non-empty string");
+    });
+
+    it("should normalize status to uppercase", async () => {
+      const mockSessions = [
+        {
+          id: "session1",
+          sessionId: "abc123",
+          status: "COMPLETED",
+        },
+      ];
+
+      mockPrisma.chatSession.findMany.mockResolvedValue(mockSessions);
+
+      const result = await chatSessionService.getUserChatSessions("user123", {
+        status: "completed",
+      });
+
+      expect(result).toEqual(mockSessions);
+      expect(mockPrisma.chatSession.findMany).toHaveBeenCalledWith({
+        where: { userId: "user123", status: "COMPLETED" },
+        include: expect.any(Object),
+        orderBy: { startedAt: "desc" },
+        take: 50,
+        skip: 0,
+      });
+    });
+
     it("should throw error for invalid limit", async () => {
       await expect(
         chatSessionService.getUserChatSessions("user123", { limit: 0 })
-      ).rejects.toThrow("Limit must be between 1 and 100");
+      ).rejects.toThrow("Limit must be an integer between 1 and 100");
 
       await expect(
         chatSessionService.getUserChatSessions("user123", { limit: 101 })
-      ).rejects.toThrow("Limit must be between 1 and 100");
+      ).rejects.toThrow("Limit must be an integer between 1 and 100");
+
+      await expect(
+        chatSessionService.getUserChatSessions("user123", { limit: 1.5 })
+      ).rejects.toThrow("Limit must be an integer between 1 and 100");
+
+      await expect(
+        chatSessionService.getUserChatSessions("user123", { limit: "10" })
+      ).rejects.toThrow("Limit must be an integer between 1 and 100");
     });
 
-    it("should throw error for negative offset", async () => {
+    it("should throw error for invalid offset", async () => {
       await expect(
         chatSessionService.getUserChatSessions("user123", { offset: -1 })
-      ).rejects.toThrow("Offset must be non-negative");
+      ).rejects.toThrow("Offset must be a non-negative integer");
+
+      await expect(
+        chatSessionService.getUserChatSessions("user123", { offset: 1.5 })
+      ).rejects.toThrow("Offset must be a non-negative integer");
+
+      await expect(
+        chatSessionService.getUserChatSessions("user123", { offset: "0" })
+      ).rejects.toThrow("Offset must be a non-negative integer");
+    });
+
+    it("should sanitize userId input", async () => {
+      mockPrisma.chatSession.findMany.mockResolvedValue([]);
+
+      await chatSessionService.getUserChatSessions("  user123  ");
+
+      expect(mockPrisma.chatSession.findMany).toHaveBeenCalledWith({
+        where: { userId: "user123" },
+        include: expect.any(Object),
+        orderBy: { startedAt: "desc" },
+        take: 50,
+        skip: 0,
+      });
     });
   });
 
@@ -407,6 +714,38 @@ describe("ChatSessionService", () => {
           errorMessage: "Session timed out due to inactivity",
         },
       });
+    });
+
+    it("should throw error for invalid inactiveHours", async () => {
+      await expect(
+        chatSessionService.cleanupExpiredSessions(-1)
+      ).rejects.toThrow("inactiveHours must be a positive number");
+
+      await expect(
+        chatSessionService.cleanupExpiredSessions(0)
+      ).rejects.toThrow("inactiveHours must be a positive number");
+
+      await expect(
+        chatSessionService.cleanupExpiredSessions("24")
+      ).rejects.toThrow("inactiveHours must be a positive number");
+
+      await expect(
+        chatSessionService.cleanupExpiredSessions(Infinity)
+      ).rejects.toThrow("inactiveHours must be a positive number");
+
+      await expect(
+        chatSessionService.cleanupExpiredSessions(NaN)
+      ).rejects.toThrow("inactiveHours must be a positive number");
+    });
+
+    it("should use default value for inactiveHours", async () => {
+      mockPrisma.chatSession.updateMany.mockResolvedValue({ count: 3 });
+
+      const result = await chatSessionService.cleanupExpiredSessions();
+
+      expect(result).toBe(3);
+      // Should use default 24 hours
+      expect(mockPrisma.chatSession.updateMany).toHaveBeenCalled();
     });
   });
 
@@ -433,6 +772,40 @@ describe("ChatSessionService", () => {
           COMPLETED: 10,
           FAILED: 2,
         },
+      });
+    });
+
+    it("should throw error for missing userId", async () => {
+      await expect(
+        chatSessionService.getChatSessionStats(null)
+      ).rejects.toThrow("userId must be a non-empty string");
+    });
+
+    it("should throw error for empty userId", async () => {
+      await expect(chatSessionService.getChatSessionStats("")).rejects.toThrow(
+        "userId must be a non-empty string"
+      );
+    });
+
+    it("should throw error for non-string userId", async () => {
+      await expect(chatSessionService.getChatSessionStats(123)).rejects.toThrow(
+        "userId must be a non-empty string"
+      );
+    });
+
+    it("should sanitize userId input", async () => {
+      const mockStats = [];
+      mockPrisma.chatSession.groupBy.mockResolvedValue(mockStats);
+      mockPrisma.chatSession.count
+        .mockResolvedValueOnce(0) // total
+        .mockResolvedValueOnce(0); // active
+
+      await chatSessionService.getChatSessionStats("  user123  ");
+
+      expect(mockPrisma.chatSession.groupBy).toHaveBeenCalledWith({
+        by: ["status"],
+        where: { userId: "user123" },
+        _count: { id: true },
       });
     });
 
@@ -503,6 +876,68 @@ describe("ChatSessionService", () => {
 
       expect(mockPrisma.chatSession.delete).toHaveBeenCalledWith({
         where: { id: "session123" },
+      });
+    });
+
+    it("should throw error for missing sessionId", async () => {
+      await expect(
+        chatSessionService.deleteChatSession(null, "user123")
+      ).rejects.toThrow("sessionId must be a non-empty string");
+    });
+
+    it("should throw error for empty sessionId", async () => {
+      await expect(
+        chatSessionService.deleteChatSession("", "user123")
+      ).rejects.toThrow("sessionId must be a non-empty string");
+    });
+
+    it("should throw error for non-string sessionId", async () => {
+      await expect(
+        chatSessionService.deleteChatSession(123, "user123")
+      ).rejects.toThrow("sessionId must be a non-empty string");
+    });
+
+    it("should throw error for missing userId", async () => {
+      await expect(
+        chatSessionService.deleteChatSession("abc123def456", null)
+      ).rejects.toThrow("userId must be a non-empty string");
+    });
+
+    it("should throw error for empty userId", async () => {
+      await expect(
+        chatSessionService.deleteChatSession("abc123def456", "")
+      ).rejects.toThrow("userId must be a non-empty string");
+    });
+
+    it("should throw error for non-string userId", async () => {
+      await expect(
+        chatSessionService.deleteChatSession("abc123def456", 123)
+      ).rejects.toThrow("userId must be a non-empty string");
+    });
+
+    it("should sanitize input parameters", async () => {
+      const mockSession = {
+        id: "session123",
+        sessionId: "abc123def456",
+        userId: "user123",
+        messages: [],
+      };
+
+      mockPrisma.chatSession.findUnique.mockResolvedValue(mockSession);
+      mockPrisma.$transaction.mockImplementation((callback) =>
+        callback(mockPrisma)
+      );
+      mockPrisma.message.deleteMany.mockResolvedValue({ count: 0 });
+      mockPrisma.chatSession.delete.mockResolvedValue(mockSession);
+
+      await chatSessionService.deleteChatSession(
+        "  abc123def456  ",
+        "  user123  "
+      );
+
+      expect(mockPrisma.chatSession.findUnique).toHaveBeenCalledWith({
+        where: { sessionId: "abc123def456" },
+        include: { messages: true },
       });
     });
 
