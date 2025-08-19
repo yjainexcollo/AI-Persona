@@ -1,0 +1,18 @@
+[
+    {
+      "id": "1",
+      "avatar": "https://static.vecteezy.com/system/resources/thumbnails/027/951/137/small_2x/stylish-spectacles-guy-3d-avatar-character-illustrations-png.png",
+      "department": "Sales",
+      "hasStartChat": false,
+      "name": "Ethan Carter",
+      "role": "Chief Financial Officer (CFO)"
+    },
+    {
+      "id": "2",
+      "avatar": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQidULZph_aP3ma55diUiMYcbfKLd0mL069tw&s",
+      "department": "Sales",
+      "hasStartChat": false,
+      "name": "David Lee",
+      "role": "Chief Business Officer (CBO)"
+    }
+  ]

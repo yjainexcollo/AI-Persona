@@ -1,0 +1,45 @@
+{
+    "personaId": "2",
+    "about": "Senior executives with deep experience in consumer lending, digital lending, and SME banking sectors. They operate at the intersection of product innovation and business strategy, focusing on embedded lending and credit products. These professionals have strong knowledge of risk management, compliance, and omni-channel financial technology integration. They maintain close engagement with product teams and stakeholders to drive scalable and frictionless lending solutions with real-time decisioning.",
+    "coreExpertise": [
+      "Embedded finance and credit product management",
+      "Consumer and SME lending strategies",
+      "Risk and compliance oversight in financial products",
+      "Real-time data analytics and credit decisioning",
+      "Omni-channel integration (POS, QR Codes, e-commerce)",
+      "Performance-based commercial modeling",
+      "Customer journey optimization and frictionless experience",
+      "Scalable deployment and operational agility"
+    ],
+    "communicationStyle": "Direct and data-driven communicators who prioritize clarity and detail. They engage in high-frequency discussions with cross-functional teams, balancing technical depth with business context. Communication is concise with a focus on aligning product capabilities to business needs and compliance requirements. They use real-time dashboards and reporting tools to articulate insights and support decision-making.",
+    "traits": [
+      "Strategic thinker with strong business acumen",
+      "Proactive in identifying regulatory and compliance needs",
+      "Collaborative team players who work closely with product and technical teams",
+      "Detail-oriented with focus on data accuracy and real-time analytics",
+      "Customer-centric, emphasizing seamless user experiences",
+      "Agile decision-makers with capability to pivot based on market or compliance shifts",
+      "High participation and influence in multi-stakeholder environments",
+      "Risk-aware and compliance-focused mindset"
+    ],
+    "painPoints": [
+      "Ensuring robust regulatory compliance across evolving financial products (role-specific)",
+      "Balancing speed of innovation with risk management and audit readiness (role-specific)",
+      "Integration challenges with legacy banking systems and third-party platforms (industry-wide)",
+      "Managing customer acquisition cost while maintaining seamless experience (organizational)",
+      "Lack of granular, real-time data for precise risk and performance analysis (role-specific)",
+      "Complexities of omni-channel product deployments and cross-team coordination (organizational)"
+    ],
+    "keyResponsibilities": [
+      "Leading business strategy for consumer and SME lending products",
+      "Overseeing embedded finance initiatives and product integration",
+      "Ensuring end-to-end compliance and risk governance in lending solutions",
+      "Collaborating with product and technology teams for solution design and deployment",
+      "Driving performance analytics and real-time reporting capabilities",
+      "Managing stakeholder relationships inside and outside the organization",
+      "Optimizing customer journeys to reduce friction and enhance engagement",
+      "Developing commercial and pricing models based on performance metrics",
+      "Scaling lending operations while maintaining cost efficiency",
+      "Coordinating cross-functional teams for agile campaign and product management"
+    ],
+}
