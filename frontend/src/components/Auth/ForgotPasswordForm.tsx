@@ -97,6 +97,7 @@ const ForgotPasswordForm: React.FC = () => {
                   boxShadow: "none",
                   textTransform: "none",
                   "&:hover": { bgcolor: "#526794" },
+                  "&:disabled": { bgcolor: "#e5e7eb", color: "#9ca3af" },
                 }}
                 onClick={handleSendEmail}
                 disabled={!email || loading}

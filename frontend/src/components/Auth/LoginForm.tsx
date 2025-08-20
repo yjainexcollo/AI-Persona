@@ -128,6 +128,7 @@ const LoginForm: React.FC = () => {
         bgcolor: "#fff",
         justifyContent: "center",
         alignItems: "center",
+        pt: { xs: 5, sm: 5 },
       }}
     >
       {/* Left: Form */}

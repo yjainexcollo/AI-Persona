@@ -19,6 +19,7 @@ import {
 } from "react-router-dom";
 import GlobalLoader from "./components/GlobalLoader";
 import { usePageLoader } from "./hooks/usePageLoader";
+import BrandLogo from "./components/BrandLogo";
 const ChatPage = lazy(() => import("./pages/ChatPage"));
 const ChatHistoryPage = lazy(() => import("./pages/ChatHistoryPage"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
@@ -147,7 +148,8 @@ const AppContent: React.FC = () => {
       <a href="#main-content" className="skip-link">
         Skip to content
       </a>
-      <GlobalLoader open={isLoading} message="Loading page..." />
+      <BrandLogo />
+      {/* Keep route fallback only; page overlay is controlled by hook if re-enabled */}
       <Suspense fallback={<GlobalLoader open message="Loading page..." />}>
         <main id="main-content" ref={mainRef} tabIndex={-1} role="main">
           <Routes>
