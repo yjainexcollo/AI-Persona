@@ -19,7 +19,52 @@ interface TermsAndConditionsDialogProps {
   onAgree: () => void;
 }
 
-const termsText = `Terms and conditions outline what users can and cannot do with your website, products, and services. They lay out the rules to protect you in case of misuse and enable you to take action if it becomes necessary.\nIt's also referred to by other names such as terms of service (ToS) and terms of use (ToU). Even though they have different names, in fact – there is no difference.\nIn order to use your website, products, or services, your customers usually must agree to abide by your terms and conditions first.`;
+const termsSections: Array<{ title: string; body: string }> = [
+  {
+    title: "Overview",
+    body: 'These Terms and Conditions ("Terms") govern your access to and use of our website, products, and services (collectively, the "Services"). By using the Services, you agree to these Terms. If you do not agree, do not use the Services.',
+  },
+  {
+    title: "Acceptance of Terms",
+    body: "By creating an account or accessing the Services, you confirm that you are at least the age of majority in your jurisdiction and that you have the authority to enter into these Terms.",
+  },
+  {
+    title: "Accounts & Security",
+    body: "You are responsible for maintaining the confidentiality of your account credentials and for all activities under your account. Notify us immediately of any unauthorized use.",
+  },
+  {
+    title: "Permitted Use",
+    body: "You may use the Services for lawful, personal, or internal business purposes in compliance with these Terms and applicable laws.",
+  },
+  {
+    title: "Prohibited Conduct",
+    body: "Do not: (1) reverse engineer or interfere with the Services; (2) upload malicious code or content; (3) infringe on intellectual property or privacy rights; (4) misuse, overload, or attempt to gain unauthorized access to the Services.",
+  },
+  {
+    title: "Intellectual Property",
+    body: "All content, features, and functionality in the Services are owned by us or our licensors and are protected by intellectual property laws. Your use grants you a limited, non-exclusive, non-transferable license.",
+  },
+  {
+    title: "Privacy",
+    body: "Your use of the Services is also governed by our Privacy Policy. By using the Services, you consent to our data practices described there.",
+  },
+  {
+    title: "Termination",
+    body: "We may suspend or terminate your access to the Services at any time for any conduct that violates these Terms or harms other users or the Services.",
+  },
+  {
+    title: "Disclaimers & Liability",
+    body: 'The Services are provided "as is" and "as available." We disclaim all warranties to the maximum extent permitted by law. To the fullest extent allowed, we are not liable for any indirect, incidental, or consequential damages.',
+  },
+  {
+    title: "Changes to Terms",
+    body: "We may update these Terms from time to time. Continued use of the Services after changes take effect indicates acceptance of the revised Terms.",
+  },
+  {
+    title: "Contact",
+    body: "If you have questions about these Terms, please contact support.",
+  },
+];
 
 const TermsAndConditionsDialog: React.FC<TermsAndConditionsDialogProps> = ({
   open,
@@ -57,6 +102,7 @@ const TermsAndConditionsDialog: React.FC<TermsAndConditionsDialogProps> = ({
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
+          fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
         }}
       >
         Terms and Conditions
@@ -66,31 +112,59 @@ const TermsAndConditionsDialog: React.FC<TermsAndConditionsDialogProps> = ({
       </DialogTitle>
       <Divider sx={{ mb: 0 }} />
       <DialogContent sx={{ px: 4, pt: 3, pb: 1 }}>
-        <Typography
-          sx={{
-            color: "#222",
-            fontSize: 16,
-            fontWeight: 400,
-            mb: 3,
-            whiteSpace: "pre-line",
-            lineHeight: 1.5,
-            textAlign: "justify",
-            hyphens: "auto",
-            wordBreak: "break-word",
-          }}
-        >
-          {termsText}
-        </Typography>
+        {termsSections.map((section) => (
+          <React.Fragment key={section.title}>
+            <Typography
+              sx={{
+                color: "#222",
+                fontSize: 14,
+                fontWeight: 700,
+                mb: 0.75,
+                lineHeight: 1.4,
+                textAlign: "left",
+                fontFamily:
+                  '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
+              }}
+            >
+              {section.title}
+            </Typography>
+            <Typography
+              sx={{
+                color: "#222",
+                fontSize: 14,
+                fontWeight: 400,
+                mb: 2,
+                whiteSpace: "pre-line",
+                lineHeight: 1.55,
+                textAlign: "left",
+                hyphens: "auto",
+                wordBreak: "break-word",
+                fontFamily:
+                  '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
+              }}
+            >
+              {section.body}
+            </Typography>
+          </React.Fragment>
+        ))}
         <FormControlLabel
           control={
             <Checkbox
               checked={checked}
               onChange={(e) => setChecked(e.target.checked)}
-              sx={{ p: 0.5, mr: 1 }}
+              sx={{ p: 0.5, ml: 0.5, mt: -0.3 }}
             />
           }
           label={
-            <Typography sx={{ fontSize: 16, color: "#222", fontWeight: 400 }}>
+            <Typography
+              sx={{
+                fontSize: 16,
+                color: "#222",
+                fontWeight: 400,
+                fontFamily:
+                  '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
+              }}
+            >
               I have read and agree to these Terms and Conditions
             </Typography>
           }

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   Box,
   Typography,
@@ -10,9 +10,13 @@ import {
   FormControlLabel,
   Link,
   Alert,
+  useTheme,
+  useMediaQuery,
 } from "@mui/material";
 import VisibilityOff from "@mui/icons-material/VisibilityOff";
 import Visibility from "@mui/icons-material/Visibility";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import RadioButtonUncheckedIcon from "@mui/icons-material/RadioButtonUnchecked";
 import TermsAndConditionsDialog from "./TermsAndConditionsDialog";
 import { useNavigate } from "react-router-dom";
 
@@ -21,9 +25,13 @@ interface RegisterFormProps {
 }
 
 const RegisterForm: React.FC<RegisterFormProps> = () => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+
   const [showPassword, setShowPassword] = useState(false);
   const [termsOpen, setTermsOpen] = useState(false);
   const [agreed, setAgreed] = useState(false);
+  const [passwordFocused, setPasswordFocused] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -33,6 +41,9 @@ const RegisterForm: React.FC<RegisterFormProps> = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
+  const passwordFieldRef = useRef<HTMLDivElement>(null);
+  const checklistRef = useRef<HTMLDivElement>(null);
+
   // Password validation rules
   const passwordRules = [
     { label: "At least 8 characters", test: (pw: string) => pw.length >= 8 },
@@ -41,19 +52,45 @@ const RegisterForm: React.FC<RegisterFormProps> = () => {
       test: (pw: string) => /[A-Z]/.test(pw),
     },
     {
-      label: "At least one lowercase letter (a-z)",
-      test: (pw: string) => /[a-z]/.test(pw),
+      label: "At least one number (0-9)",
+      test: (pw: string) => /\d/.test(pw),
     },
-    { label: "At least one number (0-9)", test: (pw: string) => /\d/.test(pw) },
     {
-      label: "At least one special character (@$!%*?&)",
-      test: (pw: string) => /[@$!%*?&]/.test(pw),
+      label: "At least one special character (!@#$%^&*)",
+      test: (pw: string) => /[!@#$%^&*]/.test(pw),
     },
   ];
 
   const allPasswordRulesValid = passwordRules.every((rule) =>
     rule.test(formData.password)
   );
+
+  // Handle clicks outside password field and checklist
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        passwordFieldRef.current &&
+        checklistRef.current &&
+        !passwordFieldRef.current.contains(event.target as Node) &&
+        !checklistRef.current.contains(event.target as Node)
+      ) {
+        setPasswordFocused(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  // Auto-hide checklist when all requirements are met
+  useEffect(() => {
+    if (allPasswordRulesValid && passwordFocused) {
+      const timer = setTimeout(() => setPasswordFocused(false), 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [allPasswordRulesValid, passwordFocused]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
@@ -164,6 +201,9 @@ const RegisterForm: React.FC<RegisterFormProps> = () => {
     setTermsOpen(false);
   };
 
+  const isFormValid =
+    agreed && allPasswordRulesValid && formData.name && formData.email;
+
   return (
     <>
       <Box
@@ -173,32 +213,39 @@ const RegisterForm: React.FC<RegisterFormProps> = () => {
           bgcolor: "#fff",
           justifyContent: "center",
           alignItems: "center",
+          px: { xs: 2, sm: 3, md: 4 },
+          py: { xs: 2, sm: 3 },
+          pt: { xs: 5, sm: 5 },
         }}
       >
-        {/* Left: Form */}
+        {/* Form Container */}
         <Box
           sx={{
-            flex: 1,
+            width: "100%",
+            maxWidth: { xs: "100%", sm: 440, md: 480 },
             display: "flex",
             flexDirection: "column",
             justifyContent: "center",
             alignItems: "center",
-            px: 4,
-            maxWidth: 480,
           }}
         >
           <Box
             component="form"
             onSubmit={handleSubmit}
-            sx={{ width: "100%", maxWidth: 370 }}
+            sx={{
+              width: "100%",
+              maxWidth: { xs: "100%", sm: 380, md: 420 },
+            }}
           >
             <Typography
-              variant="h5"
+              variant="h4"
               sx={{
                 fontWeight: 800,
-                mb: 2.5,
+                mb: { xs: 1.5, sm: 2, md: 2.5 },
                 color: "#222",
-                textAlign: "left",
+                textAlign: "center",
+                fontSize: { xs: "22px", sm: "24px", md: "28px" },
+                lineHeight: 1.25,
               }}
             >
               Create Account
@@ -207,21 +254,36 @@ const RegisterForm: React.FC<RegisterFormProps> = () => {
               sx={{
                 color: "#6b7280",
                 fontWeight: 500,
-                fontSize: 16,
-                mb: 3,
-                textAlign: "left",
-                lineHeight: 1.3,
+                fontSize: { xs: 13, sm: 14, md: 16 },
+                mb: { xs: 2, sm: 2.5, md: 3 },
+                textAlign: "center",
+                lineHeight: 1.4,
+                px: { xs: 1, sm: 0 },
               }}
             >
-              Fill your information below or register with your social account
+              Fill your information below or register with your crudo account
             </Typography>
+
             {error && (
-              <Alert severity="error" sx={{ mb: 2 }}>
+              <Alert
+                severity="error"
+                sx={{
+                  mb: { xs: 2, sm: 2.5 },
+                  fontSize: { xs: 14, sm: 16 },
+                }}
+              >
                 {error}
               </Alert>
             )}
+
+            {/* Full Name Field */}
             <Typography
-              sx={{ fontWeight: 700, fontSize: 16, mb: 1, color: "#222" }}
+              sx={{
+                fontWeight: 700,
+                fontSize: { xs: 13, sm: 14, md: 16 },
+                mb: { xs: 0.75, sm: 1.25 },
+                color: "#222",
+              }}
             >
               Full Name
             </Typography>
@@ -234,13 +296,24 @@ const RegisterForm: React.FC<RegisterFormProps> = () => {
               onChange={handleChange}
               required
               sx={{
-                mb: 2,
+                mb: { xs: 1.75, sm: 2.25 },
                 borderRadius: 2,
-                "& .MuiOutlinedInput-root": { borderRadius: 2 },
+                "& .MuiOutlinedInput-root": {
+                  borderRadius: 2,
+                  fontSize: { xs: 13, sm: 14 },
+                  height: { xs: 44, sm: 52 },
+                },
               }}
             />
+
+            {/* Email Field */}
             <Typography
-              sx={{ fontWeight: 700, fontSize: 16, mb: 1, color: "#222" }}
+              sx={{
+                fontWeight: 700,
+                fontSize: { xs: 13, sm: 14, md: 16 },
+                mb: { xs: 0.75, sm: 1.25 },
+                color: "#222",
+              }}
             >
               Email
             </Typography>
@@ -254,116 +327,163 @@ const RegisterForm: React.FC<RegisterFormProps> = () => {
               onChange={handleChange}
               required
               sx={{
-                mb: 2,
+                mb: { xs: 1.75, sm: 2.25 },
                 borderRadius: 2,
-                "& .MuiOutlinedInput-root": { borderRadius: 2 },
+                "& .MuiOutlinedInput-root": {
+                  borderRadius: 2,
+                  fontSize: { xs: 13, sm: 14 },
+                  height: { xs: 44, sm: 52 },
+                },
               }}
             />
+
+            {/* Password Field */}
             <Typography
-              sx={{ fontWeight: 700, fontSize: 16, mb: 1, color: "#222" }}
+              sx={{
+                fontWeight: 700,
+                fontSize: { xs: 13, sm: 14, md: 16 },
+                mb: { xs: 0.75, sm: 1.25 },
+                color: "#222",
+              }}
             >
               Password
             </Typography>
-            <TextField
-              fullWidth
-              name="password"
-              placeholder="Your password"
-              variant="outlined"
-              type={showPassword ? "text" : "password"}
-              value={formData.password}
-              onChange={handleChange}
-              required
-              sx={{
-                mb: 1,
-                borderRadius: 2,
-                "& .MuiOutlinedInput-root": { borderRadius: 2 },
-              }}
-              InputProps={{
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <IconButton
-                      onClick={() => setShowPassword((v) => !v)}
-                      edge="end"
-                    >
-                      {showPassword ? <Visibility /> : <VisibilityOff />}
-                    </IconButton>
-                  </InputAdornment>
-                ),
-              }}
-            />
-            {/* Password validation rules */}
-            {formData.password && (
-              <Box
+            <Box ref={passwordFieldRef} sx={{ position: "relative" }}>
+              <TextField
+                fullWidth
+                name="password"
+                placeholder="Your password"
+                variant="outlined"
+                type={showPassword ? "text" : "password"}
+                value={formData.password}
+                onChange={handleChange}
+                onFocus={() => setPasswordFocused(true)}
+                required
                 sx={{
-                  mb: 2,
-                  p: 2,
-                  bgcolor: "#f8f9fa",
+                  mb: 1,
                   borderRadius: 2,
-                  border: "1px solid #e9ecef",
+                  "& .MuiOutlinedInput-root": {
+                    borderRadius: 2,
+                    fontSize: { xs: 13, sm: 14 },
+                    height: { xs: 44, sm: 52 },
+                  },
                 }}
-              >
-                <Typography
-                  sx={{ fontWeight: 600, fontSize: 14, mb: 1, color: "#222" }}
+                InputProps={{
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton
+                        onClick={() => setShowPassword((v) => !v)}
+                        edge="end"
+                        size={isMobile ? "small" : "medium"}
+                      >
+                        {showPassword ? <Visibility /> : <VisibilityOff />}
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                }}
+              />
+
+              {/* Password Checklist */}
+              {passwordFocused && formData.password && (
+                <Box
+                  ref={checklistRef}
+                  sx={{
+                    position: "absolute",
+                    top: "100%",
+                    left: 0,
+                    right: 0,
+                    zIndex: 10,
+                    mt: 1,
+                    p: { xs: 1.5, sm: 2 },
+                    bgcolor: "#f8f9fa",
+                    borderRadius: 2,
+                    border: "1px solid #e9ecef",
+                    boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+                    maxWidth: { xs: "100%", sm: "none" },
+                  }}
                 >
-                  Password requirements:
-                </Typography>
-                {passwordRules.map((rule, index) => (
-                  <Box
-                    key={index}
-                    sx={{ display: "flex", alignItems: "center", mb: 0.5 }}
+                  <Typography
+                    sx={{
+                      fontWeight: 600,
+                      fontSize: { xs: 12, sm: 13 },
+                      mb: { xs: 0.75, sm: 1 },
+                      color: "#222",
+                    }}
                   >
+                    Password requirements:
+                  </Typography>
+                  {passwordRules.map((rule, index) => (
                     <Box
+                      key={index}
                       sx={{
-                        width: 16,
-                        height: 16,
-                        borderRadius: "50%",
-                        bgcolor: rule.test(formData.password)
-                          ? "#2950DA"
-                          : "#d1d5db",
-                        mr: 1,
                         display: "flex",
                         alignItems: "center",
-                        justifyContent: "center",
+                        mb: { xs: 0.5, sm: 0.75 },
+                        gap: 1,
                       }}
                     >
-                      {rule.test(formData.password) && (
-                        <Box
+                      {rule.test(formData.password) ? (
+                        <CheckCircleIcon
                           sx={{
-                            width: 6,
-                            height: 6,
-                            borderRadius: "50%",
-                            bgcolor: "#fff",
+                            color: "#2950DA",
+                            fontSize: { xs: 16, sm: 18 },
+                            flexShrink: 0,
+                          }}
+                        />
+                      ) : (
+                        <RadioButtonUncheckedIcon
+                          sx={{
+                            color: "#d1d5db",
+                            fontSize: { xs: 16, sm: 18 },
+                            flexShrink: 0,
                           }}
                         />
                       )}
+                      <Typography
+                        sx={{
+                          fontSize: { xs: 12, sm: 13 },
+                          color: rule.test(formData.password)
+                            ? "#2950DA"
+                            : "#6b7280",
+                          fontWeight: rule.test(formData.password) ? 600 : 400,
+                          lineHeight: 1.3,
+                        }}
+                      >
+                        {rule.label}
+                      </Typography>
                     </Box>
-                    <Typography
-                      sx={{
-                        fontSize: 13,
-                        color: rule.test(formData.password)
-                          ? "#2950DA"
-                          : "#6b7280",
-                        fontWeight: rule.test(formData.password) ? 600 : 400,
-                      }}
-                    >
-                      {rule.label}
-                    </Typography>
-                  </Box>
-                ))}
-              </Box>
-            )}
+                  ))}
+                </Box>
+              )}
+            </Box>
+
+            {/* Terms and Conditions */}
             <FormControlLabel
               control={
                 <Checkbox
                   checked={agreed}
                   onClick={handleCheckboxClick}
                   onChange={handleCheckboxClick}
-                  sx={{ p: 0.5, mr: 1 }}
+                  sx={{
+                    p: { xs: 0.5, sm: 0.75 },
+                    mr: 0.0,
+                    alignSelf: "flex-start",
+                    mt: -0.6,
+                    ml: 0.5,
+                    "& .MuiSvgIcon-root": {
+                      fontSize: { xs: 18, sm: 20 },
+                    },
+                  }}
                 />
               }
               label={
                 <Typography
-                  sx={{ fontSize: 14, color: "#222", fontWeight: 400 }}
+                  sx={{
+                    fontSize: { xs: 13, sm: 14, md: 15 },
+                    color: "#222",
+                    fontWeight: 400,
+                    lineHeight: 1.4,
+                  }}
                 >
                   I agree with{" "}
                   <Link
@@ -381,41 +501,61 @@ const RegisterForm: React.FC<RegisterFormProps> = () => {
                 </Typography>
               }
               sx={{
-                mb: 3,
+                mb: { xs: 2.5, sm: 3, md: 3.5 },
                 alignItems: "flex-start",
-                ".MuiFormControlLabel-label": { mt: 0.2 },
+                ".MuiFormControlLabel-label": {
+                  mt: 0,
+                },
               }}
             />
+
+            {/* Sign Up Button */}
             <Button
               type="submit"
               variant="contained"
               fullWidth
-              disabled={!agreed || loading || !allPasswordRulesValid}
+              disabled={!isFormValid || loading}
               sx={{
-                bgcolor:
-                  !agreed || !allPasswordRulesValid ? "#d1d5db" : "#526794",
-                color: "#fff",
+                bgcolor: isFormValid ? "#2950DA" : "#e5e7eb",
+                color: isFormValid ? "#fff" : "#9ca3af",
                 fontWeight: 700,
-                fontSize: 18,
+                fontSize: { xs: 15, sm: 16, md: 18 },
                 borderRadius: 2,
-                py: 1.5,
-                mb: 3,
-                boxShadow: "none",
+                py: { xs: 1.25, sm: 1.5, md: 1.75 },
+                mb: { xs: 2, sm: 2.5, md: 3 },
+                boxShadow: isFormValid
+                  ? "0 4px 12px rgba(41, 80, 218, 0.3)"
+                  : "none",
                 textTransform: "none",
+                height: { xs: 44, sm: 52, md: 56 },
+                transition: "all 0.2s ease-in-out",
                 "&:hover": {
-                  bgcolor:
-                    !agreed || !allPasswordRulesValid ? "#d1d5db" : "#526794",
+                  bgcolor: isFormValid ? "#1e40af" : "#e5e7eb",
+                  boxShadow: isFormValid
+                    ? "0 6px 20px rgba(41, 80, 218, 0.4)"
+                    : "none",
+                  transform: isFormValid ? "translateY(-1px)" : "none",
+                },
+                "&:disabled": {
+                  bgcolor: "#e5e7eb",
+                  color: "#9ca3af",
+                  opacity: 0.6,
+                  cursor: "not-allowed",
+                  transform: "none",
                 },
               }}
             >
               {loading ? "Signing up..." : "Sign up"}
             </Button>
+
+            {/* Login Link */}
             <Typography
               sx={{
                 color: "#8a8a8a",
-                fontSize: 16,
+                fontSize: { xs: 13, sm: 14, md: 16 },
                 fontWeight: 400,
-                textAlign: "left",
+                textAlign: "center",
+                lineHeight: 1.4,
               }}
             >
               Already have an account?{" "}
@@ -423,10 +563,14 @@ const RegisterForm: React.FC<RegisterFormProps> = () => {
                 href="#"
                 underline="none"
                 sx={{
-                  color: "#222",
+                  color: "#2950DA",
                   fontWeight: 700,
-                  fontSize: 16,
+                  fontSize: { xs: 13, sm: 14, md: 16 },
                   cursor: "pointer",
+                  "&:hover": {
+                    color: "#1e40af",
+                    textDecoration: "underline",
+                  },
                 }}
                 onClick={() => navigate("/login")}
               >
@@ -436,6 +580,7 @@ const RegisterForm: React.FC<RegisterFormProps> = () => {
           </Box>
         </Box>
       </Box>
+
       <TermsAndConditionsDialog
         open={termsOpen}
         onClose={handleClose}

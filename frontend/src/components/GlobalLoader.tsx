@@ -1,9 +1,9 @@
 /**
  * Global Loader Component
- * 
+ *
  * A full-screen loading overlay that displays during application loading states.
  * Uses Material-UI Backdrop with a centered circular progress indicator and message.
- * 
+ *
  * Features:
  * - Full-screen overlay with semi-transparent background
  * - Centered circular progress indicator
@@ -11,8 +11,8 @@
  * - High z-index to appear above all other content
  */
 
-import React from 'react';
-import { Backdrop, CircularProgress, Box, Typography } from '@mui/material';
+import React from "react";
+import { Backdrop, CircularProgress, Box, Typography } from "@mui/material";
 
 /**
  * Props interface for the GlobalLoader component
@@ -26,44 +26,51 @@ interface GlobalLoaderProps {
 
 /**
  * Global Loader Component
- * 
+ *
  * Renders a full-screen loading overlay with a circular progress indicator
  * and optional message. Used for global application loading states.
  */
-const GlobalLoader: React.FC<GlobalLoaderProps> = ({ open, message = "Loading..." }) => {
+const GlobalLoader: React.FC<GlobalLoaderProps> = ({
+  open,
+  message = "Loading...",
+}) => {
   return (
     <Backdrop
       sx={{
-        color: '#fff',
+        color: "#fff",
         zIndex: (theme) => theme.zIndex.drawer + 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+        backgroundColor: "rgba(0, 0, 0, 0.7)",
       }}
       open={open}
+      role="status"
+      aria-live="polite"
+      aria-busy={open}
     >
       <Box
         sx={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
           gap: 2,
         }}
       >
         {/* Circular progress indicator with custom styling */}
-        <CircularProgress 
-          color="primary" 
+        <CircularProgress
+          color="primary"
           size={60}
           thickness={4}
           sx={{
-            color: '#0A9969',
+            color: "#0A9969",
           }}
+          aria-label="Loading"
         />
         {/* Loading message text */}
-        <Typography 
-          variant="h6" 
-          sx={{ 
-            color: '#fff',
+        <Typography
+          variant="h6"
+          sx={{
+            color: "#fff",
             fontWeight: 500,
-            fontSize: '18px',
+            fontSize: "18px",
           }}
         >
           {message}
@@ -73,4 +80,4 @@ const GlobalLoader: React.FC<GlobalLoaderProps> = ({ open, message = "Loading...
   );
 };
 
-export default GlobalLoader; 
+export default GlobalLoader;

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   Dialog,
   DialogTitle,
@@ -10,21 +10,24 @@ import {
   Divider,
   IconButton,
   Chip,
-} from '@mui/material';
-import CloseIcon from '@mui/icons-material/Close';
-import SettingsIcon from '@mui/icons-material/Settings';
-import PersonIcon from '@mui/icons-material/Person';
-import MessageIcon from '@mui/icons-material/Message';
-import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
-import ConversationVisibilityToggle from './ConversationVisibilityToggle';
-import ConversationArchiveToggle from './ConversationArchiveToggle';
-import { type Conversation } from '../services/personaService';
+} from "@mui/material";
+import CloseIcon from "@mui/icons-material/Close";
+import SettingsIcon from "@mui/icons-material/Settings";
+import PersonIcon from "@mui/icons-material/Person";
+import MessageIcon from "@mui/icons-material/Message";
+import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
+import ConversationVisibilityToggle from "./ConversationVisibilityToggle";
+import ConversationArchiveToggle from "./ConversationArchiveToggle";
+import { type Conversation } from "../services/personaService";
 
 interface ConversationSettingsDialogProps {
   open: boolean;
   onClose: () => void;
   conversation: Conversation | null;
-  onConversationUpdate?: (conversationId: string, updates: Partial<Conversation>) => void;
+  onConversationUpdate?: (
+    conversationId: string,
+    updates: Partial<Conversation>
+  ) => void;
 }
 
 const ConversationSettingsDialog: React.FC<ConversationSettingsDialogProps> = ({
@@ -33,19 +36,26 @@ const ConversationSettingsDialog: React.FC<ConversationSettingsDialogProps> = ({
   conversation,
   onConversationUpdate,
 }) => {
-  const [localConversation, setLocalConversation] = useState<Conversation | null>(conversation);
+  const [localConversation, setLocalConversation] =
+    useState<Conversation | null>(conversation);
 
   // Update local state when conversation prop changes
   React.useEffect(() => {
     setLocalConversation(conversation);
   }, [conversation]);
 
-  const handleVisibilityChange = (conversationId: string, newVisibility: 'PRIVATE' | 'SHARED') => {
+  const handleVisibilityChange = (
+    conversationId: string,
+    newVisibility: "PRIVATE" | "SHARED"
+  ) => {
     // Update local state
     if (localConversation) {
-      const updatedConversation = { ...localConversation, visibility: newVisibility };
+      const updatedConversation = {
+        ...localConversation,
+        visibility: newVisibility,
+      };
       setLocalConversation(updatedConversation);
-      
+
       // Notify parent component
       if (onConversationUpdate) {
         onConversationUpdate(conversationId, { visibility: newVisibility });
@@ -53,12 +63,16 @@ const ConversationSettingsDialog: React.FC<ConversationSettingsDialogProps> = ({
     }
   };
 
-  const handleArchiveChange = (conversationId: string, _archived: boolean, archivedAt: string | null) => {
+  const handleArchiveChange = (
+    conversationId: string,
+    _archived: boolean,
+    archivedAt: string | null
+  ) => {
     // Update local state
     if (localConversation) {
       const updatedConversation = { ...localConversation, archivedAt };
       setLocalConversation(updatedConversation);
-      
+
       // Notify parent component
       if (onConversationUpdate) {
         onConversationUpdate(conversationId, { archivedAt });
@@ -67,12 +81,12 @@ const ConversationSettingsDialog: React.FC<ConversationSettingsDialogProps> = ({
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
+    return new Date(dateString).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
     });
   };
 
@@ -86,6 +100,8 @@ const ConversationSettingsDialog: React.FC<ConversationSettingsDialogProps> = ({
     <Dialog
       open={open}
       onClose={onClose}
+      aria-labelledby="conversation-settings-title"
+      aria-describedby="conversation-settings-description"
       maxWidth="sm"
       fullWidth
       PaperProps={{
@@ -95,43 +111,44 @@ const ConversationSettingsDialog: React.FC<ConversationSettingsDialogProps> = ({
       }}
     >
       <DialogTitle
+        id="conversation-settings-title"
         sx={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
           pb: 1,
         }}
       >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
           <SettingsIcon color="primary" />
           <Typography variant="h6">Conversation Settings</Typography>
         </Box>
-        <IconButton onClick={onClose} size="small">
+        <IconButton onClick={onClose} size="small" aria-label="Close settings">
           <CloseIcon />
         </IconButton>
       </DialogTitle>
 
-      <DialogContent sx={{ pt: 2 }}>
+      <DialogContent id="conversation-settings-description" sx={{ pt: 2 }}>
         {/* Conversation Info */}
         <Box sx={{ mb: 3 }}>
           <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600 }}>
             Conversation Details
           </Typography>
-          
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
             {/* Title */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
               <MessageIcon fontSize="small" color="action" />
               <Typography variant="body2" color="text.secondary">
                 Title:
               </Typography>
               <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                {localConversation.title || 'Untitled Conversation'}
+                {localConversation.title || "Untitled Conversation"}
               </Typography>
             </Box>
 
             {/* Persona */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
               <PersonIcon fontSize="small" color="action" />
               <Typography variant="body2" color="text.secondary">
                 Persona:
@@ -142,20 +159,20 @@ const ConversationSettingsDialog: React.FC<ConversationSettingsDialogProps> = ({
             </Box>
 
             {/* Message Count */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
               <MessageIcon fontSize="small" color="action" />
               <Typography variant="body2" color="text.secondary">
                 Messages:
               </Typography>
-              <Chip 
-                label={`${localConversation._count?.messages || localConversation.messageCount || 0} messages`} 
-                size="small" 
+              <Chip
+                label={`${localConversation._count?.messages ?? 0} messages`}
+                size="small"
                 variant="outlined"
               />
             </Box>
 
             {/* Created Date */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
               <CalendarTodayIcon fontSize="small" color="action" />
               <Typography variant="body2" color="text.secondary">
                 Created:
@@ -167,14 +184,14 @@ const ConversationSettingsDialog: React.FC<ConversationSettingsDialogProps> = ({
 
             {/* Archive Status */}
             {isArchived && (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                 <CalendarTodayIcon fontSize="small" color="action" />
                 <Typography variant="body2" color="text.secondary">
                   Archived:
                 </Typography>
-                <Chip 
-                  label={formatDate(localConversation.archivedAt!)} 
-                  size="small" 
+                <Chip
+                  label={formatDate(localConversation.archivedAt!)}
+                  size="small"
                   color="warning"
                   variant="outlined"
                 />
@@ -190,19 +207,21 @@ const ConversationSettingsDialog: React.FC<ConversationSettingsDialogProps> = ({
           <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600 }}>
             Privacy Settings
           </Typography>
-          
+
           {isArchived ? (
-            <Box sx={{ p: 2, bgcolor: 'grey.100', borderRadius: 1 }}>
+            <Box sx={{ p: 2, bgcolor: "grey.100", borderRadius: 1 }}>
               <Typography variant="body2" color="text.secondary">
                 Visibility cannot be changed for archived conversations.
               </Typography>
-              <Box sx={{ mt: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Box
+                sx={{ mt: 1, display: "flex", alignItems: "center", gap: 1 }}
+              >
                 <Typography variant="body2" color="text.secondary">
                   Current visibility:
                 </Typography>
-                <Chip 
-                  label={localConversation.visibility} 
-                  size="small" 
+                <Chip
+                  label={localConversation.visibility}
+                  size="small"
                   variant="outlined"
                 />
               </Box>
@@ -214,12 +233,15 @@ const ConversationSettingsDialog: React.FC<ConversationSettingsDialogProps> = ({
               showLabel={false}
             />
           )}
-          
-          <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-            {localConversation.visibility === 'PRIVATE' 
-              ? 'Only you can see this conversation.' 
-              : 'Anyone in your workspace can see this conversation.'
-            }
+
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ mt: 1, display: "block" }}
+          >
+            {localConversation.visibility === "PRIVATE"
+              ? "Only you can see this conversation."
+              : "Anyone in your workspace can see this conversation."}
           </Typography>
         </Box>
 
@@ -230,18 +252,21 @@ const ConversationSettingsDialog: React.FC<ConversationSettingsDialogProps> = ({
           <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600 }}>
             Archive Settings
           </Typography>
-          
+
           <ConversationArchiveToggle
             conversation={localConversation}
             onArchiveChange={handleArchiveChange}
             variant="button"
           />
-          
-          <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-            {isArchived 
-              ? 'This conversation is archived and cannot receive new messages or be edited.' 
-              : 'Archive this conversation to move it out of your active conversations.'
-            }
+
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ mt: 1, display: "block" }}
+          >
+            {isArchived
+              ? "This conversation is archived and cannot receive new messages or be edited."
+              : "Archive this conversation to move it out of your active conversations."}
           </Typography>
         </Box>
       </DialogContent>

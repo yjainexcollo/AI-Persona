@@ -53,7 +53,7 @@ const Sidebar: React.FC<{
   const [loadingFavorites, setLoadingFavorites] = useState(false);
   const [recentChats, setRecentChats] = useState<Conversation[]>([]);
   const [loadingRecentChats, setLoadingRecentChats] = useState(false);
-  const [currentPersonaName, setCurrentPersonaName] = useState<string>("");
+  const [currentPersonaName] = useState<string>("");
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
   const [selectedConversationId, setSelectedConversationId] = useState<
     string | null

@@ -1,26 +1,31 @@
 /**
  * Webhook Service
- * 
+ *
  * Handles communication with external AI workflows via webhooks.
  * Integrates with n8n persona workflows for AI-powered conversations.
- * 
+ *
  * Features:
  * - Session management for conversation continuity
  * - File attachment support (images and documents)
  * - Error handling and retry logic
  * - Detailed logging for debugging
  * - Connection testing capabilities
+ * - Persona traits update webhook integration
  */
 
 // Webhook service for integrating with n8n persona workflows
 const WEBHOOK_URL =
   "https://n8n-excollo.azurewebsites.net/webhook/e17df12a-2bfc-4270-8756-0c20442a4b9f";
 
+// New webhook endpoint for traits updates
+const TRAITS_WEBHOOK_URL =
+  "https://n8n-excollo.azurewebsites.net/webhook-test/traits";
+
 import { getSessionId } from "../utils/session";
 
 /**
  * Webhook Message Interface
- * 
+ *
  * Defines the structure of messages sent to the webhook service.
  * Includes conversation context, user information, and file attachments.
  */
@@ -45,7 +50,7 @@ export interface WebhookMessage {
 
 /**
  * Webhook Response Interface
- * 
+ *
  * Defines the structure of responses received from the webhook service.
  */
 export interface WebhookResponse {
@@ -57,21 +62,38 @@ export interface WebhookResponse {
 
 /**
  * Generic Response Interface
- * 
+ *
  * Flexible interface for handling various response formats from webhook services.
  */
 interface GenericResponse {
-  message?: string;
-  output?: string;
   [key: string]: unknown;
 }
 
 /**
+ * Persona Traits Update Interface
+ *
+ * Defines the structure for updating persona traits via webhook.
+ */
+export interface PersonaTraitsUpdate {
+  /** The exact name of the persona to update */
+  personaName: string;
+  /** The metadata containing traits and other persona information */
+  metadata: {
+    about: string;
+    coreExpertise: string[];
+    communicationStyle: string;
+    traits: string[];
+    painPoints: string[];
+    keyResponsibilities: string[];
+  };
+}
+
+/**
  * Send message to webhook service
- * 
+ *
  * Sends a message to the AI workflow webhook with session management
  * and file attachment support.
- * 
+ *
  * @param message - The user's message content
  * @param personaId - Unique identifier for the persona
  * @param personaName - Display name of the persona
@@ -94,10 +116,11 @@ export const sendToWebhook = async (
     // Enhance message with file information if present
     let enhancedMessage = message;
     if (fileUrl) {
-      const fileInfo = fileType && fileType.startsWith('image/') 
-        ? `[IMAGE ATTACHED: ${fileUrl}]` 
-        : `[FILE ATTACHED: ${fileUrl}]`;
-      enhancedMessage = fileInfo + (message ? ` ${message}` : '');
+      const fileInfo =
+        fileType && fileType.startsWith("image/")
+          ? `[IMAGE ATTACHED: ${fileUrl}]`
+          : `[FILE ATTACHED: ${fileUrl}]`;
+      enhancedMessage = fileInfo + (message ? ` ${message}` : "");
     }
 
     // Prepare the webhook payload
@@ -135,7 +158,7 @@ export const sendToWebhook = async (
     console.log("📡 Response status:", response.status);
     console.log(
       "📡 Response headers:",
-      Object.fromEntries(response.headers.entries())
+      Object.fromEntries(Array.from(response.headers.entries()))
     );
 
     // Handle error responses
@@ -174,7 +197,9 @@ export const sendToWebhook = async (
       "I've processed your payment query.";
 
     // Clean up the response text
-    return aiResponse.replace(/^"(.*)"$/, "$1").trim();
+    return String(aiResponse)
+      .replace(/^"(.*)"$/, "$1")
+      .trim();
   } catch (error) {
     console.error("❌ Error calling payment webhook:", error);
     if (error instanceof Error) {
@@ -190,12 +215,182 @@ export const sendToWebhook = async (
   }
 };
 
+/**
+ * Update persona traits via webhook
+ *
+ * Sends persona traits update to the n8n webhook endpoint.
+ * This function is typically called by workspace admins to update
+ * persona traits based on AI analysis.
+ *
+ * @param traitsUpdate - The persona traits update data
+ * @param authToken - JWT authentication token
+ * @returns Promise that resolves to the update result
+ * @throws Error if webhook request fails
+ */
+/**
+ * Update persona traits via external n8n webhook
+ *
+ * Sends persona traits update to the n8n webhook endpoint.
+ * This function is typically called by workspace admins to update
+ * persona traits based on AI analysis.
+ *
+ * @param traitsUpdate - The persona traits update data
+ * @param authToken - JWT authentication token
+ * @returns Promise that resolves to the update result
+ * @throws Error if webhook request fails
+ */
+export const updatePersonaTraitsViaN8n = async (
+  traitsUpdate: PersonaTraitsUpdate,
+  authToken: string
+): Promise<any> => {
+  try {
+    console.log(
+      "🔄 Updating persona traits via n8n webhook:",
+      traitsUpdate.personaName
+    );
+    console.log("📦 Payload:", JSON.stringify(traitsUpdate, null, 2));
+
+    const response = await fetch(TRAITS_WEBHOOK_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        Authorization: `Bearer ${authToken}`,
+      },
+      body: JSON.stringify(traitsUpdate),
+    });
+
+    console.log("📡 Traits update response status:", response.status);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("❌ Traits update webhook error:", errorText);
+      throw new Error(
+        `Traits update failed: ${response.status} - ${errorText}`
+      );
+    }
+
+    const result = await response.json();
+    console.log("✅ Traits update successful:", result);
+
+    return result;
+  } catch (error) {
+    console.error("❌ Error updating persona traits:", error);
+    throw error;
+  }
+};
+
+/**
+ * Update persona traits via backend API
+ *
+ * Sends persona traits update to our backend API endpoint.
+ * This function updates the database directly and should be used
+ * for testing or manual updates.
+ *
+ * @param traitsUpdate - The persona traits update data
+ * @param authToken - JWT authentication token
+ * @returns Promise that resolves to the update result
+ * @throws Error if API request fails
+ */
+export const updatePersonaTraits = async (
+  traitsUpdate: PersonaTraitsUpdate,
+  authToken: string
+): Promise<any> => {
+  try {
+    console.log(
+      "🔄 Updating persona traits via backend API:",
+      traitsUpdate.personaName
+    );
+    console.log("📦 Payload:", JSON.stringify(traitsUpdate, null, 2));
+    console.log("🔑 Auth token length:", authToken ? authToken.length : 0);
+
+    // Get backend URL from environment or use default
+    const backendUrl =
+      import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
+
+    console.log("🌐 Backend URL:", backendUrl);
+    console.log(
+      "🚀 Making fetch request to:",
+      `${backendUrl}/api/webhooks/traits`
+    );
+
+    const response = await fetch(`${backendUrl}/api/webhooks/traits`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        Authorization: `Bearer ${authToken}`,
+      },
+      body: JSON.stringify(traitsUpdate),
+    });
+
+    console.log("📡 Backend API response status:", response.status);
+    console.log(
+      "📡 Backend API response headers:",
+      Object.fromEntries(Array.from(response.headers.entries()))
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("❌ Backend API error:", errorText);
+      throw new Error(
+        `Backend API update failed: ${response.status} - ${errorText}`
+      );
+    }
+
+    const result = await response.json();
+    console.log("✅ Backend API update successful:", result);
+
+    return result;
+  } catch (error) {
+    console.error("❌ Error updating persona traits via backend:", error);
+    throw error;
+  }
+};
+
+/**
+ * Forward persona traits to n8n via backend and persist returned metadata
+ *
+ * Calls POST /api/webhooks/traits/forward. Backend will:
+ * - Resolve the n8n webhook URL (env or persona.webhookUrl)
+ * - POST the payload to n8n
+ * - Expect { metadata } back
+ * - Update the persona in DB and return updated record
+ */
+export const forwardPersonaTraitsViaBackend = async (
+  traitsUpdate: PersonaTraitsUpdate,
+  authToken: string
+): Promise<any> => {
+  const backendUrl =
+    import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
+
+  const res = await fetch(`${backendUrl}/api/webhooks/traits/forward`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      Authorization: `Bearer ${authToken}`,
+    },
+    body: JSON.stringify(traitsUpdate),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Forward failed: ${res.status} - ${text}`);
+  }
+
+  return res.json();
+};
+
 export const isWebhookPersona = (personaId: string): boolean => {
-  return personaId === "1" || personaId === "2"; // Ethan Carter (Head of Payment) & David Lee (Product Manager)
+  // Ethan Carter (Head of Payment) & David Lee (Product Manager)
+  return false;
 };
 
 // Test function to check if webhook is active
-export const testWebhookConnection = async (personaId: string): Promise<boolean> => {
+export const testWebhookConnection = async (
+  personaId: string
+): Promise<boolean> => {
   try {
     // Get or create session ID
     const sessionId = getSessionId(personaId);
@@ -214,6 +409,36 @@ export const testWebhookConnection = async (personaId: string): Promise<boolean>
     return response.ok;
   } catch (error) {
     console.error("Webhook connection test failed:", error);
+    return false;
+  }
+};
+
+/**
+ * Test traits update webhook connection
+ *
+ * Tests the connection to our backend webhook API endpoint.
+ *
+ * @param authToken - JWT authentication token
+ * @returns Promise that resolves to connection status
+ */
+export const testTraitsWebhookConnection = async (
+  authToken: string
+): Promise<boolean> => {
+  try {
+    // Get backend URL from environment or use default
+    const backendUrl =
+      import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
+
+    const response = await fetch(`${backendUrl}/api/webhooks/health`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+    });
+
+    return response.ok;
+  } catch (error) {
+    console.error("Backend webhook API connection test failed:", error);
     return false;
   }
 };

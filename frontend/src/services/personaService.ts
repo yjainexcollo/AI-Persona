@@ -1,6 +1,6 @@
-import { fetchWithAuth } from '../utils/session';
+import { fetchWithAuth } from "../utils/session";
 
-const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
+const backendUrl = import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
 
 export interface Persona {
   id: string;
@@ -45,7 +45,7 @@ export interface Conversation {
   title: string;
   userId: string;
   personaId: string;
-  visibility: 'PRIVATE' | 'SHARED';
+  visibility: "PRIVATE" | "SHARED";
   archivedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -62,12 +62,12 @@ export interface Conversation {
   messages: Array<{
     id: string;
     content: string;
-    role: 'USER' | 'ASSISTANT';
+    role: "USER" | "ASSISTANT";
     createdAt: string;
     edited?: boolean;
     reactions?: Array<{
       id: string;
-      type: 'LIKE' | 'DISLIKE';
+      type: "LIKE" | "DISLIKE";
       userId: string;
       createdAt: string;
     }>;
@@ -75,6 +75,8 @@ export interface Conversation {
   _count: {
     messages: number;
   };
+  /** Optional last message preview if provided by backend */
+  lastMessage?: string;
 }
 
 export interface ConversationsResponse {
@@ -88,7 +90,7 @@ export interface VisibilityUpdateResponse {
   message: string;
   data: {
     id: string;
-    visibility: 'PRIVATE' | 'SHARED';
+    visibility: "PRIVATE" | "SHARED";
   };
 }
 
@@ -128,7 +130,7 @@ export interface FileUploadResponse {
 }
 
 export interface ReactionRequest {
-  type: 'LIKE' | 'DISLIKE';
+  type: "LIKE" | "DISLIKE";
 }
 
 export interface ReactionResponse {
@@ -136,8 +138,8 @@ export interface ReactionResponse {
   message: string;
   data: {
     messageId: string;
-    type: 'LIKE' | 'DISLIKE';
-    action: 'added' | 'removed' | 'updated';
+    type: "LIKE" | "DISLIKE";
+    action: "added" | "removed" | "updated";
     toggled: boolean;
   };
 }
@@ -152,7 +154,7 @@ export interface SharedConversationResponse {
       description: string;
     };
     messages: Array<{
-      role: 'USER' | 'ASSISTANT';
+      role: "USER" | "ASSISTANT";
       content: string;
       fileUrl: string | null;
     }>;
@@ -180,12 +182,12 @@ export interface ChatSession {
   messages: Array<{
     id: string;
     content: string;
-    role: 'USER' | 'ASSISTANT';
+    role: "USER" | "ASSISTANT";
     createdAt: string;
     edited?: boolean;
     reactions?: Array<{
       id: string;
-      type: 'LIKE' | 'DISLIKE';
+      type: "LIKE" | "DISLIKE";
       userId: string;
       createdAt: string;
     }>;
@@ -197,13 +199,15 @@ export interface ChatSession {
  * @param favouritesOnly - Filter to show only favourited personas
  * @returns Promise<PersonasResponse>
  */
-export const getPersonas = async (favouritesOnly?: boolean): Promise<PersonasResponse> => {
-  const queryParams = favouritesOnly ? '?favouritesOnly=true' : '';
+export const getPersonas = async (
+  favouritesOnly?: boolean
+): Promise<PersonasResponse> => {
+  const queryParams = favouritesOnly ? "?favouritesOnly=true" : "";
   const res = await fetchWithAuth(`${backendUrl}/api/personas${queryParams}`);
-  
+
   if (!res.ok) {
     const errorData = await res.json();
-    throw new Error(errorData.message || 'Failed to fetch personas');
+    throw new Error(errorData.message || "Failed to fetch personas");
   }
 
   return await res.json();
@@ -216,10 +220,10 @@ export const getPersonas = async (favouritesOnly?: boolean): Promise<PersonasRes
  */
 export const getPersonaById = async (personaId: string): Promise<Persona> => {
   const res = await fetchWithAuth(`${backendUrl}/api/personas/${personaId}`);
-  
+
   if (!res.ok) {
     const errorData = await res.json();
-    throw new Error(errorData.message || 'Failed to fetch persona');
+    throw new Error(errorData.message || "Failed to fetch persona");
   }
 
   const data = await res.json();
@@ -231,17 +235,22 @@ export const getPersonaById = async (personaId: string): Promise<Persona> => {
  * @param personaId - The persona ID
  * @returns Promise<{ isFavourited: boolean }>
  */
-export const toggleFavourite = async (personaId: string): Promise<{ isFavourited: boolean }> => {
-  const res = await fetchWithAuth(`${backendUrl}/api/personas/${personaId}/favourite`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  });
+export const toggleFavourite = async (
+  personaId: string
+): Promise<{ isFavourited: boolean }> => {
+  const res = await fetchWithAuth(
+    `${backendUrl}/api/personas/${personaId}/favourite`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    }
+  );
 
   if (!res.ok) {
     const errorData = await res.json();
-    throw new Error(errorData.message || 'Failed to toggle favourite');
+    throw new Error(errorData.message || "Failed to toggle favourite");
   }
 
   const data = await res.json();
@@ -257,32 +266,35 @@ export const toggleFavourite = async (personaId: string): Promise<{ isFavourited
  * @returns Promise<MessageResponse>
  */
 export const sendMessageToPersona = async (
-  personaId: string, 
-  message: string, 
+  personaId: string,
+  message: string,
   conversationId?: string,
   fileId?: string
 ): Promise<MessageResponse> => {
   const payload: any = { message };
-  
+
   if (conversationId) {
     payload.conversationId = conversationId;
   }
-  
+
   if (fileId) {
     payload.fileId = fileId;
   }
 
-  const res = await fetchWithAuth(`${backendUrl}/api/personas/${personaId}/chat`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-  });
+  const res = await fetchWithAuth(
+    `${backendUrl}/api/personas/${personaId}/chat`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    }
+  );
 
   if (!res.ok) {
     const errorData = await res.json();
-    throw new Error(errorData.message || 'Failed to send message');
+    throw new Error(errorData.message || "Failed to send message");
   }
 
   return await res.json();
@@ -293,13 +305,17 @@ export const sendMessageToPersona = async (
  * @param archived - Whether to get archived conversations
  * @returns Promise<ConversationsResponse>
  */
-export const getConversations = async (archived?: boolean): Promise<ConversationsResponse> => {
-  const queryParams = archived ? '?archived=true' : '';
-  const res = await fetchWithAuth(`${backendUrl}/api/conversations${queryParams}`);
-  
+export const getConversations = async (
+  archived?: boolean
+): Promise<ConversationsResponse> => {
+  const queryParams = archived ? "?archived=true" : "";
+  const res = await fetchWithAuth(
+    `${backendUrl}/api/conversations${queryParams}`
+  );
+
   if (!res.ok) {
     const errorData = await res.json();
-    throw new Error(errorData.message || 'Failed to fetch conversations');
+    throw new Error(errorData.message || "Failed to fetch conversations");
   }
 
   return await res.json();
@@ -315,19 +331,24 @@ export const getConversations = async (archived?: boolean): Promise<Conversation
  */
 export const updateConversationVisibility = async (
   conversationId: string,
-  visibility: 'PRIVATE' | 'SHARED'
+  visibility: "PRIVATE" | "SHARED"
 ): Promise<VisibilityUpdateResponse> => {
-  const res = await fetchWithAuth(`${backendUrl}/api/conversations/${conversationId}/visibility`, {
-    method: 'PATCH',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ visibility }),
-  });
+  const res = await fetchWithAuth(
+    `${backendUrl}/api/conversations/${conversationId}/visibility`,
+    {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ visibility }),
+    }
+  );
 
   if (!res.ok) {
     const errorData = await res.json();
-    throw new Error(errorData.message || 'Failed to update conversation visibility');
+    throw new Error(
+      errorData.message || "Failed to update conversation visibility"
+    );
   }
 
   return await res.json();
@@ -343,17 +364,22 @@ export const toggleConversationArchive = async (
   conversationId: string,
   archived: boolean
 ): Promise<ArchiveUpdateResponse> => {
-  const res = await fetchWithAuth(`${backendUrl}/api/conversations/${conversationId}/archive`, {
-    method: 'PATCH',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ archived }),
-  });
+  const res = await fetchWithAuth(
+    `${backendUrl}/api/conversations/${conversationId}/archive`,
+    {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ archived }),
+    }
+  );
 
   if (!res.ok) {
     const errorData = await res.json();
-    throw new Error(errorData.message || 'Failed to update conversation archive status');
+    throw new Error(
+      errorData.message || "Failed to update conversation archive status"
+    );
   }
 
   return await res.json();
@@ -370,16 +396,16 @@ export const editMessage = async (
   content: string
 ): Promise<EditMessageResponse> => {
   const res = await fetchWithAuth(`${backendUrl}/api/messages/${messageId}`, {
-    method: 'PATCH',
+    method: "PATCH",
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
     },
     body: JSON.stringify({ content }),
   });
 
   if (!res.ok) {
     const errorData = await res.json();
-    throw new Error(errorData.message || 'Failed to edit message');
+    throw new Error(errorData.message || "Failed to edit message");
   }
 
   return await res.json();
@@ -395,17 +421,20 @@ export const requestFileUpload = async (
   conversationId: string,
   fileData: FileUploadRequest
 ): Promise<FileUploadResponse> => {
-  const res = await fetchWithAuth(`${backendUrl}/api/conversations/${conversationId}/files`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(fileData),
-  });
+  const res = await fetchWithAuth(
+    `${backendUrl}/api/conversations/${conversationId}/files`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(fileData),
+    }
+  );
 
   if (!res.ok) {
     const errorData = await res.json();
-    throw new Error(errorData.message || 'Failed to request file upload URL');
+    throw new Error(errorData.message || "Failed to request file upload URL");
   }
 
   return await res.json();
@@ -419,19 +448,22 @@ export const requestFileUpload = async (
  */
 export const toggleMessageReaction = async (
   messageId: string,
-  type: 'LIKE' | 'DISLIKE'
+  type: "LIKE" | "DISLIKE"
 ): Promise<ReactionResponse> => {
-  const res = await fetchWithAuth(`${backendUrl}/api/messages/${messageId}/reactions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ type }),
-  });
+  const res = await fetchWithAuth(
+    `${backendUrl}/api/messages/${messageId}/reactions`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ type }),
+    }
+  );
 
   if (!res.ok) {
     const errorData = await res.json();
-    throw new Error(errorData.message || 'Failed to toggle message reaction');
+    throw new Error(errorData.message || "Failed to toggle message reaction");
   }
 
   return await res.json();
@@ -442,17 +474,19 @@ export const toggleMessageReaction = async (
  * @param token - The shared conversation token
  * @returns Promise<SharedConversationResponse>
  */
-export const getSharedConversation = async (token: string): Promise<SharedConversationResponse> => {
+export const getSharedConversation = async (
+  token: string
+): Promise<SharedConversationResponse> => {
   const res = await fetch(`${backendUrl}/p/${token}`, {
-    method: 'GET',
+    method: "GET",
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
     },
   });
 
   if (!res.ok) {
     const errorData = await res.json();
-    throw new Error(errorData.message || 'Failed to get shared conversation');
+    throw new Error(errorData.message || "Failed to get shared conversation");
   }
 
   return await res.json();
@@ -473,38 +507,45 @@ export const createShareableLink = async (
     payload.expiresInDays = expiresInDays;
   }
 
-  const res = await fetchWithAuth(`${backendUrl}/api/conversations/${conversationId}/share`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-  });
+  const res = await fetchWithAuth(
+    `${backendUrl}/api/conversations/${conversationId}/share`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    }
+  );
 
   if (!res.ok) {
     const errorData = await res.json();
-    throw new Error(errorData.message || 'Failed to create shareable link');
+    throw new Error(errorData.message || "Failed to create shareable link");
   }
 
   return await res.json();
-}; 
+};
 
-export const getChatSessionById = async (sessionId: string): Promise<ChatSession> => {
-  const res = await fetchWithAuth(`${backendUrl}/api/chat-sessions/${sessionId}`);
+export const getChatSessionById = async (
+  sessionId: string
+): Promise<ChatSession> => {
+  const res = await fetchWithAuth(
+    `${backendUrl}/api/chat-sessions/${sessionId}`
+  );
   if (!res.ok) {
     const errorData = await res.json();
-    throw new Error(errorData.message || 'Failed to fetch chat session');
+    throw new Error(errorData.message || "Failed to fetch chat session");
   }
   const data = await res.json();
   return data.data;
-}; 
+};
 
 export const getUserChatSessions = async (): Promise<ChatSession[]> => {
   const res = await fetchWithAuth(`${backendUrl}/api/chat-sessions`);
   if (!res.ok) {
     const errorData = await res.json();
-    throw new Error(errorData.message || 'Failed to fetch chat sessions');
+    throw new Error(errorData.message || "Failed to fetch chat sessions");
   }
   const data = await res.json();
   return data.data as ChatSession[];
-}; 
+};

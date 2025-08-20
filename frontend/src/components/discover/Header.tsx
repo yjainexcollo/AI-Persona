@@ -25,7 +25,7 @@ import MenuIcon from "@mui/icons-material/Menu";
 
 import Popover from "@mui/material/Popover";
 import ListItemIcon from "@mui/material/ListItemIcon";
-import HelpOutlineIcon from "@mui/icons-material/HelpOutline";
+// import HelpOutlineIcon from "@mui/icons-material/HelpOutline";
 import LogoutIcon from "@mui/icons-material/Logout";
 import SettingsPage from "../../pages/SettingsPage";
 import { logout, getCurrentUser } from "../../services/authService";

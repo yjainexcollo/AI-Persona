@@ -44,7 +44,7 @@ const Pagination: React.FC<PaginationProps> = ({
     const maxVisiblePages = isMobile ? 5 : 7;
 
     let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
-    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+    const endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
 
     // Adjust start page if we're near the end
     if (endPage - startPage + 1 < maxVisiblePages) {
@@ -58,6 +58,7 @@ const Pagination: React.FC<PaginationProps> = ({
           key={1}
           onClick={() => onPageChange(1)}
           variant="text"
+          aria-label="Go to page 1"
           sx={{
             minWidth: { xs: 36, sm: 40 },
             height: { xs: 36, sm: 40 },
@@ -101,6 +102,8 @@ const Pagination: React.FC<PaginationProps> = ({
           key={i}
           onClick={() => onPageChange(i)}
           variant={currentPage === i ? "contained" : "text"}
+          aria-label={`Go to page ${i}`}
+          aria-current={currentPage === i ? "page" : undefined}
           sx={{
             minWidth: { xs: 36, sm: 40 },
             height: { xs: 36, sm: 40 },
@@ -144,6 +147,7 @@ const Pagination: React.FC<PaginationProps> = ({
           key={totalPages}
           onClick={() => onPageChange(totalPages)}
           variant="text"
+          aria-label={`Go to page ${totalPages}`}
           sx={{
             minWidth: { xs: 36, sm: 40 },
             height: { xs: 36, sm: 40 },
@@ -167,7 +171,11 @@ const Pagination: React.FC<PaginationProps> = ({
   };
 
   return (
-    <Box sx={{ mt: { xs: 4, sm: 6 }, mb: { xs: 3, sm: 4 } }}>
+    <Box
+      component="nav"
+      aria-label="Pagination"
+      sx={{ mt: { xs: 4, sm: 6 }, mb: { xs: 3, sm: 4 } }}
+    >
       <Box
         sx={{
           display: "flex",
@@ -190,6 +198,7 @@ const Pagination: React.FC<PaginationProps> = ({
           <IconButton
             onClick={handlePrevious}
             disabled={currentPage === 1}
+            aria-label="Previous page"
             sx={{
               mr: { xs: 0.5, sm: 1 },
               color: currentPage === 1 ? "#ccc" : "#666",
@@ -208,6 +217,7 @@ const Pagination: React.FC<PaginationProps> = ({
           <IconButton
             onClick={handleNext}
             disabled={currentPage === totalPages}
+            aria-label="Next page"
             sx={{
               ml: { xs: 0.5, sm: 1 },
               color: currentPage === totalPages ? "#ccc" : "#666",

@@ -67,6 +67,7 @@ const CommonNavbar: React.FC<CommonNavbarProps> = ({
 }) => {
   const navigate = useNavigate();
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
+  const isMenuOpen = !!anchorEl;
 
   /**
    * Handle opening the user menu
@@ -105,6 +106,8 @@ const CommonNavbar: React.FC<CommonNavbarProps> = ({
   return (
     <AppBar
       position="static"
+      component="nav"
+      aria-label="Global"
       sx={{
         backgroundColor: "#fff",
         color: "#333",
@@ -146,6 +149,10 @@ const CommonNavbar: React.FC<CommonNavbarProps> = ({
         <Box sx={{ display: "flex", alignItems: "center" }}>
           <IconButton
             onClick={handleMenuOpen}
+            aria-label="Open user menu"
+            aria-controls={isMenuOpen ? "user-menu" : undefined}
+            aria-haspopup="menu"
+            aria-expanded={isMenuOpen ? "true" : undefined}
             sx={{
               color: "#333",
               "&:hover": { backgroundColor: "#f5f5f5" },
@@ -161,9 +168,11 @@ const CommonNavbar: React.FC<CommonNavbarProps> = ({
           </IconButton>
 
           <Menu
+            id="user-menu"
             anchorEl={anchorEl}
-            open={Boolean(anchorEl)}
+            open={isMenuOpen}
             onClose={handleMenuClose}
+            MenuListProps={{ role: "menu", "aria-labelledby": "user-menu" }}
             PaperProps={{
               sx: {
                 mt: 1,
@@ -184,19 +193,29 @@ const CommonNavbar: React.FC<CommonNavbarProps> = ({
 
             <Divider />
 
-            <MenuItem onClick={() => handleNavigation("/profile")}>
+            <MenuItem
+              onClick={() => handleNavigation("/profile")}
+              role="menuitem"
+            >
               <AccountIcon sx={{ mr: 2, fontSize: 20 }} />
               Profile
             </MenuItem>
 
-            <MenuItem onClick={() => handleNavigation("/settings")}>
+            <MenuItem
+              onClick={() => handleNavigation("/settings")}
+              role="menuitem"
+            >
               <SettingsIcon sx={{ mr: 2, fontSize: 20 }} />
               Settings
             </MenuItem>
 
             <Divider />
 
-            <MenuItem onClick={handleLogout} sx={{ color: "#d32f2f" }}>
+            <MenuItem
+              onClick={handleLogout}
+              sx={{ color: "#d32f2f" }}
+              role="menuitem"
+            >
               <LogoutIcon sx={{ mr: 2, fontSize: 20 }} />
               Sign Out
             </MenuItem>

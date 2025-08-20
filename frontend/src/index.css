@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap");
 
 * {
   box-sizing: border-box;
@@ -13,6 +13,23 @@ body {
   -moz-osx-font-smoothing: grayscale;
   background-color: #ffffff;
   overflow-x: hidden; /* Prevent horizontal scroll */
+}
+
+/* Skip link (visible on focus) */
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 16px;
+  padding: 8px 12px;
+  background: #2950da;
+  color: #fff;
+  border-radius: 6px;
+  z-index: 9999;
+  text-decoration: none;
+}
+.skip-link:focus {
+  top: 12px;
+  outline: 2px solid #fff;
 }
 
 code {
@@ -110,11 +127,12 @@ code {
 
 /* Touch-friendly button sizes for mobile */
 @media (max-width: 767px) {
-  button, .MuiButton-root {
+  button,
+  .MuiButton-root {
     min-height: 44px !important;
     min-width: 44px !important;
   }
-  
+
   .MuiIconButton-root {
     min-width: 44px !important;
     min-height: 44px !important;
@@ -158,7 +176,7 @@ code {
   .hide-mobile {
     display: block;
   }
-  
+
   .show-mobile {
     display: none;
   }
@@ -192,27 +210,27 @@ code {
     font-size: 24px !important;
     line-height: 1.3 !important;
   }
-  
+
   h2 {
     font-size: 20px !important;
     line-height: 1.4 !important;
   }
-  
+
   h3 {
     font-size: 18px !important;
     line-height: 1.4 !important;
   }
-  
+
   h4 {
     font-size: 16px !important;
     line-height: 1.5 !important;
   }
-  
+
   h5 {
     font-size: 14px !important;
     line-height: 1.5 !important;
   }
-  
+
   h6 {
     font-size: 13px !important;
     line-height: 1.5 !important;

@@ -7,13 +7,13 @@ import ViewPersonaTabs from "../components/viewPersona/ViewPersonaTabs";
 import ViewPersonaSection from "../components/viewPersona/ViewPersonaSection";
 import ViewPersonaChips from "../components/viewPersona/ViewPersonaChips";
 import ViewPersonaSidebar from "../components/viewPersona/ViewPersonaSidebar";
+import WebhookManager from "../components/WebhookManager";
 import type { Persona } from "../types";
 import InsertDriveFileOutlinedIcon from "@mui/icons-material/InsertDriveFileOutlined";
 import ComputerOutlinedIcon from "@mui/icons-material/ComputerOutlined";
 import StorageOutlinedIcon from "@mui/icons-material/StorageOutlined";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import PublicOutlinedIcon from "@mui/icons-material/PublicOutlined";
-import { fetchWithAuth } from "../utils/session";
 import {
   getPersonas,
   getPersonaById,
@@ -25,9 +25,7 @@ interface ViewPersonaPageProps {
 }
 
 interface Trait {
-  _id: string;
   title: string;
-  category: string;
   description: string;
 }
 
@@ -44,6 +42,8 @@ interface SimilarPersona {
   name: string;
   role: string;
   avatar: string;
+  personaRole?: string;
+  avatarUrl?: string;
 }
 
 const ViewPersonaPage: React.FC<ViewPersonaPageProps> = ({
@@ -57,12 +57,78 @@ const ViewPersonaPage: React.FC<ViewPersonaPageProps> = ({
   const [allPersonas, setAllPersonas] = useState<SimilarPersona[]>([]);
   const navigate = useNavigate();
 
+  // Fetch persona data function - moved outside useEffect for reuse
+  const fetchPersonaData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      if (!id) {
+        setError("No persona ID provided");
+        return;
+      }
+
+      // Fetch persona from backend API
+      const persona = await getPersonaById(id);
+
+      // For now, we'll use a simplified structure since traits are not in the backend API
+      // In a real implementation, you might want to add traits to the backend API
+      setPersonaData({
+        id: persona.id,
+        name: persona.name,
+        role: (persona as any).personaRole || "",
+        avatar: persona.avatarUrl || "",
+        traits: [
+          {
+            title: "About",
+            description: (persona as any).about || persona.description || "",
+          },
+          {
+            title: "Core Expertise",
+            description: (persona as any).coreExpertise || "",
+          },
+          {
+            title: "Communication Style",
+            description: (persona as any).communicationStyle || "",
+          },
+          { title: "Traits", description: persona.traits || "" },
+          {
+            title: "Pain Points",
+            description: (persona as any).painPoints || "",
+          },
+          {
+            title: "Key Responsibilities",
+            description: (persona as any).keyResponsibility || "",
+          },
+        ],
+      });
+    } catch (error) {
+      console.error("Error fetching persona data:", error);
+      setError(
+        error instanceof Error ? error.message : "Failed to load persona data"
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Fetch all personas for similar personas list
   useEffect(() => {
     async function fetchAllPersonas() {
       try {
         const response = await getPersonas();
-        setAllPersonas(response.data || []);
+        // Transform Persona[] to SimilarPersona[]
+        const similarPersonas: SimilarPersona[] = (response.data || []).map(
+          (persona) => ({
+            id: persona.id,
+            name: persona.name,
+            role: persona.role || "Unknown",
+            avatar: persona.avatarUrl || "",
+            personaRole: (persona as any).personaRole,
+            avatarUrl: persona.avatarUrl,
+          })
+        );
+        setAllPersonas(similarPersonas);
       } catch (error) {
         console.error("Error fetching personas from backend:", error);
         setAllPersonas([]);
@@ -72,57 +138,6 @@ const ViewPersonaPage: React.FC<ViewPersonaPageProps> = ({
   }, []);
 
   useEffect(() => {
-    const fetchPersonaData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-
-        if (!id) {
-          setError("No persona ID provided");
-          return;
-        }
-
-        // Fetch persona from backend API
-        const persona = await getPersonaById(id);
-
-        // For now, we'll use a simplified structure since traits are not in the backend API
-        // In a real implementation, you might want to add traits to the backend API
-        setPersonaData({
-          id: persona.id,
-          name: persona.name,
-          role: persona.personaRole || "",
-          avatar: persona.avatarUrl || "",
-          traits: [
-            {
-              title: "About",
-              description: persona.about || persona.description || "",
-            },
-            {
-              title: "Core Expertise",
-              description: persona.coreExpertise || "",
-            },
-            {
-              title: "Communication Style",
-              description: persona.communicationStyle || "",
-            },
-            { title: "Traits", description: persona.traits || "" },
-            { title: "Pain Points", description: persona.painPoints || "" },
-            {
-              title: "Key Responsibilities",
-              description: persona.keyResponsibility || "",
-            },
-          ],
-        });
-      } catch (error) {
-        console.error("Error fetching persona data:", error);
-        setError(
-          error instanceof Error ? error.message : "Failed to load persona data"
-        );
-      } finally {
-        setLoading(false);
-      }
-    };
-
     if (id) {
       fetchPersonaData();
     }
@@ -382,6 +397,18 @@ const ViewPersonaPage: React.FC<ViewPersonaPageProps> = ({
             role={persona?.role || ""}
             onStartChat={() => navigate(`/chat/${persona?.id}`)}
           />
+
+          {/* Webhook Manager for Admin Users */}
+          <WebhookManager
+            personaName={persona?.name || ""}
+            onTraitsUpdated={() => {
+              // Refresh persona data when traits are updated
+              if (id) {
+                fetchPersonaData();
+              }
+            }}
+          />
+
           <ViewPersonaTabs value={tab} onChange={setTab} />
           {tab === 0 && (
             <>

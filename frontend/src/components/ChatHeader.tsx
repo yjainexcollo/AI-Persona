@@ -19,6 +19,7 @@ import {
   Divider,
 } from "@mui/material";
 import MenuIcon from "@mui/icons-material/Menu";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { CiSettings } from "react-icons/ci";
 import { useNavigate } from "react-router-dom";
 import { useLocation } from "react-router-dom";
@@ -102,6 +103,7 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
               <IconButton
                 size="small"
                 onClick={onBack}
+                aria-label="Go back"
                 sx={{
                   fontSize: { xs: 24, sm: 28 },
                   color: "#000",
@@ -119,10 +121,11 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
                   },
                 }}
               >
-                {typeof backIcon !== "undefined" ? backIcon : "<"}
+                {typeof backIcon !== "undefined" ? backIcon : <ArrowBackIcon />}
               </IconButton>
               <IconButton
                 size="small"
+                aria-label="Open menu"
                 sx={{
                   color: "#000",
                   fontSize: { xs: 20, sm: 22 },
@@ -212,13 +215,18 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
             </Stack>
           )}
           <>
-            <IconButton sx={{ color: "#666" }} onClick={handleSettingsOpen}>
+            <IconButton
+              sx={{ color: "#666" }}
+              onClick={handleSettingsOpen}
+              aria-label="Open settings"
+            >
               <CiSettings size={isMobile ? 20 : 24} />
             </IconButton>
             <Dialog
               open={settingsOpen}
               onClose={handleSettingsClose}
               fullScreen
+              aria-labelledby="settings-dialog-title"
               PaperProps={{
                 sx: {
                   m: 0,
@@ -232,10 +240,17 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
               <SettingsPage />
             </Dialog>
           </>
-          <Button onClick={handleProfileClick} sx={{ minWidth: 0, p: 0.5 }}>
+          <Button
+            onClick={handleProfileClick}
+            sx={{ minWidth: 0, p: 0.5 }}
+            aria-haspopup="menu"
+            aria-expanded={profileOpen ? "true" : undefined}
+            aria-label="Open profile menu"
+          >
             <Avatar
               src="https://img.freepik.com/free-vector/smiling-young-man-illustration_1308-174669.jpg?semt=ais_hybrid&w=740"
               sx={{ width: { xs: 28, sm: 32 }, height: { xs: 28, sm: 32 } }}
+              imgProps={{ loading: "lazy" }}
             />
           </Button>
         </Box>
