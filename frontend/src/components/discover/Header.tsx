@@ -118,16 +118,19 @@ const Header: React.FC = () => {
               </svg>
             </IconButton>
           )}
-          <Typography
-            variant="h6"
-            sx={{
-              fontWeight: 800,
-              color: "#333",
-              fontSize: { xs: "16px", sm: "18px" },
-            }}
-          >
-            Crudo.ai
-          </Typography>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <Box
+              component="img"
+              src="/logo.png"
+              alt="Crudo.ai"
+              sx={{
+                height: { xs: 22, sm: 50 },
+                width: "auto",
+                display: "block",
+              }}
+              onClick={() => navigate("/")}
+            />
+          </Box>
         </Box>
 
         {/* Right section - Navigation, Search, Settings and Profile */}

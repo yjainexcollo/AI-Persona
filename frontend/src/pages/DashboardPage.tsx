@@ -549,17 +549,27 @@ const DashboardPage: React.FC = () => {
                         color: "#222",
                         textAlign: "center",
                         display: "inline-flex",
-                        alignItems: "center",
+                        alignItems: "flex-end",
                         gap: 0.5,
-                        whiteSpace: "nowrap",
                         fontFamily:
                           '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
+                        maxWidth: 250,
                       }}
                     >
-                      {p.name}
-                      <ArrowOutwardIcon
-                        sx={{ fontSize: { xs: 14, md: 16 }, ml: 0.25 }}
-                      />
+                      <Box
+                        component="span"
+                        sx={{
+                          display: "-webkit-box",
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: "vertical",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "normal",
+                          maxWidth: 220,
+                        }}
+                      >
+                        {p.name}
+                      </Box>
                     </Typography>
                   </Box>
                 ))

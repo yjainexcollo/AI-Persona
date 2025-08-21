@@ -22,7 +22,6 @@ import {
   useTheme,
   useMediaQuery,
 } from "@mui/material";
-import { LiaExternalLinkAltSolid } from "react-icons/lia";
 import { useNavigate } from "react-router-dom";
 import type { Persona } from "../types";
 
@@ -56,6 +55,9 @@ const PersonaCard: React.FC<PersonaCardProps> = ({
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const isTablet = useMediaQuery(theme.breakpoints.down("md"));
   const navigate = useNavigate();
+  const hasRole = Boolean(
+    (persona as any).role && String((persona as any).role).trim().length
+  );
 
   /**
    * Handle view persona click event
@@ -203,57 +205,52 @@ const PersonaCard: React.FC<PersonaCardProps> = ({
             lineHeight: { xs: "20px", sm: "24px" },
             letterSpacing: 0,
             color: "#333",
-            mb: 0.5,
             textAlign: { xs: "center", sm: "left" },
+            mb: 0.5,
+            display: "-webkit-box",
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: "vertical",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "normal",
           }}
         >
           {persona.name}
         </Typography>
 
         {/* Clickable Role with External Link Icon */}
-        <Box
-          className="role-link"
-          onClick={handleViewPersona}
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: { xs: "center", sm: "flex-start" },
-            gap: 0.5,
-            cursor: "pointer",
-            transition: "color 0.2s ease-in-out",
-            color: "#2950DA",
-            position: "relative",
-            zIndex: 10, // Ensure it's above other elements
-            "&:hover": {
-              color: "#2950DA",
-              "& .external-icon": {
-                transform: "translateX(2px)",
-              },
-            },
-          }}
-        >
-          <Typography
-            variant="body2"
+        {hasRole && (
+          <Box
+            className="role-link"
+            onClick={handleViewPersona}
             sx={{
-              fontFamily: "Inter, Roboto, Helvetica, Arial, sans-serif",
-              fontWeight: 400,
-              fontSize: { xs: "13px", sm: "14px" },
-              lineHeight: { xs: "18px", sm: "21px" },
-              letterSpacing: 0,
-              color: "inherit",
+              display: "inline-flex",
+              alignItems: "flex-end",
+              justifyContent: { xs: "center", sm: "flex-start" },
+              gap: 0.5,
+              cursor: "pointer",
+              transition: "color 0.2s ease-in-out",
+              color: "#2950DA",
+              position: "relative",
+              zIndex: 10, // Ensure it's above other elements
+              "&:hover": { color: "#2950DA" },
             }}
           >
-            {persona.role}
-          </Typography>
-          <LiaExternalLinkAltSolid
-            className="external-icon"
-            style={{
-              fontSize: isMobile ? "14px" : "16px",
-              transition: "transform 0.2s ease-in-out",
-              marginTop: "1px",
-            }}
-          />
-        </Box>
+            <Typography
+              variant="body2"
+              sx={{
+                fontFamily: "Inter, Roboto, Helvetica, Arial, sans-serif",
+                fontWeight: 400,
+                fontSize: { xs: "13px", sm: "14px" },
+                lineHeight: 1.5,
+                letterSpacing: 0,
+                color: "inherit",
+              }}
+            >
+              {(persona as any).role}
+            </Typography>
+          </Box>
+        )}
       </CardContent>
     </Card>
   );

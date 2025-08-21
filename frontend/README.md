@@ -35,33 +35,26 @@ A modern React + TypeScript application for the AI Persona platform. It provides
 
 ```
 src/
+├── app/
+│   ├── guards/                  # Route guards (auth, admin)
+│   └── routes/                  # Centralized route definitions
 ├── components/
-│   ├── Auth/                    # Login/Register/Reset/2FA dialogs
-│   ├── chatHistory/             # History list, item, tabs
-│   ├── discover/                # Top header for Discovery & shared header UX
-│   ├── personaSelector/         # Selector grid & header
-│   ├── sidebar/                 # App sidebar with recent/favorites
-│   ├── viewPersona/             # Persona view header, sections, sidebar
-│   ├── ChatHeader.tsx           # Chat page header (Discover, Chat History)
-│   ├── ChatInputBar.tsx         # Message input with file uploads
-│   ├── CommonNavbar.tsx         # Workspace/User common navbar
-│   ├── ConversationSettingsDialog.tsx
-│   ├── FormattedOutput.tsx      # Render markdown-like content
-│   ├── GlobalLoader.tsx         # Loader
-│   ├── MessageReaction.tsx      # Like/Dislike on AI messages
-│   ├── Pagination.tsx
-│   ├── PersonaCard.tsx
-│   └── PersonaGrid.tsx
+│   ├── Auth/
+│   ├── chatHistory/
+│   ├── discover/
+│   ├── personaSelector/
+│   ├── sidebar/
+│   └── viewPersona/
+├── lib/
+│   ├── config/
+│   │   └── env.ts               # Env helpers (VITE_* access)
+│   ├── routing/
+│   │   └── paths.ts             # Central route path helpers
+│   └── storage/
+│       └── localStorage.ts      # Typed storage helpers
 ├── pages/
-│   ├── ChatPage.tsx             # Chat experience
-│   ├── ChatHistoryPage.tsx      # Lists chat sessions (from /api/chat-sessions)
-│   ├── Discovery.tsx            # Browse personas
-│   ├── ProfilePage.tsx
-│   ├── SettingsPage.tsx         # Full-screen dialog when opened from headers
-│   ├── WorkspaceDashboard.tsx
-│   └── ...                      # Other pages
-├── services/                    # REST services (persona/chat/etc.)
-├── utils/                       # fetchWithAuth, session mgmt, avatar helpers
+├── services/                    # REST services
+├── utils/                       # fetchWithAuth, session mgmt
 ├── hooks/
 ├── types/
 ├── App.tsx, main.tsx, index.css
@@ -136,23 +129,28 @@ All services use `fetchWithAuth` which injects auth headers from session storage
 
 ## Environment
 
-Create `frontend/.env`:
+Create `frontend/.env.local` (or `.env`):
 
 ```env
 VITE_BACKEND_URL=http://localhost:3000
+
+Notes:
+- `src/lib/config/env.ts` centralizes access to env values.
+- `src/lib/storage/localStorage.ts` centralizes token/user/workspace access.
 ```
 
 Tips:
+
 - Images and avatars may be stored as relative paths like `/uploads/...`. The app uses `getAvatarUrl()` to build full URLs using `VITE_BACKEND_URL` and avoid browser CORS issues.
 - Ensure the backend enables CORS for `http://localhost:5173` and serves `/uploads` with permissive headers.
 
 ## Development
 
-1) Install deps: `npm install`
-2) Start dev server: `npm run dev`
-3) Lint: `npm run lint`
-4) Build: `npm run build`
-5) Preview: `npm run preview`
+1. Install deps: `npm install`
+2. Start dev server: `npm run dev`
+3. Lint: `npm run lint`
+4. Build: `npm run build`
+5. Preview: `npm run preview`
 
 ## Common Flows
 
@@ -182,5 +180,3 @@ Tips:
 
 - `getConversationById` was removed; use `getConversations()` and/or `getChatSessionById()`.
 - Reactions UI hidden for user messages by design.
-
-
