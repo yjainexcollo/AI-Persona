@@ -276,8 +276,20 @@ async function forwardTraitsToN8n(payload, userId) {
   }
 
   // Resolve target URL
-  let targetUrl = process.env.N8N_TRAITS_WEBHOOK_URL || null;
+  // 1) Persona-specific traits URL mapping (preferred)
+  const traitsUrlByPersona = {
+    "HR Ops / Payroll Manager":
+      "https://n8n-excollo.azurewebsites.net/webhook/traits/hr-payroll",
+    "HRIS Lead and Finance Ops/Controller":
+      "https://n8n-excollo.azurewebsites.net/webhook/traits/hris-payroll",
+  };
+
+  let targetUrl =
+    traitsUrlByPersona[personaName] ||
+    process.env.N8N_TRAITS_WEBHOOK_URL ||
+    null;
   if (!targetUrl) {
+    // 3) Fallback to persona's own webhook (typically used for chat); keeps backward compat
     if (!persona.webhookUrl) {
       throw new ApiError(400, "No n8n webhook URL configured for this persona");
     }
