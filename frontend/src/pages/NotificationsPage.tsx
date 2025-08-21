@@ -48,6 +48,11 @@ const NotificationsPage: React.FC = () => {
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const navigate = useNavigate();
 
+  const localUser = JSON.parse(localStorage.getItem("user") || "{}");
+  const userRole: string = localUser.role || "MEMBER";
+  const userName: string = localUser.name || "User";
+  const avatarUrl: string = localUser.avatarUrl || localUser.avatar || "";
+
   const fetchNotifications = async () => {
     try {
       setLoading(true);
@@ -123,9 +128,11 @@ const NotificationsPage: React.FC = () => {
       {/* Fixed sidebar on md+ */}
       <Box sx={{ display: { xs: "none", md: "block" } }}>
         <AdminSidebar
-          userRole="MEMBER"
+          userRole={userRole}
           currentTab="notifications"
           onSignOut={() => navigate("/login")}
+          userName={userName}
+          avatarUrl={avatarUrl}
         />
       </Box>
 
@@ -136,10 +143,12 @@ const NotificationsPage: React.FC = () => {
         PaperProps={{ sx: { width: 240 } }}
       >
         <AdminSidebar
-          userRole="MEMBER"
+          userRole={userRole}
           currentTab="notifications"
           onSignOut={() => navigate("/login")}
           isDrawer
+          userName={userName}
+          avatarUrl={avatarUrl}
         />
       </Drawer>
 

@@ -403,9 +403,7 @@ const ActiveUsersPage: React.FC = () => {
       <Drawer
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
-        PaperProps={{
-          sx: { width: 240, display: { xs: "block", md: "none" } },
-        }}
+        PaperProps={{ sx: { width: 240 } }}
       >
         <AdminSidebar
           userRole={user.role}
@@ -421,27 +419,34 @@ const ActiveUsersPage: React.FC = () => {
           display: "flex",
           flexDirection: "column",
           ml: { xs: 0, md: "220px" },
+          minWidth: 0,
         }}
       >
-        {/* Top Bar with CommonNavbar */}
+        {/* Header (matches Dashboard) */}
         <Box
           sx={{
             display: "flex",
-            justifyContent: "space-between",
             alignItems: "center",
-            p: 2,
-            bgcolor: "#fff",
-            boxShadow: 1,
-            position: "sticky",
-            top: 0,
-            zIndex: 10,
+            justifyContent: "space-between",
+            mb: 2,
+            px: { xs: 2, md: 6 },
+            pt: { xs: 2, md: 3 },
+            fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
           }}
         >
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-            <Typography variant="h4" sx={{ fontWeight: 700, color: "#222" }}>
+          <Box>
+            <Typography
+              sx={{
+                fontWeight: 700,
+                fontSize: { xs: 18, md: 24 },
+                color: "#222",
+              }}
+            >
               Workspace Members
             </Typography>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <Box
+              sx={{ display: "flex", alignItems: "center", gap: 1, mt: 0.5 }}
+            >
               <Box
                 sx={{
                   width: 8,
@@ -468,8 +473,8 @@ const ActiveUsersPage: React.FC = () => {
               sx: {
                 borderRadius: 3,
                 bgcolor: "#fff",
-                width: { xs: "100%", sm: 320 },
-                fontSize: 18,
+                width: { xs: 220, sm: 320 },
+                fontSize: 16,
               },
             }}
             value={search}
@@ -478,19 +483,34 @@ const ActiveUsersPage: React.FC = () => {
         </Box>
 
         {successMessage && (
-          <Alert severity="success" sx={{ mb: 2 }}>
+          <Alert severity="success" sx={{ mb: 2, mx: { xs: 2, md: 6 } }}>
             {successMessage}
           </Alert>
         )}
 
-        <Paper elevation={0} sx={{ borderRadius: 3, p: 3, mt: 2 }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
-            <FormControl size="small" sx={{ minWidth: 120 }}>
+        <Paper
+          elevation={0}
+          sx={{ borderRadius: 3, p: { xs: 2, md: 3 }, mx: { xs: 2, md: 6 } }}
+        >
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: 2,
+              mb: 3,
+              flexWrap: "wrap",
+            }}
+          >
+            <FormControl size="small" sx={{ minWidth: 140 }}>
               <InputLabel>Status</InputLabel>
               <Select
                 value={statusFilter}
                 label="Status"
-                onChange={(e) => setStatusFilter(e.target.value)}
+                onChange={(e) =>
+                  setStatusFilter(
+                    (e.target.value || "").toString().toUpperCase()
+                  )
+                }
               >
                 <MenuItem value="">All</MenuItem>
                 <MenuItem value="ACTIVE">Active</MenuItem>
@@ -499,12 +519,14 @@ const ActiveUsersPage: React.FC = () => {
               </Select>
             </FormControl>
 
-            <FormControl size="small" sx={{ minWidth: 120 }}>
+            <FormControl size="small" sx={{ minWidth: 140 }}>
               <InputLabel>Role</InputLabel>
               <Select
                 value={roleFilter}
                 label="Role"
-                onChange={(e) => setRoleFilter(e.target.value)}
+                onChange={(e) =>
+                  setRoleFilter((e.target.value || "").toString().toUpperCase())
+                }
               >
                 <MenuItem value="">All</MenuItem>
                 <MenuItem value="ADMIN">Admin</MenuItem>
@@ -559,9 +581,7 @@ const ActiveUsersPage: React.FC = () => {
                         checked={checked.includes(idx)}
                         onChange={() => handleCheck(idx)}
                         icon={<CheckBoxOutlineBlankIcon />}
-                        checkedIcon={
-                          <CheckBoxIcon sx={{ color: "#2950DA" }} />
-                        }
+                        checkedIcon={<CheckBoxIcon sx={{ color: "#2950DA" }} />}
                       />
                     </TableCell>
                     <TableCell
