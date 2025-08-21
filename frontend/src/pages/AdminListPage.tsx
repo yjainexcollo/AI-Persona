@@ -202,38 +202,48 @@ const AdminListPage: React.FC = () => {
           display: "flex",
           flexDirection: "column",
           ml: { xs: 0, md: "220px" },
+          minWidth: 0,
         }}
       >
+        {/* Header (match ActiveUsersPage / Dashboard look) */}
         <Box
           sx={{
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            p: 2,
-            bgcolor: "#fff",
-            boxShadow: 1,
+            mb: 2,
+            px: { xs: 2, md: 6 },
+            pt: { xs: 2, md: 3 },
+            fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
           }}
         >
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-            <Typography
-              variant="h4"
-              sx={{ fontWeight: 700, color: "#222" }}
-            >
-              Admin Users
-            </Typography>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-              <Box
+          <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1 }}>
+            <Box>
+              <Typography
                 sx={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: "50%",
-                  bgcolor: "#2950DA",
-                  opacity: 0.7,
+                  fontWeight: 700,
+                  fontSize: { xs: 18, md: 24 },
+                  color: "#222",
                 }}
-              />
-              <Typography sx={{ color: "#666", fontSize: 12 }}>
-                Live data
+              >
+                Admin Users
               </Typography>
+              <Box
+                sx={{ display: "flex", alignItems: "center", gap: 1, mt: 0.5 }}
+              >
+                <Box
+                  sx={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: "50%",
+                    bgcolor: "#2950DA",
+                    opacity: 0.7,
+                  }}
+                />
+                <Typography sx={{ color: "#666", fontSize: 12 }}>
+                  {totalAdmins} admins
+                </Typography>
+              </Box>
             </Box>
           </Box>
           <TextField
@@ -248,8 +258,8 @@ const AdminListPage: React.FC = () => {
               sx: {
                 borderRadius: 3,
                 bgcolor: "#fff",
-                width: { xs: "100%", sm: 320 },
-                fontSize: 18,
+                width: { xs: 220, sm: 320 },
+                fontSize: 16,
               },
             }}
             value={search}
@@ -258,19 +268,10 @@ const AdminListPage: React.FC = () => {
         </Box>
 
         {/* Users Table */}
-        <Paper elevation={0} sx={{ borderRadius: 3, p: 3, mt: 2 }}>
-          <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
-            <Typography
-              sx={{
-                color: "#888",
-                fontWeight: 600,
-                fontSize: 16,
-                ml: "auto",
-              }}
-            >
-              Date : <span style={{ color: "#222" }}>All</span>
-            </Typography>
-          </Box>
+        <Paper
+          elevation={0}
+          sx={{ borderRadius: 3, p: { xs: 2, md: 3 }, mx: { xs: 2, md: 6 } }}
+        >
           <TableContainer sx={{ width: "100%", overflowX: "auto" }}>
             <Table size="small">
               <TableHead>
@@ -302,10 +303,7 @@ const AdminListPage: React.FC = () => {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell
-                      colSpan={6}
-                      sx={{ textAlign: "center", py: 4 }}
-                    >
+                    <TableCell colSpan={6} sx={{ textAlign: "center", py: 4 }}>
                       <Typography>Loading admin users...</Typography>
                     </TableCell>
                   </TableRow>
@@ -313,21 +311,14 @@ const AdminListPage: React.FC = () => {
                   <TableRow>
                     <TableCell
                       colSpan={6}
-                      sx={{
-                        textAlign: "center",
-                        py: 4,
-                        color: "error.main",
-                      }}
+                      sx={{ textAlign: "center", py: 4, color: "error.main" }}
                     >
                       <Typography>{error}</Typography>
                     </TableCell>
                   </TableRow>
                 ) : paginatedUsers.length === 0 ? (
                   <TableRow>
-                    <TableCell
-                      colSpan={6}
-                      sx={{ textAlign: "center", py: 4 }}
-                    >
+                    <TableCell colSpan={6} sx={{ textAlign: "center", py: 4 }}>
                       <Typography>No admin users found</Typography>
                     </TableCell>
                   </TableRow>
@@ -354,33 +345,22 @@ const AdminListPage: React.FC = () => {
                         {user.id}
                       </TableCell>
                       <TableCell
-                        sx={{
-                          fontWeight: 600,
-                          fontSize: { xs: 14, md: 16 },
-                        }}
+                        sx={{ fontWeight: 600, fontSize: { xs: 14, md: 16 } }}
                       >
                         {user.name}
                       </TableCell>
                       <TableCell
-                        sx={{
-                          fontWeight: 600,
-                          fontSize: { xs: 14, md: 16 },
-                        }}
+                        sx={{ fontWeight: 600, fontSize: { xs: 14, md: 16 } }}
                       >
                         {user.role}
                       </TableCell>
                       <TableCell
-                        sx={{
-                          fontWeight: 600,
-                          fontSize: { xs: 14, md: 16 },
-                        }}
+                        sx={{ fontWeight: 600, fontSize: { xs: 14, md: 16 } }}
                       >
                         {user.status === "ACTIVE" ? "Active" : "Inactive"}
                       </TableCell>
                       <TableCell align="right">
-                        <IconButton
-                          onClick={() => handleViewDetails(user.id)}
-                        >
+                        <IconButton onClick={() => handleViewDetails(user.id)}>
                           <MoreVertIcon />
                         </IconButton>
                       </TableCell>
@@ -390,26 +370,25 @@ const AdminListPage: React.FC = () => {
               </TableBody>
             </Table>
           </TableContainer>
-          <Box
-            sx={{
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              mt: 3,
-            }}
-          >
-            <Pagination
-              count={Math.max(
-                1,
-                Math.ceil((totalAdmins || 0) / itemsPerPage)
-              )}
-              page={page}
-              onChange={(_, v) => setPage(v)}
-              color="primary"
-              shape="rounded"
-              size="large"
-            />
-          </Box>
+          {totalAdmins > itemsPerPage && (
+            <Box
+              sx={{
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                mt: 3,
+              }}
+            >
+              <Pagination
+                count={Math.ceil((totalAdmins || 0) / itemsPerPage)}
+                page={page}
+                onChange={(_, v) => setPage(v)}
+                color="primary"
+                shape="rounded"
+                size="large"
+              />
+            </Box>
+          )}
         </Paper>
       </Box>
 
