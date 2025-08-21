@@ -24,13 +24,13 @@ const TwoFactorAuthForm: React.FC<TwoFactorAuthFormProps> = ({
     newCode[idx] = value;
     setCode(newCode);
     if (value && idx < 5) {
-      inputs[idx + 1].current?.focus();
+      inputs[idx + 1]?.current?.focus();
     }
   };
 
   const handleKeyDown = (idx: number, e: React.KeyboardEvent) => {
     if (e.key === "Backspace" && !code[idx] && idx > 0) {
-      inputs[idx - 1].current?.focus();
+      inputs[idx - 1]?.current?.focus();
     }
   };
 

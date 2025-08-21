@@ -11,14 +11,31 @@ import {
   TextField,
   Button,
   Drawer,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Grid,
+  Card,
+  CardContent,
+  CardHeader,
+  Divider,
+  Alert,
+  CircularProgress,
 } from "@mui/material";
 import AccountCircleIcon from "@mui/icons-material/AccountCircle";
 import NotificationsNoneIcon from "@mui/icons-material/NotificationsNone";
 import PolicyIcon from "@mui/icons-material/Policy";
-import CommonNavbar from "../components/CommonNavbar";
+import WorkspacesIcon from "@mui/icons-material/Workspaces";
+import MenuIcon from "@mui/icons-material/Menu";
 import AdminSidebar from "../components/sidebar/AdminSidebar";
 import { fetchWithAuth } from "../utils/session";
 import { logout } from "../services/authService";
+import {
+  getWorkspaceDetails,
+  updateWorkspace,
+  type WorkspaceData,
+} from "../services/workspaceService";
 
 const settingsSidebar = [
   {
@@ -35,10 +52,16 @@ const settingsSidebar = [
     subtitle: "All settings related to notifications",
   },
   {
+    key: "workspace",
+    icon: <WorkspacesIcon sx={{ fontSize: 28 }} />,
+    title: "Workspace",
+    subtitle: "Manage your workspace settings and preferences",
+  },
+  {
     key: "privacy",
     icon: <PolicyIcon sx={{ fontSize: 28 }} />,
     title: "Privacy policy",
-    subtitle: "All settings related to notifications",
+    subtitle: "All settings related to privacy",
   },
 ];
 
@@ -50,10 +73,37 @@ const notificationOptions = [
   { label: "WhatsApp", key: "whatsapp" },
 ];
 
+const timezones = [
+  "UTC",
+  "America/New_York",
+  "America/Chicago",
+  "America/Denver",
+  "America/Los_Angeles",
+  "Europe/London",
+  "Europe/Paris",
+  "Europe/Berlin",
+  "Asia/Tokyo",
+  "Asia/Shanghai",
+  "Australia/Sydney",
+];
+
+const locales = [
+  "en-US",
+  "en-GB",
+  "es-ES",
+  "fr-FR",
+  "de-DE",
+  "it-IT",
+  "pt-BR",
+  "ja-JP",
+  "zh-CN",
+  "ko-KR",
+];
+
 const SettingsPage: React.FC = () => {
   const user = JSON.parse(localStorage.getItem("user") || "{}");
   const [activeSection, setActiveSection] = useState<
-    "account" | "notifications" | "privacy"
+    "account" | "notifications" | "privacy" | "workspace"
   >("account");
   const [toggles, setToggles] = useState({
     pause: false,
@@ -86,6 +136,9 @@ const SettingsPage: React.FC = () => {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [workspace, setWorkspace] = useState<WorkspaceData | null>(null);
+  const [loadingWorkspace, setLoadingWorkspace] = useState(true);
+  const [workspaceError, setWorkspaceError] = useState("");
 
   useEffect(() => {
     if (activeSection !== "account") return;
@@ -101,6 +154,18 @@ const SettingsPage: React.FC = () => {
       })
       .catch(() => setProfileError("Failed to load profile"))
       .finally(() => setLoadingProfile(false));
+  }, [activeSection]);
+
+  useEffect(() => {
+    if (activeSection !== "workspace") return;
+    setLoadingWorkspace(true);
+    setWorkspaceError("");
+    getWorkspaceDetails()
+      .then((data) => {
+        setWorkspace(data);
+      })
+      .catch(() => setWorkspaceError("Failed to load workspace settings"))
+      .finally(() => setLoadingWorkspace(false));
   }, [activeSection]);
 
   const handleEditClick = (
@@ -212,6 +277,28 @@ const SettingsPage: React.FC = () => {
     }
   };
 
+  const handleWorkspaceUpdate = async (updatedWorkspace: WorkspaceData) => {
+    setLoadingWorkspace(true);
+    setWorkspaceError("");
+    try {
+      if (workspace) {
+        await updateWorkspace(workspace.id, {
+          name: updatedWorkspace.name,
+          timezone: updatedWorkspace.timezone,
+          locale: updatedWorkspace.locale,
+        });
+        setWorkspace(updatedWorkspace);
+        setWorkspaceError("Workspace settings updated successfully!");
+      }
+    } catch (err) {
+      setWorkspaceError(
+        err instanceof Error ? err.message : "Failed to update workspace"
+      );
+    } finally {
+      setLoadingWorkspace(false);
+    }
+  };
+
   return (
     <Box sx={{ display: "flex", minHeight: "100vh", bgcolor: "#f8f9fa" }}>
       <Box sx={{ display: { xs: "none", md: "block" } }}>
@@ -244,15 +331,27 @@ const SettingsPage: React.FC = () => {
         }}
       >
         {/* Top Bar with CommonNavbar */}
-        <CommonNavbar
-          user={{
-            name: user.name || "User",
-            role: user.role || "Member",
-            avatarUrl: user.avatar || "",
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            p: 2,
+            bgcolor: "#fff",
+            boxShadow: "0 2px 8px 0 rgba(44,62,80,0.04)",
           }}
-          onSignOut={logout}
-          onToggleSidebar={() => setSidebarOpen(true)}
-        />
+        >
+          <Typography variant="h5" sx={{ fontWeight: 700, color: "#222" }}>
+            Settings
+          </Typography>
+          <Button
+            variant="outlined"
+            color="primary"
+            onClick={() => setSidebarOpen(true)}
+          >
+            <MenuIcon />
+          </Button>
+        </Box>
         {/* Settings Sidebar */}
         <Box
           sx={{
@@ -298,7 +397,11 @@ const SettingsPage: React.FC = () => {
                 }}
                 onClick={() =>
                   setActiveSection(
-                    item.key as "account" | "notifications" | "privacy"
+                    item.key as
+                      | "account"
+                      | "notifications"
+                      | "privacy"
+                      | "workspace"
                   )
                 }
               >
@@ -598,6 +701,129 @@ const SettingsPage: React.FC = () => {
                     </Button>
                   </DialogActions>
                 </Dialog>
+              </>
+            )}
+            {activeSection === "workspace" && (
+              <>
+                <Typography
+                  variant="h4"
+                  sx={{
+                    fontWeight: 700,
+                    color: "#222",
+                    mb: 4,
+                    alignSelf: "flex-start",
+                  }}
+                >
+                  Workspace Settings
+                </Typography>
+                <Paper
+                  elevation={0}
+                  sx={{
+                    width: { xs: "100%", sm: 600 },
+                    borderRadius: 4,
+                    p: 4,
+                    bgcolor: "#fff",
+                    boxShadow: "0 2px 8px 0 rgba(44,62,80,0.04)",
+                  }}
+                >
+                  {loadingWorkspace ? (
+                    <Box
+                      sx={{ display: "flex", justifyContent: "center", p: 4 }}
+                    >
+                      <CircularProgress />
+                    </Box>
+                  ) : workspaceError ? (
+                    <Alert
+                      severity={
+                        workspaceError.includes("successfully")
+                          ? "success"
+                          : "error"
+                      }
+                      sx={{ mb: 3 }}
+                    >
+                      {workspaceError}
+                    </Alert>
+                  ) : workspace ? (
+                    <Box>
+                      <Grid container spacing={3}>
+                        <Grid item xs={12} sm={6}>
+                          <TextField
+                            fullWidth
+                            label="Workspace Name"
+                            value={workspace.name}
+                            onChange={(e) => {
+                              const updated = {
+                                ...workspace,
+                                name: e.target.value,
+                              };
+                              setWorkspace(updated);
+                            }}
+                            sx={{ mb: 2 }}
+                          />
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                          <FormControl fullWidth sx={{ mb: 2 }}>
+                            <InputLabel>Timezone</InputLabel>
+                            <Select
+                              value={workspace.timezone}
+                              label="Timezone"
+                              onChange={(e) => {
+                                const updated = {
+                                  ...workspace,
+                                  timezone: e.target.value,
+                                };
+                                setWorkspace(updated);
+                              }}
+                            >
+                              {timezones.map((tz) => (
+                                <MenuItem key={tz} value={tz}>
+                                  {tz}
+                                </MenuItem>
+                              ))}
+                            </Select>
+                          </FormControl>
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                          <FormControl fullWidth sx={{ mb: 2 }}>
+                            <InputLabel>Locale</InputLabel>
+                            <Select
+                              value={workspace.locale}
+                              label="Locale"
+                              onChange={(e) => {
+                                const updated = {
+                                  ...workspace,
+                                  locale: e.target.value,
+                                };
+                                setWorkspace(updated);
+                              }}
+                            >
+                              {locales.map((locale) => (
+                                <MenuItem key={locale} value={locale}>
+                                  {locale}
+                                </MenuItem>
+                              ))}
+                            </Select>
+                          </FormControl>
+                        </Grid>
+                        <Grid item xs={12}>
+                          <Button
+                            variant="contained"
+                            color="primary"
+                            onClick={() => handleWorkspaceUpdate(workspace)}
+                            disabled={loadingWorkspace}
+                            sx={{ mt: 2 }}
+                          >
+                            {loadingWorkspace ? "Saving..." : "Save Changes"}
+                          </Button>
+                        </Grid>
+                      </Grid>
+                    </Box>
+                  ) : (
+                    <Typography color="error">
+                      No workspace data available
+                    </Typography>
+                  )}
+                </Paper>
               </>
             )}
             {activeSection === "privacy" && (

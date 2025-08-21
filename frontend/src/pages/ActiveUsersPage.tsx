@@ -2,39 +2,54 @@ import React, { useState, useEffect } from "react";
 import {
   Box,
   Typography,
+  Paper,
+  Button,
+  Avatar,
   TextField,
-  InputAdornment,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Alert,
+  CircularProgress,
+  Grid,
+  Card,
+  CardContent,
+  CardHeader,
+  Divider,
   IconButton,
-  Checkbox,
+  Drawer,
+  Chip,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
-  Paper,
-  Pagination,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Button,
+  TablePagination,
   FormControl,
   InputLabel,
   Select,
   MenuItem,
-  Alert,
-  Chip,
+  Switch,
+  FormControlLabel,
+  InputAdornment,
+  Checkbox,
   Tooltip,
-  Drawer,
+  Pagination,
 } from "@mui/material";
+import EditIcon from "@mui/icons-material/Edit";
+import DeleteIcon from "@mui/icons-material/Delete";
+import AddIcon from "@mui/icons-material/Add";
 import SearchIcon from "@mui/icons-material/Search";
-import MoreVertIcon from "@mui/icons-material/MoreVert";
+import FilterListIcon from "@mui/icons-material/FilterList";
 import CheckBoxIcon from "@mui/icons-material/CheckBox";
 import CheckBoxOutlineBlankIcon from "@mui/icons-material/CheckBoxOutlineBlank";
-import CommonNavbar from "../components/CommonNavbar";
+import MoreVertIcon from "@mui/icons-material/MoreVert";
 import AdminSidebar from "../components/sidebar/AdminSidebar";
+import { fetchWithAuth } from "../utils/session";
 import { logout } from "../services/authService";
+import { getAvatarUrl } from "../services/avatarService";
 import {
   getWorkspaceDetails,
   getWorkspaceMembers,
@@ -409,235 +424,226 @@ const ActiveUsersPage: React.FC = () => {
         }}
       >
         {/* Top Bar with CommonNavbar */}
-        <CommonNavbar
-          user={{
-            name: user.name || "User",
-            role: user.role || "Member",
-            avatarUrl: user.avatar || "",
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            p: 2,
+            bgcolor: "#fff",
+            boxShadow: 1,
+            position: "sticky",
+            top: 0,
+            zIndex: 10,
           }}
-          onSignOut={handleSignOut}
-          onToggleSidebar={() => setSidebarOpen(true)}
-        />
-        {/* Content */}
-        <Box sx={{ flex: 1, px: { xs: 2, md: 6 }, py: { xs: 2, md: 4 } }}>
-          <Box
-            sx={{
-              display: "flex",
-              justifyContent: { xs: "flex-start", md: "space-between" },
-              alignItems: { xs: "stretch", md: "center" },
-              mb: 2,
-              flexDirection: { xs: "column", md: "row" },
-              gap: { xs: 1.5, md: 0 },
-            }}
-          >
-            <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-              <Typography variant="h4" sx={{ fontWeight: 700, color: "#222" }}>
-                Workspace Members
-              </Typography>
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                <Box
-                  sx={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: "50%",
-                    bgcolor: "#2950DA",
-                    opacity: 0.7,
-                  }}
-                />
-                <Typography sx={{ color: "#666", fontSize: 12 }}>
-                  {totalMembers} members
-                </Typography>
-              </Box>
-            </Box>
-            <TextField
-              placeholder="Search members..."
-              size="small"
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon sx={{ color: "#bdbdbd" }} />
-                  </InputAdornment>
-                ),
-                sx: {
-                  borderRadius: 3,
-                  bgcolor: "#fff",
-                  width: { xs: "100%", sm: 320 },
-                  fontSize: 18,
-                },
-              }}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </Box>
-
-          {successMessage && (
-            <Alert severity="success" sx={{ mb: 2 }}>
-              {successMessage}
-            </Alert>
-          )}
-
-          <Paper elevation={0} sx={{ borderRadius: 3, p: 3, mt: 2 }}>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
-              <FormControl size="small" sx={{ minWidth: 120 }}>
-                <InputLabel>Status</InputLabel>
-                <Select
-                  value={statusFilter}
-                  label="Status"
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                >
-                  <MenuItem value="">All</MenuItem>
-                  <MenuItem value="ACTIVE">Active</MenuItem>
-                  <MenuItem value="DEACTIVATED">Deactivated</MenuItem>
-                  <MenuItem value="PENDING_VERIFY">Pending Verify</MenuItem>
-                </Select>
-              </FormControl>
-
-              <FormControl size="small" sx={{ minWidth: 120 }}>
-                <InputLabel>Role</InputLabel>
-                <Select
-                  value={roleFilter}
-                  label="Role"
-                  onChange={(e) => setRoleFilter(e.target.value)}
-                >
-                  <MenuItem value="">All</MenuItem>
-                  <MenuItem value="ADMIN">Admin</MenuItem>
-                  <MenuItem value="MEMBER">Member</MenuItem>
-                </Select>
-              </FormControl>
-            </Box>
-
-            <TableContainer sx={{ width: "100%", overflowX: "auto" }}>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell padding="checkbox"></TableCell>
-                    <TableCell
-                      sx={{ fontWeight: 800, fontSize: { xs: 14, md: 16 } }}
-                    >
-                      Member ID
-                    </TableCell>
-                    <TableCell
-                      sx={{ fontWeight: 800, fontSize: { xs: 14, md: 16 } }}
-                    >
-                      Name
-                    </TableCell>
-                    <TableCell
-                      sx={{ fontWeight: 800, fontSize: { xs: 14, md: 16 } }}
-                    >
-                      Email
-                    </TableCell>
-                    <TableCell
-                      sx={{ fontWeight: 800, fontSize: { xs: 14, md: 16 } }}
-                    >
-                      Role
-                    </TableCell>
-                    <TableCell
-                      sx={{ fontWeight: 800, fontSize: { xs: 14, md: 16 } }}
-                    >
-                      Status
-                    </TableCell>
-                    <TableCell
-                      sx={{ fontWeight: 800, fontSize: { xs: 14, md: 16 } }}
-                    >
-                      Joined
-                    </TableCell>
-                    <TableCell align="right"></TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {members.map((member, idx) => (
-                    <TableRow key={member.id}>
-                      <TableCell padding="checkbox">
-                        <Checkbox
-                          checked={checked.includes(idx)}
-                          onChange={() => handleCheck(idx)}
-                          icon={<CheckBoxOutlineBlankIcon />}
-                          checkedIcon={
-                            <CheckBoxIcon sx={{ color: "#2950DA" }} />
-                          }
-                        />
-                      </TableCell>
-                      <TableCell
-                        sx={{
-                          fontWeight: 700,
-                          fontSize: { xs: 12, md: 16 },
-                          fontFamily: "monospace",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {member.id}
-                      </TableCell>
-                      <TableCell
-                        sx={{ fontWeight: 600, fontSize: { xs: 14, md: 16 } }}
-                      >
-                        {member.name}
-                      </TableCell>
-                      <TableCell
-                        sx={{ fontWeight: 600, fontSize: { xs: 14, md: 16 } }}
-                      >
-                        {member.email}
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={member.role}
-                          color={getRoleColor(member.role)}
-                          size="small"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={member.status}
-                          color={getStatusColor(member.status)}
-                          size="small"
-                          onClick={() => handleStatusClick(member)}
-                          sx={{
-                            cursor: "pointer",
-                            "&:hover": {
-                              opacity: 0.8,
-                              transform: "scale(1.05)",
-                            },
-                          }}
-                        />
-                      </TableCell>
-                      <TableCell
-                        sx={{ fontWeight: 600, fontSize: { xs: 14, md: 16 } }}
-                      >
-                        {new Date(member.createdAt).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell align="right">
-                        <Tooltip title="View details">
-                          <IconButton onClick={() => handleViewDetails(member)}>
-                            <MoreVertIcon />
-                          </IconButton>
-                        </Tooltip>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-
-            {totalPages > 1 && (
+        >
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+            <Typography variant="h4" sx={{ fontWeight: 700, color: "#222" }}>
+              Workspace Members
+            </Typography>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
               <Box
                 sx={{
-                  display: "flex",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  mt: 3,
+                  width: 8,
+                  height: 8,
+                  borderRadius: "50%",
+                  bgcolor: "#2950DA",
+                  opacity: 0.7,
                 }}
-              >
-                <Pagination
-                  count={totalPages}
-                  page={page}
-                  onChange={handlePageChange}
-                  color="primary"
-                  shape="rounded"
-                  size="large"
-                />
-              </Box>
-            )}
-          </Paper>
+              />
+              <Typography sx={{ color: "#666", fontSize: 12 }}>
+                {totalMembers} members
+              </Typography>
+            </Box>
+          </Box>
+          <TextField
+            placeholder="Search members..."
+            size="small"
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon sx={{ color: "#bdbdbd" }} />
+                </InputAdornment>
+              ),
+              sx: {
+                borderRadius: 3,
+                bgcolor: "#fff",
+                width: { xs: "100%", sm: 320 },
+                fontSize: 18,
+              },
+            }}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
         </Box>
+
+        {successMessage && (
+          <Alert severity="success" sx={{ mb: 2 }}>
+            {successMessage}
+          </Alert>
+        )}
+
+        <Paper elevation={0} sx={{ borderRadius: 3, p: 3, mt: 2 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
+            <FormControl size="small" sx={{ minWidth: 120 }}>
+              <InputLabel>Status</InputLabel>
+              <Select
+                value={statusFilter}
+                label="Status"
+                onChange={(e) => setStatusFilter(e.target.value)}
+              >
+                <MenuItem value="">All</MenuItem>
+                <MenuItem value="ACTIVE">Active</MenuItem>
+                <MenuItem value="DEACTIVATED">Deactivated</MenuItem>
+                <MenuItem value="PENDING_VERIFY">Pending Verify</MenuItem>
+              </Select>
+            </FormControl>
+
+            <FormControl size="small" sx={{ minWidth: 120 }}>
+              <InputLabel>Role</InputLabel>
+              <Select
+                value={roleFilter}
+                label="Role"
+                onChange={(e) => setRoleFilter(e.target.value)}
+              >
+                <MenuItem value="">All</MenuItem>
+                <MenuItem value="ADMIN">Admin</MenuItem>
+                <MenuItem value="MEMBER">Member</MenuItem>
+              </Select>
+            </FormControl>
+          </Box>
+
+          <TableContainer sx={{ width: "100%", overflowX: "auto" }}>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell padding="checkbox"></TableCell>
+                  <TableCell
+                    sx={{ fontWeight: 800, fontSize: { xs: 14, md: 16 } }}
+                  >
+                    Member ID
+                  </TableCell>
+                  <TableCell
+                    sx={{ fontWeight: 800, fontSize: { xs: 14, md: 16 } }}
+                  >
+                    Name
+                  </TableCell>
+                  <TableCell
+                    sx={{ fontWeight: 800, fontSize: { xs: 14, md: 16 } }}
+                  >
+                    Email
+                  </TableCell>
+                  <TableCell
+                    sx={{ fontWeight: 800, fontSize: { xs: 14, md: 16 } }}
+                  >
+                    Role
+                  </TableCell>
+                  <TableCell
+                    sx={{ fontWeight: 800, fontSize: { xs: 14, md: 16 } }}
+                  >
+                    Status
+                  </TableCell>
+                  <TableCell
+                    sx={{ fontWeight: 800, fontSize: { xs: 14, md: 16 } }}
+                  >
+                    Joined
+                  </TableCell>
+                  <TableCell align="right"></TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {members.map((member, idx) => (
+                  <TableRow key={member.id}>
+                    <TableCell padding="checkbox">
+                      <Checkbox
+                        checked={checked.includes(idx)}
+                        onChange={() => handleCheck(idx)}
+                        icon={<CheckBoxOutlineBlankIcon />}
+                        checkedIcon={
+                          <CheckBoxIcon sx={{ color: "#2950DA" }} />
+                        }
+                      />
+                    </TableCell>
+                    <TableCell
+                      sx={{
+                        fontWeight: 700,
+                        fontSize: { xs: 12, md: 16 },
+                        fontFamily: "monospace",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {member.id}
+                    </TableCell>
+                    <TableCell
+                      sx={{ fontWeight: 600, fontSize: { xs: 14, md: 16 } }}
+                    >
+                      {member.name}
+                    </TableCell>
+                    <TableCell
+                      sx={{ fontWeight: 600, fontSize: { xs: 14, md: 16 } }}
+                    >
+                      {member.email}
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        label={member.role}
+                        color={getRoleColor(member.role)}
+                        size="small"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        label={member.status}
+                        color={getStatusColor(member.status)}
+                        size="small"
+                        onClick={() => handleStatusClick(member)}
+                        sx={{
+                          cursor: "pointer",
+                          "&:hover": {
+                            opacity: 0.8,
+                            transform: "scale(1.05)",
+                          },
+                        }}
+                      />
+                    </TableCell>
+                    <TableCell
+                      sx={{ fontWeight: 600, fontSize: { xs: 14, md: 16 } }}
+                    >
+                      {new Date(member.createdAt).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell align="right">
+                      <Tooltip title="View details">
+                        <IconButton onClick={() => handleViewDetails(member)}>
+                          <MoreVertIcon />
+                        </IconButton>
+                      </Tooltip>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+
+          {totalPages > 1 && (
+            <Box
+              sx={{
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                mt: 3,
+              }}
+            >
+              <Pagination
+                count={totalPages}
+                page={page}
+                onChange={handlePageChange}
+                color="primary"
+                shape="rounded"
+                size="large"
+              />
+            </Box>
+          )}
+        </Paper>
       </Box>
 
       {/* Member Details Modal */}

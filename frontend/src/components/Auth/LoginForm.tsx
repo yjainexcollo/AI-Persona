@@ -128,7 +128,8 @@ const LoginForm: React.FC = () => {
         bgcolor: "#fff",
         justifyContent: "center",
         alignItems: "center",
-        pt: { xs: 5, sm: 5 },
+        pt: { xs: 6, sm: 8 },
+        px: { xs: 2, sm: 3 },
       }}
     >
       {/* Left: Form */}
@@ -139,18 +140,24 @@ const LoginForm: React.FC = () => {
           flexDirection: "column",
           justifyContent: "center",
           alignItems: "center",
-          px: 4,
-          maxWidth: 480,
+          px: { xs: 2, sm: 4 },
+          maxWidth: { xs: 420, sm: 480 },
+          width: "100%",
         }}
       >
         <Box
           component="form"
           onSubmit={handleSubmit}
-          sx={{ width: "100%", maxWidth: 370 }}
+          sx={{ width: "100%", maxWidth: { xs: 360, sm: 370 } }}
         >
           <Typography
             variant="h5"
-            sx={{ fontWeight: 800, mb: 4, color: "#222" }}
+            sx={{
+              fontWeight: 800,
+              mb: { xs: 3, sm: 4 },
+              color: "#222",
+              textAlign: { xs: "center", sm: "left" },
+            }}
           >
             Log in
           </Typography>
@@ -165,7 +172,7 @@ const LoginForm: React.FC = () => {
             </Alert>
           )}
           <Typography
-            sx={{ fontWeight: 700, fontSize: 16, mb: 1, color: "#222" }}
+            sx={{ fontWeight: 700, fontSize: 14, mb: 1, color: "#222" }}
           >
             Email
           </Typography>
@@ -179,13 +186,16 @@ const LoginForm: React.FC = () => {
             onChange={handleChange}
             required
             sx={{
-              mb: 2,
+              mb: { xs: 1.5, sm: 2 },
               borderRadius: 2,
-              "& .MuiOutlinedInput-root": { borderRadius: 2 },
+              "& .MuiOutlinedInput-root": {
+                borderRadius: 2,
+                height: { xs: 44, sm: 48 },
+              },
             }}
           />
           <Typography
-            sx={{ fontWeight: 700, fontSize: 16, mb: 1, color: "#222" }}
+            sx={{ fontWeight: 700, fontSize: 14, mb: 1, color: "#222" }}
           >
             Password
           </Typography>
@@ -201,7 +211,10 @@ const LoginForm: React.FC = () => {
             sx={{
               mb: 1,
               borderRadius: 2,
-              "& .MuiOutlinedInput-root": { borderRadius: 2 },
+              "& .MuiOutlinedInput-root": {
+                borderRadius: 2,
+                height: { xs: 44, sm: 48 },
+              },
             }}
             InputProps={{
               endAdornment: (
@@ -221,7 +234,7 @@ const LoginForm: React.FC = () => {
               sx={{
                 color: "#526794",
                 fontWeight: 600,
-                fontSize: 15,
+                fontSize: 14,
                 textTransform: "none",
                 p: 0,
                 minWidth: 0,
@@ -240,9 +253,9 @@ const LoginForm: React.FC = () => {
               bgcolor: "#526794",
               color: "#fff",
               fontWeight: 700,
-              fontSize: 18,
+              fontSize: { xs: 16, sm: 18 },
               borderRadius: 2,
-              py: 1.5,
+              py: { xs: 1.25, sm: 1.5 },
               mb: 3,
               boxShadow: "none",
               textTransform: "none",
@@ -254,27 +267,20 @@ const LoginForm: React.FC = () => {
           <Box
             sx={{ display: "flex", justifyContent: "center", gap: 2, mb: 3 }}
           >
-            <IconButton sx={{ p: 1.2 }} onClick={handleGoogleLogin}>
+            <IconButton
+              sx={{ p: 1 }}
+              onClick={handleGoogleLogin}
+              aria-label="Sign in with Google"
+            >
               <Box
                 component="img"
                 src="https://th.bing.com/th?q=Google+Login+Logo.png&w=120&h=120&c=1&rs=1&qlt=70&o=7&cb=1&dpr=1.5&pid=InlineBlock&rm=3&mkt=en-IN&cc=IN&setlang=en&adlt=moderate&t=1&mw=247"
                 alt="Google"
-                sx={{ width: 28, height: 28, objectFit: "contain" }}
+                sx={{ width: 26, height: 26, objectFit: "contain" }}
               />
             </IconButton>
-            <IconButton sx={{ p: 1.2 }}>
-              <AppleIcon sx={{ fontSize: 32, color: "#222" }} />
-            </IconButton>
-            <IconButton sx={{ p: 1.2 }}>
-              <Box
-                component="img"
-                src="https://th.bing.com/th/id/OIP.swFnAmrkP4rAX8Od0GNpnwHaHw?pid=ImgDet&w=178&h=186&c=7&dpr=1.5"
-                alt="Twitter"
-                sx={{ width: 28, height: 28, objectFit: "contain" }}
-              />
-            </IconButton>
-            <IconButton sx={{ p: 1.2, bgcolor: "#fff" }}>
-              {/* Empty for spacing, matches Figma */}
+            <IconButton sx={{ p: 1 }} aria-label="Sign in with Apple">
+              <AppleIcon sx={{ fontSize: 28, color: "#222" }} />
             </IconButton>
           </Box>
           <Typography
@@ -282,7 +288,7 @@ const LoginForm: React.FC = () => {
               textAlign: "center",
               color: "#444",
               fontWeight: 500,
-              fontSize: 16,
+              fontSize: { xs: 14, sm: 16 },
               mt: 1,
             }}
           >
@@ -291,7 +297,7 @@ const LoginForm: React.FC = () => {
               sx={{
                 color: "#1a237e",
                 fontWeight: 700,
-                fontSize: 16,
+                fontSize: { xs: 14, sm: 16 },
                 textTransform: "none",
                 p: 0,
                 minWidth: 0,

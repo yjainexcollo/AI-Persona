@@ -3,21 +3,27 @@ import {
   Box,
   Typography,
   Paper,
+  Grid,
+  Card,
+  CardContent,
+  CardHeader,
+  Avatar,
   Button,
   IconButton,
   Drawer,
-  Avatar,
+  CircularProgress,
+  Alert,
 } from "@mui/material";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend } from "recharts";
 import NotificationsNoneOutlinedIcon from "@mui/icons-material/NotificationsNoneOutlined";
 import ArrowOutwardIcon from "@mui/icons-material/ArrowOutward";
 import AdminSidebar from "../components/sidebar/AdminSidebar";
-import CommonNavbar from "../components/CommonNavbar";
 import { useNavigate } from "react-router-dom";
 import { fetchWithAuth } from "../utils/session";
-import type { Persona } from "../types";
+import { getPersonas, type Persona } from "../services/personaService";
+import { getWorkspaceDetails } from "../services/workspaceService";
+import { getAvatarUrl } from "../services/avatarService";
 import { logout } from "../services/authService";
-import { getPersonas } from "../services/personaService";
 
 const COLORS = ["#2950DA", "#526794", "#E8ECF2", "#526794"];
 
@@ -232,15 +238,42 @@ const DashboardPage: React.FC = () => {
         }}
       >
         {/* Top Bar with CommonNavbar */}
-        <CommonNavbar
-          user={{
-            name: user.name || "User",
-            role: user.role || "Member",
-            avatarUrl: user.avatar || "",
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            p: 2,
+            bgcolor: "#fff",
+            borderBottom: "1px solid #f0f0f0",
           }}
-          onSignOut={handleSignOut}
-          onToggleSidebar={() => setSidebarOpen(true)}
-        />
+        >
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+            <Button
+              variant="contained"
+              sx={{
+                bgcolor: "#2950DA",
+                color: "#fff",
+                fontWeight: 700,
+                borderRadius: 2,
+                px: 3,
+                py: 1,
+                fontSize: 16,
+                textTransform: "none",
+                "&:hover": { bgcolor: "#526794" },
+              }}
+              onClick={() => navigate("/discovery")}
+            >
+              View Personas
+            </Button>
+            <IconButton
+              sx={{ bgcolor: "#fff", border: "1px solid #e0e0e0" }}
+              onClick={() => setNotifOpen((v) => !v)}
+            >
+              <NotificationsNoneOutlinedIcon sx={{ color: "#2950DA" }} />
+            </IconButton>
+          </Box>
+        </Box>
         {/* Content */}
         <Box
           sx={{

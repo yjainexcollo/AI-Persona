@@ -1,28 +1,34 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Box,
   Typography,
-  Avatar,
-  Button,
-  TextField,
   Paper,
-  IconButton,
+  Button,
+  Avatar,
+  TextField,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
+  Alert,
   CircularProgress,
+  Grid,
+  Card,
+  CardContent,
+  CardHeader,
+  Divider,
+  IconButton,
   Drawer,
 } from "@mui/material";
 import EditIcon from "@mui/icons-material/Edit";
+import SaveIcon from "@mui/icons-material/Save";
+import CancelIcon from "@mui/icons-material/Cancel";
 import PhotoCameraIcon from "@mui/icons-material/PhotoCamera";
-
 import EmailOutlinedIcon from "@mui/icons-material/EmailOutlined";
 import PhoneOutlinedIcon from "@mui/icons-material/PhoneOutlined";
 import AssignmentIndOutlinedIcon from "@mui/icons-material/AssignmentIndOutlined";
 import LogoutOutlinedIcon from "@mui/icons-material/LogoutOutlined";
 import { fetchWithAuth } from "../utils/session";
-import CommonNavbar from "../components/CommonNavbar";
 import AdminSidebar from "../components/sidebar/AdminSidebar";
 import { logout } from "../services/authService";
 import { getAvatarUrl } from "../services/avatarService";
@@ -47,7 +53,7 @@ const ProfilePage: React.FC = () => {
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const user = JSON.parse(localStorage.getItem("user") || "{}");
 
@@ -267,15 +273,23 @@ const ProfilePage: React.FC = () => {
         }}
       >
         {/* Top Bar with CommonNavbar */}
-        <CommonNavbar
-          user={{
-            name: user.name || "User",
-            role: user.role || "Member",
-            avatarUrl: getAvatarUrl(user.avatar) || "",
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            p: 2,
+            bgcolor: "#fff",
+            boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
           }}
-          onSignOut={handleSignOut}
-          onToggleSidebar={() => setSidebarOpen(true)}
-        />
+        >
+          <Typography variant="h5" sx={{ fontWeight: 700, color: "#222" }}>
+            Profile
+          </Typography>
+          <IconButton onClick={() => setSidebarOpen(true)}>
+            <PhotoCameraIcon sx={{ color: "#2950DA", fontSize: 28 }} />
+          </IconButton>
+        </Box>
         {/* Content */}
         <Box sx={{ flex: 1, px: { xs: 2, md: 6 }, py: { xs: 2, md: 4 } }}>
           {/* Header */}
