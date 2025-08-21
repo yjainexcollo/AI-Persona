@@ -152,21 +152,23 @@ export default function ChatPage() {
     useState<Conversation | null>(null);
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
   const [loadingPersona, setLoadingPersona] = useState(true);
-  const [initialLoading, setInitialLoading] = useState(true);
 
   const [allPersonas, setAllPersonas] = useState<Persona[]>([]);
 
-  // Show a loader overlay for up to 7 seconds on initial mount
-  useEffect(() => {
-    const timer = setTimeout(() => setInitialLoading(false), 7000);
-    return () => clearTimeout(timer);
-  }, []);
+  // Remove the unnecessary 7-second timer - this was causing artificial delays
+  // useEffect(() => {
+  //   const timer = setTimeout(() => setInitialLoading(false), 7000);
+  //   return () => clearTimeout(timer);
+  // }, []);
 
   const loadConversations = useCallback(async () => {
+    // Only load conversations if we have a persona
+    if (!persona?.id) return;
+
     try {
       const response = await getConversations();
       const personaConversations = response.data.filter(
-        (conv) => conv.personaId === persona?.id
+        (conv) => conv.personaId === persona.id
       );
 
       console.log("Current persona ID:", persona?.id);
@@ -287,15 +289,15 @@ export default function ChatPage() {
     if (persona?.id) {
       loadConversations();
     }
-  }, [persona?.id, conversationIdFromUrl, loadConversations]);
+  }, [persona?.id, loadConversations]);
 
-  // Handle conversationIdFromUrl changes specifically
-  useEffect(() => {
-    if (conversationIdFromUrl && persona?.id) {
-      console.log("Conversation ID from URL detected:", conversationIdFromUrl);
-      loadConversations();
-    }
-  }, [conversationIdFromUrl, persona?.id, loadConversations]);
+  // Remove the separate effect for conversationIdFromUrl changes since it's handled in loadConversations
+  // useEffect(() => {
+  //   if (conversationIdFromUrl && persona?.id) {
+  //     console.log("Conversation ID from URL detected:", conversationIdFromUrl);
+  //     loadConversations();
+  //   }
+  // }, [conversationIdFromUrl, persona?.id, loadConversations]);
 
   const loadConversationMessages = (conversation: Conversation) => {
     if (!conversation.messages || !Array.isArray(conversation.messages)) {
@@ -314,7 +316,7 @@ export default function ChatPage() {
     setMessages(formattedMessages);
   };
 
-  // Fetch all personas for persona switcher
+  // Fetch all personas for persona switcher - only when needed
   useEffect(() => {
     async function fetchAllPersonas() {
       try {
@@ -325,8 +327,12 @@ export default function ChatPage() {
         setAllPersonas([]);
       }
     }
-    fetchAllPersonas();
-  }, []);
+
+    // Only fetch if we don't have personas yet
+    if (allPersonas.length === 0) {
+      fetchAllPersonas();
+    }
+  }, [allPersonas.length]);
 
   useEffect(() => {
     try {
@@ -339,9 +345,9 @@ export default function ChatPage() {
 
   useEffect(() => {
     async function fetchPersona() {
-      setLoadingPersona(true);
       if (id) {
         try {
+          setLoadingPersona(true);
           const response = await getPersonaById(id);
           setPersona(response);
         } catch (error) {
@@ -353,8 +359,14 @@ export default function ChatPage() {
         setLoadingPersona(false);
       }
     }
-    fetchPersona();
-  }, [id]);
+
+    // Only fetch if we have an ID and don't already have the persona
+    if (id && (!persona || persona.id !== id)) {
+      fetchPersona();
+    } else if (!id) {
+      setLoadingPersona(false);
+    }
+  }, [id, persona?.id]);
 
   // Dynamic suggestion chips based on persona department
   const getSuggestionChips = (department: string, personaId: string) => {
@@ -601,7 +613,7 @@ export default function ChatPage() {
   // }
 
   // Check if persona exists after loading is complete
-  const showLoaderOverlay = initialLoading || loadingPersona;
+  const showLoaderOverlay = loadingPersona; // Remove initialLoading dependency
   if (!persona) {
     return (
       <Box
@@ -647,6 +659,7 @@ export default function ChatPage() {
   // Handler for switch persona
   const handleSwitchPersona = (personaId: string) => {
     setSwitcherOpen(false);
+    setLoadingPersona(true); // Set loading state before navigating
     navigate(`/chat/${personaId}`);
   };
 
@@ -757,6 +770,7 @@ export default function ChatPage() {
         overflow: "hidden",
         width: "100vw",
         maxWidth: "100vw",
+        fontFamily: "Inter, Roboto, Helvetica, Arial, sans-serif",
       }}
     >
       {/* Initial loader overlay (up to 7s or until persona finishes loading) */}
@@ -864,7 +878,7 @@ export default function ChatPage() {
               mx: 0,
               overflowY: "auto",
               overflowX: "hidden",
-              pb: { xs: 20, sm: 30 },
+              pb: { xs: 16, sm: 24, md: 28 },
               scrollbarWidth: "none",
               "&::-webkit-scrollbar": { display: "none" },
               minHeight: 0,
@@ -873,13 +887,13 @@ export default function ChatPage() {
             <Box
               sx={{
                 width: "100%",
-                maxWidth: { xs: "100%", sm: 900 },
+                maxWidth: { xs: "100%", sm: 720, md: 900 },
                 mx: "auto",
                 mb: 2,
                 display: "flex",
                 flexDirection: "column",
-                gap: 2,
-                px: { xs: 2, sm: 0 },
+                gap: { xs: 1.5, sm: 2 },
+                px: { xs: 1.5, sm: 2, md: 0 },
                 overflow: "visible",
               }}
             >
@@ -898,6 +912,7 @@ export default function ChatPage() {
               >
                 {/* Avatar - clicks to view persona */}
                 <Avatar
+                  key={persona.id}
                   src={persona.avatarUrl || persona.avatar || ""}
                   sx={{
                     width: { xs: 80, sm: 96 },
@@ -1050,7 +1065,8 @@ export default function ChatPage() {
                           onClick={() => handleSwitchPersona(p.id)}
                         >
                           <Avatar
-                            src={p.avatar}
+                            key={p.id}
+                            src={p.avatarUrl || p.avatar || ""}
                             sx={{ width: 48, height: 48 }}
                           />
                           <Box>
@@ -1130,6 +1146,7 @@ export default function ChatPage() {
                     >
                       <Avatar sx={{ width: 42, height: 42, mb: 0.5 }}>
                         <img
+                          key={persona.id}
                           src={persona.avatarUrl || persona.avatar || ""}
                           alt="AI"
                           style={{ width: 48, height: 48, borderRadius: "50%" }}

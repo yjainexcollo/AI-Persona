@@ -83,7 +83,8 @@ const AppRoutes: React.FC = () => {
       <a href="#main-content" className="skip-link">
         Skip to content
       </a>
-      {location.pathname !== paths.discovery && <BrandLogo />}
+      {!location.pathname.includes("/discovery") &&
+        !location.pathname.includes("/chat") && <BrandLogo />}
       <Suspense fallback={<GlobalLoader open message="Loading page..." />}>
         <main id="main-content" ref={mainRef} tabIndex={-1} role="main">
           <Routes>

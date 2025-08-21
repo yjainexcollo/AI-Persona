@@ -240,7 +240,8 @@ const Sidebar: React.FC<{
   return (
     <Box
       sx={{
-        width: 320,
+        width: { xs: "86vw", sm: 280, md: 280 },
+        maxWidth: "100vw",
         height: "100vh",
         bgcolor: "#fff",
         p: 0,
@@ -250,6 +251,7 @@ const Sidebar: React.FC<{
         borderRight: "1px solid #e0e0e0",
         overflowY: "auto",
         overflowX: "hidden",
+        fontFamily: "Inter, Roboto, Helvetica, Arial, sans-serif",
         // Hide scrollbar for all browsers
         scrollbarWidth: "none", // Firefox
         "&::-webkit-scrollbar": { display: "none" }, // Chrome, Safari, Opera
@@ -306,27 +308,39 @@ const Sidebar: React.FC<{
       {/* New Chat Button */}
       <Button
         variant="contained"
-        startIcon={<AddIcon />}
+        size="medium"
+        startIcon={<AddIcon sx={{ fontSize: 18 }} />}
         disabled={personas.length === 0}
+        aria-label="Start a new chat"
         sx={{
-          bgcolor: "#2950DA",
+          background: "linear-gradient(90deg, #2950DA 0%, #1E88E5 100%)",
           color: "#fff",
-          borderRadius: 3,
-          fontWeight: 500,
-          fontSize: { xs: 16, sm: 19 },
-          py: { xs: 2.5, sm: 2.8 },
-          mb: { xs: 1.5, sm: 1.9 },
-          mt: { xs: 2, sm: 2.5 },
-          boxShadow: "none",
+          borderRadius: 2,
+          fontWeight: 600,
+          fontSize: { xs: 14, sm: 15 },
+          py: { xs: 1.1, sm: 1.3 },
+          mb: { xs: 1.25, sm: 1.5 },
+          mt: { xs: 1.5, sm: 2 },
+          boxShadow: "0 4px 12px rgba(41,80,218,0.18)",
           textTransform: "none",
-          width: "calc(100% - 32px)",
+          width: "calc(100% - 95px)",
           minWidth: 0,
-          letterSpacing: 0.1,
-          "&:hover": { bgcolor: "#526794" },
+          letterSpacing: 0.2,
           mx: 2,
           whiteSpace: "nowrap",
           overflow: "hidden",
           textOverflow: "ellipsis",
+          transition:
+            "transform 0.15s ease, box-shadow 0.15s ease, background 0.2s ease",
+          "&:hover": {
+            transform: "translateY(-1px)",
+            boxShadow: "0 6px 16px rgba(41,80,218,0.25)",
+            background: "linear-gradient(90deg, #1E6FE5 0%, #2950DA 100%)",
+          },
+          "&:disabled": {
+            background: "#b0bec5",
+            color: "#f5f5f5",
+          },
         }}
         onClick={handleNewChat}
       >
