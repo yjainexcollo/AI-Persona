@@ -476,6 +476,37 @@ const validateSharedToken = [
   handleValidationErrors,
 ];
 
+// Webhook validation schemas
+const validateWebhookTraits = [
+  body("personaName")
+    .notEmpty()
+    .withMessage("Persona name is required")
+    .isString()
+    .withMessage("Persona name must be a string"),
+  body("metadata").isObject().withMessage("Metadata must be an object"),
+  body("metadata.about")
+    .notEmpty()
+    .withMessage("About field is required")
+    .isString()
+    .withMessage("About field must be a string"),
+  body("metadata.coreExpertise")
+    .isArray()
+    .withMessage("Core expertise must be an array"),
+  body("metadata.communicationStyle")
+    .notEmpty()
+    .withMessage("Communication style is required")
+    .isString()
+    .withMessage("Communication style must be a string"),
+  body("metadata.traits").isArray().withMessage("Traits must be an array"),
+  body("metadata.painPoints")
+    .isArray()
+    .withMessage("Pain points must be an array"),
+  body("metadata.keyResponsibilities")
+    .isArray()
+    .withMessage("Key responsibilities must be an array"),
+  handleValidationErrors,
+];
+
 module.exports = {
   validateRegistration,
   validateLogin,
@@ -527,5 +558,7 @@ module.exports = {
   validateShareLink,
   // Shared token validation schemas
   validateSharedToken,
+  // Webhook validation schemas
+  validateWebhookTraits,
   handleValidationErrors,
 };

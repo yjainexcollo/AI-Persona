@@ -278,6 +278,31 @@ POST   /api/messages/:id/reactions       # Toggle message reaction
 GET    /p/:token                         # Get shared conversation (public)
 ```
 
+#### Webhook Integration
+
+```http
+GET    /api/webhooks/health               # Webhook service health check
+POST   /api/webhooks/traits               # Update persona traits via webhook (admin only)
+```
+
+**Webhook Authentication**: All webhook endpoints require JWT authentication and ADMIN role.
+
+**Webhook Payload Format**:
+
+```json
+{
+  "personaName": "HR Ops / Payroll Manager",
+  "metadata": {
+    "about": "Updated persona description",
+    "coreExpertise": ["Expertise 1", "Expertise 2"],
+    "communicationStyle": "Updated communication style",
+    "traits": ["Trait 1", "Trait 2"],
+    "painPoints": ["Pain point 1", "Pain point 2"],
+    "keyResponsibilities": ["Responsibility 1", "Responsibility 2"]
+  }
+}
+```
+
 ### Admin Operations
 
 ```http

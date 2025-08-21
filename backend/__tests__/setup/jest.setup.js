@@ -59,6 +59,7 @@ const mockPrismaClient = {
   persona: {
     findUnique: mockFindUnique,
     findMany: mockFindMany,
+    findFirst: mockFindFirst,
     create: mockCreate,
     update: mockUpdate,
     delete: mockDelete,

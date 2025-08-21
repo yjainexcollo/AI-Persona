@@ -18,6 +18,7 @@ info:
     - **Session Management**: Device tracking, session revocation, and token rotation
     - **Account Lockout**: Automatic lockout after failed login attempts (5 attempts → 15 min)
     - **GDPR Compliance**: Account deletion with 30-day grace period
+    - **Webhook Integration**: External service integration for persona trait updates
 
     ## **Security Architecture**
     - **JWT Security**: RSA-256 signing with key rotation and JWKS endpoint
@@ -176,6 +177,8 @@ tags:
     description: Security and key management
   - name: Chat Sessions
     description: Chat session management and tracking
+  - name: Webhooks
+    description: Webhook integration for external services
 
 paths:
   # Health Check
@@ -2263,6 +2266,211 @@ paths:
                   message:
                     type: string
                     example: "Shared link has expired"
+
+  # Webhook Integration Endpoints
+  /api/webhooks/health:
+    get:
+      tags:
+        - Webhooks
+      summary: Webhook service health check
+      description: Check if the webhook service is running and healthy
+      security: []
+      responses:
+        "200":
+          description: Webhook service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  message:
+                    type: string
+                    example: "Webhook service is healthy"
+                  data:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                        example: "healthy"
+                      timestamp:
+                        type: string
+                        format: date-time
+                        example: "2024-01-15T10:30:00Z"
+                      service:
+                        type: string
+                        example: "webhook-service"
+
+  /api/webhooks/traits:
+    post:
+      tags:
+        - Webhooks
+      summary: Update persona traits via webhook
+      description: |
+        Update persona traits from external services (e.g., n8n workflows).
+        Requires ADMIN role authentication.
+        If persona doesn't exist, returns 404.
+        If traits already exist, they will be replaced with new ones.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - personaName
+                - metadata
+              properties:
+                personaName:
+                  type: string
+                  description: Exact name of the persona to update
+                  example: "HR Ops / Payroll Manager"
+                metadata:
+                  type: object
+                  required:
+                    - about
+                    - coreExpertise
+                    - communicationStyle
+                    - traits
+                    - painPoints
+                    - keyResponsibilities
+                  properties:
+                    about:
+                      type: string
+                      description: Persona description (1-3 sentences)
+                      example: "A process-driven HR professional focused on compliance and efficiency"
+                    coreExpertise:
+                      type: array
+                      items:
+                        type: string
+                      description: List of core expertise areas (8±2 items)
+                      example:
+                        [
+                          "Payroll Management",
+                          "Compliance",
+                          "Employee Relations",
+                        ]
+                    communicationStyle:
+                      type: string
+                      description: Communication style description (2-4 sentences)
+                      example: "Direct and professional, prefers structured communication"
+                    traits:
+                      type: array
+                      items:
+                        type: string
+                      description: List of behavioral traits (8-12 items)
+                      example:
+                        [
+                          "Process-driven – enforces standardized workflows",
+                          "Detail-oriented – maintains accurate records",
+                        ]
+                    painPoints:
+                      type: array
+                      items:
+                        type: string
+                      description: List of pain points with category labels (6-10 items)
+                      example:
+                        [
+                          "Role-specific: Complex compliance requirements",
+                          "Systemic: Manual process inefficiencies",
+                        ]
+                    keyResponsibilities:
+                      type: array
+                      items:
+                        type: string
+                      description: List of key responsibilities (8-12 items)
+                      example:
+                        [
+                          "Manage payroll processing",
+                          "Ensure compliance with labor laws",
+                        ]
+      responses:
+        "200":
+          description: Persona traits updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  message:
+                    type: string
+                    example: "Persona traits updated successfully"
+                  data:
+                    type: object
+                    properties:
+                      success:
+                        type: boolean
+                        example: true
+                      message:
+                        type: string
+                        example: "Persona traits updated successfully"
+                      persona:
+                        $ref: "#/components/schemas/Persona"
+        "400":
+          description: Invalid webhook payload
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "error"
+                  message:
+                    type: string
+                    example: "Webhook validation failed: metadata is required"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Insufficient permissions (ADMIN role required)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "error"
+                  message:
+                    type: string
+                    example: "ADMIN role required for webhook operations"
+        "404":
+          description: Persona not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "error"
+                  message:
+                    type: string
+                    example: "Persona with name 'HR Ops / Payroll Manager' not found"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "error"
+                  message:
+                    type: string
+                    example: "Failed to update persona traits"
 
 components:
   securitySchemes:

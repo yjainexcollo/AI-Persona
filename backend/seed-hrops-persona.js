@@ -1,4 +1,3 @@
-// seed-cfo-persona.js
 const { PrismaClient } = require("@prisma/client");
 const { encrypt } = require("./src/utils/encrypt");
 require("dotenv").config();
@@ -69,26 +68,28 @@ const hrOpsPersona = {
   },
 };
 
-async function seedhrOpsPersona() {
+async function seedHrOpsPersona() {
   try {
-    console.log("🌱 Starting CFO persona seeding...");
+    console.log("🌱 Starting HR Ops / Payroll Manager persona seeding...");
 
-    // Check if CFO persona already exists
-    const existingCFO = await prisma.persona.findFirst({
+    // Check if HR Ops persona already exists
+    const existingHrOps = await prisma.persona.findFirst({
       where: {
         name: {
-          contains: "CFO",
+          contains: "HR Ops",
         },
       },
     });
 
-    if (existingCFO) {
-      console.log(`⚠️  CFO persona already exists with ID: ${existingCFO.id}`);
-      console.log("Updating existing CFO persona...");
+    if (existingHrOps) {
+      console.log(
+        `⚠️  HR Ops persona already exists with ID: ${existingHrOps.id}`
+      );
+      console.log("Updating existing HR Ops persona...");
 
       // Update existing persona
       const updatedPersona = await prisma.persona.update({
-        where: { id: existingCFO.id },
+        where: { id: existingHrOps.id },
         data: {
           name: hrOpsPersona.name,
           personaRole: "HR Ops / Payroll Manager",
@@ -121,8 +122,8 @@ async function seedhrOpsPersona() {
       throw new Error("ENCRYPTION_KEY environment variable is required");
     }
 
-    // Create CFO persona with encrypted webhook URL
-    const cfoWithEncryptedWebhook = {
+    // Create HR Ops persona with encrypted webhook URL
+    const hrOpsWithEncryptedWebhook = {
       name: hrOpsPersona.name,
       personaRole: "HR Ops / Payroll Manager",
       about: hrOpsPersona.metadata.about,
@@ -137,12 +138,14 @@ async function seedhrOpsPersona() {
       isActive: true,
     };
 
-    // Insert CFO persona
+    // Insert HR Ops persona
     const createdPersona = await prisma.persona.create({
-      data: cfoWithEncryptedWebhook,
+      data: hrOpsWithEncryptedWebhook,
     });
 
-    console.log(`✅ Successfully created CFO persona: ${createdPersona.name}`);
+    console.log(
+      `✅ Successfully created HR Ops persona: ${createdPersona.name}`
+    );
     console.log(`📋 Persona ID: ${createdPersona.id}`);
     console.log(` Webhook URL: ${hrOpsPersona.webhookUrl}`);
     console.log(
@@ -151,7 +154,7 @@ async function seedhrOpsPersona() {
 
     return createdPersona;
   } catch (error) {
-    console.error("❌ Error seeding CFO persona:", error);
+    console.error("❌ Error seeding HR Ops persona:", error);
     throw error;
   } finally {
     await prisma.$disconnect();
@@ -159,19 +162,19 @@ async function seedhrOpsPersona() {
 }
 
 // Run seeder
-seedhrOpsPersona()
+seedHrOpsPersona()
   .then((persona) => {
-    console.log("🎉 CFO persona seeding completed!");
+    console.log("🎉 HR Ops / Payroll Manager persona seeding completed!");
     console.log(`\n📝 You can now test the persona with:`);
     console.log(
       `   curl -X POST http://localhost:3000/api/personas/${persona.id}/chat \\`
     );
     console.log(`     -H "Content-Type: application/json" \\`);
     console.log(`     -H "Authorization: Bearer YOUR_TOKEN" \\`);
-    console.log(`     -d '{"message": "Hello, I need financial advice"}'`);
+    console.log(`     -d '{"message": "Hello, I need help with payroll"}'`);
     process.exit(0);
   })
   .catch((error) => {
-    console.error("💥 CFO persona seeding failed:", error);
+    console.error("💥 HR Ops persona seeding failed:", error);
     process.exit(1);
   });
