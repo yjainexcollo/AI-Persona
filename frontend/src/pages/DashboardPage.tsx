@@ -21,50 +21,14 @@ import AdminSidebar from "../components/sidebar/AdminSidebar";
 import { useNavigate } from "react-router-dom";
 import { fetchWithAuth } from "../utils/session";
 import { getPersonas, type Persona } from "../services/personaService";
-import { getWorkspaceDetails } from "../services/workspaceService";
+import {
+  getWorkspaceDetails,
+  getWorkspaceMembers,
+} from "../services/workspaceService";
 import { getAvatarUrl } from "../services/avatarService";
 import { logout } from "../services/authService";
 
 const COLORS = ["#2950DA", "#526794", "#E8ECF2", "#526794"];
-
-const notifications = [
-  {
-    title: "Megan-Customer support",
-    content: `Flash sale up to -50% starts tomorrow. Don't forget to check it out!`,
-    time: "4h",
-    unread: true,
-  },
-  {
-    title: "Order Update!",
-    content: `Your order #1982345 is on it's way. Expected delivery 1-2 days.`,
-    time: "4h",
-    unread: true,
-  },
-  {
-    title: "Order update",
-    content: `Your order #1982345 is on it's way. Expected delivery 1-2 days.`,
-    time: "2d",
-    unread: false,
-  },
-  {
-    title: "Order update",
-    content: `Your order #1982345 has been processed.`,
-    time: "2d",
-    unread: false,
-  },
-  {
-    title: "Order update",
-    content: `Your order #1982345 has been processed.`,
-    time: "2d",
-    unread: false,
-  },
-  {
-    title: "Order update",
-    content: `Your order #1982345 has been processed.`,
-    time: "2d",
-    unread: false,
-  },
-];
 
 const DashboardPage: React.FC = () => {
   const [stats, setStats] = useState<{
@@ -87,33 +51,53 @@ const DashboardPage: React.FC = () => {
   const [notifOpen, setNotifOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [personasData, setPersonasData] = useState<Persona[]>([]);
+  const [notifications, setNotifications] = useState<
+    Array<{
+      title: string;
+      content: string;
+      time: string;
+      unread: boolean;
+    }>
+  >([]);
 
   const fetchStats = async () => {
     try {
-      const backendUrl =
-        import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
-
-      // Stats endpoint doesn't exist in backend, use default values
-      console.log("Stats endpoint not available, using default values");
-      setStats({
-        users: 1, // At least the current user
-        activeUsers: 1,
-        members: 0,
-        created: 1,
-        pending: 0,
-        inactivePersonas: 0,
-      });
+      // Placeholder for any extra stats; user counts fetched separately
+      setStats((prev) => ({ ...prev }));
     } catch (err) {
-      console.warn("Error fetching stats, using default values:", err);
-      // Use reasonable default values
-      setStats({
-        users: 1, // At least the current user
-        activeUsers: 1,
-        members: 0,
-        created: 1,
-        pending: 0,
-        inactivePersonas: 0,
-      });
+      console.warn("Error fetching stats:", err);
+    }
+  };
+
+  const fetchUserCounts = async () => {
+    try {
+      const workspace = await getWorkspaceDetails();
+      const [allRes, activeRes, membersRes] = await Promise.all([
+        getWorkspaceMembers(workspace.id, { page: 1, limit: 1 }),
+        getWorkspaceMembers(workspace.id, {
+          status: "ACTIVE",
+          page: 1,
+          limit: 1,
+        }),
+        getWorkspaceMembers(workspace.id, {
+          role: "MEMBER",
+          page: 1,
+          limit: 1,
+        }),
+      ]);
+
+      const totalUsers = allRes.pagination?.total ?? allRes.data?.length ?? 0;
+      const activeUsers = activeRes.pagination?.total ?? 0;
+      const members = membersRes.pagination?.total ?? 0;
+
+      setStats((prev) => ({
+        ...prev,
+        users: totalUsers,
+        activeUsers,
+        members,
+      }));
+    } catch (err) {
+      console.warn("Error fetching user counts:", err);
     }
   };
 
@@ -127,22 +111,37 @@ const DashboardPage: React.FC = () => {
     }
   };
 
+  const fetchNotifications = async () => {
+    try {
+      setNotifications([]);
+    } catch (err) {
+      console.warn("Error fetching notifications:", err);
+      setNotifications([]);
+    }
+  };
+
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
-      await Promise.all([fetchStats(), fetchPersonas()]);
+      await Promise.all([
+        fetchStats(),
+        fetchUserCounts(),
+        fetchPersonas(),
+        fetchNotifications(),
+      ]);
       setLoading(false);
     };
 
     loadData();
 
-    // Set up real-time data syncing every 30 seconds
-    const statsInterval = setInterval(fetchStats, 30000);
+    const statsInterval = setInterval(fetchUserCounts, 30000);
     const personasInterval = setInterval(fetchPersonas, 30000);
+    const notificationsInterval = setInterval(fetchNotifications, 30000);
 
     return () => {
       clearInterval(statsInterval);
       clearInterval(personasInterval);
+      clearInterval(notificationsInterval);
     };
   }, []);
 
@@ -151,6 +150,11 @@ const DashboardPage: React.FC = () => {
     logout();
   };
   const navigate = useNavigate();
+
+  const handleViewAllNotifications = () => {
+    setNotifOpen(false);
+    navigate("/notifications");
+  };
 
   if (loading) {
     return (
@@ -167,7 +171,6 @@ const DashboardPage: React.FC = () => {
     );
   }
 
-  // Example: stats = { activePersonas: 10, inactivePersonas: 5, created: 20, pending: 2, members: 100, totalUsers: 50, activeUsers: 40 }
   const analyticsData = [
     { name: "Active Personas", value: loading ? 0 : personasData.length },
     {
@@ -237,43 +240,6 @@ const DashboardPage: React.FC = () => {
           overflow: "hidden",
         }}
       >
-        {/* Top Bar with CommonNavbar */}
-        <Box
-          sx={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            p: 2,
-            bgcolor: "#fff",
-            borderBottom: "1px solid #f0f0f0",
-          }}
-        >
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-            <Button
-              variant="contained"
-              sx={{
-                bgcolor: "#2950DA",
-                color: "#fff",
-                fontWeight: 700,
-                borderRadius: 2,
-                px: 3,
-                py: 1,
-                fontSize: 16,
-                textTransform: "none",
-                "&:hover": { bgcolor: "#526794" },
-              }}
-              onClick={() => navigate("/discovery")}
-            >
-              View Personas
-            </Button>
-            <IconButton
-              sx={{ bgcolor: "#fff", border: "1px solid #e0e0e0" }}
-              onClick={() => setNotifOpen((v) => !v)}
-            >
-              <NotificationsNoneOutlinedIcon sx={{ color: "#2950DA" }} />
-            </IconButton>
-          </Box>
-        </Box>
         {/* Content */}
         <Box
           sx={{
@@ -461,19 +427,29 @@ const DashboardPage: React.FC = () => {
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
-                p: 3,
-                pb: 1,
+                p: { xs: 2, md: 3 },
+                pb: { xs: 1, md: 1 },
               }}
             >
-              <Typography sx={{ fontWeight: 700, fontSize: 18, color: "#222" }}>
+              <Typography
+                sx={{
+                  fontWeight: 700,
+                  fontSize: { xs: 16, md: 18 },
+                  color: "#222",
+                  fontFamily:
+                    '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
+                }}
+              >
                 Active Personas
               </Typography>
               <Button
                 sx={{
                   color: "#2950DA",
                   fontWeight: 700,
-                  fontSize: 15,
+                  fontSize: { xs: 14, md: 15 },
                   textTransform: "none",
+                  fontFamily:
+                    '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
                 }}
                 onClick={() => navigate("/discovery")}
               >
@@ -482,88 +458,108 @@ const DashboardPage: React.FC = () => {
             </Box>
             <Box
               sx={{
-                display: "flex",
-                gap: { xs: 2, md: 4 },
-                alignItems: "center",
-                justifyContent: { xs: "center", md: "flex-start" },
-                px: 3,
-                pb: 3,
-                flexWrap: "wrap",
+                display: "grid",
+                gridTemplateColumns: {
+                  xs: "repeat(2, minmax(0, 1fr))",
+                  sm: "repeat(3, minmax(0, 1fr))",
+                  md: "repeat(4, minmax(0, 1fr))",
+                },
+                gap: { xs: 2, md: 3 },
+                alignItems: "stretch",
+                justifyItems: "center",
+                px: { xs: 2, md: 3 },
+                pb: { xs: 2, md: 3 },
               }}
             >
               {loading ? (
                 <Box
                   sx={{
+                    gridColumn: "1 / -1",
                     display: "flex",
                     justifyContent: "center",
                     alignItems: "center",
-                    width: "100%",
                     py: 4,
                   }}
                 >
-                  <Typography sx={{ color: "#666" }}>
+                  <Typography
+                    sx={{
+                      color: "#666",
+                      fontFamily:
+                        '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
+                    }}
+                  >
                     Loading personas...
                   </Typography>
                 </Box>
               ) : personasData.length === 0 ? (
                 <Box
                   sx={{
+                    gridColumn: "1 / -1",
                     display: "flex",
                     justifyContent: "center",
                     alignItems: "center",
-                    width: "100%",
                     py: 4,
                   }}
                 >
-                  <Typography sx={{ color: "#666" }}>
+                  <Typography
+                    sx={{
+                      color: "#666",
+                      fontFamily:
+                        '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
+                    }}
+                  >
                     No personas found
                   </Typography>
                 </Box>
               ) : (
-                personasData.slice(0, 4).map((p, i) => (
+                personasData.slice(0, 8).map((p, i) => (
                   <Box
                     key={i}
                     sx={{
                       display: "flex",
                       flexDirection: "column",
                       alignItems: "center",
-                      minWidth: 120,
-                      width: { xs: "45%", sm: "auto" },
+                      justifyContent: "center",
+                      width: "100%",
+                      maxWidth: 250,
                       cursor: "pointer",
                       transition: "transform 0.2s ease-in-out",
+                      borderRadius: 2,
+                      p: { xs: 1.5, md: 2 },
                       "&:hover": {
                         transform: "translateY(-2px)",
+                        backgroundColor: "#f9fafb",
                       },
                     }}
                     onClick={() => navigate(`/view-persona/${p.id}`)}
                   >
                     <Avatar
                       src={p.avatar}
-                      sx={{ width: 72, height: 72, mb: 1 }}
+                      alt={p.name}
+                      sx={{
+                        width: { xs: 56, md: 72 },
+                        height: { xs: 56, md: 72 },
+                        mb: 1,
+                      }}
                     />
                     <Typography
                       sx={{
                         fontWeight: 700,
-                        fontSize: 17,
+                        fontSize: { xs: 14, md: 17 },
                         color: "#222",
                         textAlign: "center",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 0.5,
+                        whiteSpace: "nowrap",
+                        fontFamily:
+                          '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
                       }}
                     >
                       {p.name}
-                    </Typography>
-                    <Typography
-                      sx={{
-                        color: "#219653",
-                        fontWeight: 600,
-                        fontSize: 15,
-                        textAlign: "center",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 0.5,
-                      }}
-                    >
-                      {p.role}{" "}
-                      <ArrowOutwardIcon sx={{ fontSize: 16, mb: "-2px" }} />
+                      <ArrowOutwardIcon
+                        sx={{ fontSize: { xs: 14, md: 16 }, ml: 0.25 }}
+                      />
                     </Typography>
                   </Box>
                 ))
@@ -608,60 +604,100 @@ const DashboardPage: React.FC = () => {
               fontSize: 15,
               textTransform: "none",
             }}
+            onClick={handleViewAllNotifications}
           >
             View All
           </Button>
         </Box>
         <Box sx={{ flex: 1, overflowY: "auto", pr: 1 }}>
-          {notifications.map((n, i) => (
+          {notifications.length === 0 ? (
             <Box
-              key={i}
-              sx={{ display: "flex", alignItems: "flex-start", gap: 2, mb: 3 }}
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                height: "100%",
+                textAlign: "center",
+                py: 4,
+              }}
             >
+              <NotificationsNoneOutlinedIcon
+                sx={{ fontSize: 48, color: "#ccc", mb: 2 }}
+              />
+              <Typography sx={{ color: "#666", fontSize: 16, mb: 1 }}>
+                No notifications yet
+              </Typography>
+              <Typography sx={{ color: "#999", fontSize: 14 }}>
+                You're all caught up!
+              </Typography>
+            </Box>
+          ) : (
+            notifications.map((n, i) => (
               <Box
+                key={i}
                 sx={{
-                  bgcolor: "#E8ECF2",
-                  borderRadius: 2,
-                  p: 1,
                   display: "flex",
-                  alignItems: "center",
-                  mt: 0.5,
+                  alignItems: "flex-start",
+                  gap: 2,
+                  mb: 3,
                 }}
               >
-                <svg
-                  width="22"
-                  height="22"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
+                <Box
+                  sx={{
+                    bgcolor: "#E8ECF2",
+                    borderRadius: 2,
+                    p: 1,
+                    display: "flex",
+                    alignItems: "center",
+                    mt: 0.5,
+                  }}
                 >
-                  <rect width="24" height="24" fill="none" />
-                  <path d="M4 4H20V20H4V4Z" fill="none" />
-                  <path d="M7 7H17V17H7V7Z" fill="#2950DA" />
-                </svg>
+                  <svg
+                    width="22"
+                    height="22"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <rect width="24" height="24" fill="none" />
+                    <path d="M4 4H20V20H4V4Z" fill="none" />
+                    <path d="M7 7H17V17H7V7Z" fill="#2950DA" />
+                  </svg>
+                </Box>
+                <Box sx={{ flex: 1 }}>
+                  <Typography
+                    sx={{
+                      fontWeight: 700,
+                      fontSize: 16,
+                      color: "#222",
+                      mb: 0.5,
+                    }}
+                  >
+                    {n.title}{" "}
+                    {n.unread && (
+                      <span style={{ color: "#2950DA", fontSize: 18 }}>•</span>
+                    )}
+                  </Typography>
+                  <Typography
+                    sx={{
+                      color: "#444",
+                      fontWeight: 500,
+                      fontSize: 15,
+                      mb: 0.5,
+                    }}
+                  >
+                    {n.content}
+                  </Typography>
+                  <Typography
+                    sx={{ color: "#bdbdbd", fontWeight: 500, fontSize: 14 }}
+                  >
+                    {n.time}
+                  </Typography>
+                </Box>
               </Box>
-              <Box sx={{ flex: 1 }}>
-                <Typography
-                  sx={{ fontWeight: 700, fontSize: 16, color: "#222", mb: 0.5 }}
-                >
-                  {n.title}{" "}
-                  {n.unread && (
-                    <span style={{ color: "#2950DA", fontSize: 18 }}>•</span>
-                  )}
-                </Typography>
-                <Typography
-                  sx={{ color: "#444", fontWeight: 500, fontSize: 15, mb: 0.5 }}
-                >
-                  {n.content}
-                </Typography>
-                <Typography
-                  sx={{ color: "#bdbdbd", fontWeight: 500, fontSize: 14 }}
-                >
-                  {n.time}
-                </Typography>
-              </Box>
-            </Box>
-          ))}
+            ))
+          )}
         </Box>
       </Drawer>
     </Box>

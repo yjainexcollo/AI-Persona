@@ -2,7 +2,10 @@ import React, { useState, useEffect } from "react";
 import { Box, Typography, Button, Paper, Avatar, Drawer } from "@mui/material";
 import AdminSidebar from "../components/sidebar/AdminSidebar";
 import { fetchWithAuth } from "../utils/session";
-import { getWorkspaceDetails } from "../services/workspaceService";
+import {
+  getWorkspaceDetails,
+  getWorkspaceMembers,
+} from "../services/workspaceService";
 import { getAvatarUrl } from "../services/avatarService";
 
 interface WorkspaceDashboardProps {
@@ -22,7 +25,10 @@ const WorkspaceDashboard: React.FC<WorkspaceDashboardProps> = ({
   onUsePersona,
   onSignOut,
 }) => {
-  const [dynamicStats, setDynamicStats] = useState(stats);
+  const [dynamicStats, setDynamicStats] = useState({
+    members: stats?.members ?? "0",
+    users: stats?.users ?? "0",
+  });
   const [loadingStats, setLoadingStats] = useState(false);
   const [dynamicWorkspaceName, setDynamicWorkspaceName] =
     useState(workspaceName);
@@ -50,110 +56,36 @@ const WorkspaceDashboard: React.FC<WorkspaceDashboardProps> = ({
       }
     }
 
-    // Set workspace name to original prop value
     setDynamicWorkspaceName(workspaceName);
     console.log("Set workspace name to original prop value:", workspaceName);
   }, [workspaceName]);
 
-  const updateWorkspaceName = () => {
-    // Clear any test data first
-    const storedWorkspaceName = localStorage.getItem("workspaceName");
-    if (storedWorkspaceName && storedWorkspaceName.includes("Test Workspace")) {
-      localStorage.removeItem("workspaceName");
-      console.log("Cleared test workspace name from localStorage");
-    }
-
-    // Always use the original workspace name from props, not localStorage
-    console.log("Current workspace name from props:", workspaceName);
-    console.log("Original workspace name from props:", workspaceName);
-    setDynamicWorkspaceName(workspaceName);
-  };
-
-  const updateUserData = () => {
+  const fetchWorkspaceStats = async () => {
+    setLoadingStats(true);
     try {
-      const userData = JSON.parse(localStorage.getItem("user") || "{}");
-      console.log("Current user data from localStorage:", userData);
-      const currentUser = {
-        name: userData.name || user.name || "Demo User",
-        role: userData.role || user.role || "Member",
-        avatarUrl: userData.avatar || user.avatarUrl || "",
-      };
-      console.log("Setting dynamic user to:", currentUser);
-      setDynamicUser(currentUser);
+      const ws = await getWorkspaceDetails();
+      const [allRes, membersRes] = await Promise.all([
+        getWorkspaceMembers(ws.id, { page: 1, limit: 1 }),
+        getWorkspaceMembers(ws.id, { role: "MEMBER", page: 1, limit: 1 }),
+      ]);
+
+      const users = (
+        allRes.pagination?.total ??
+        allRes.data?.length ??
+        0
+      ).toString();
+      const members = (membersRes.pagination?.total ?? 0).toString();
+
+      setDynamicStats({ users, members });
     } catch (error) {
-      console.warn("Error parsing user data from localStorage:", error);
-      // Keep the fallback user data
+      console.warn("Error fetching workspace stats:", error);
+    } finally {
+      setLoadingStats(false);
     }
   };
 
-  const fetchUserData = async () => {
-    try {
-      const backendUrl =
-        import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
-      const res = await fetchWithAuth(`${backendUrl}/api/users/me`);
-
-      if (res.ok) {
-        const data = await res.json();
-        console.log("User data from API:", data);
-        if (data.status === "success" && data.data && data.data.user) {
-          const apiUser = data.data.user;
-          const currentUser = {
-            name: apiUser.name || user.name || "Demo User",
-            role: apiUser.role || user.role || "Member",
-            avatarUrl: apiUser.avatarUrl || user.avatarUrl || "",
-          };
-          console.log("Setting dynamic user from API to:", currentUser);
-          setDynamicUser(currentUser);
-
-          // Update localStorage with fresh data
-          const updatedUserData = {
-            ...JSON.parse(localStorage.getItem("user") || "{}"),
-            name: apiUser.name,
-            role: apiUser.role,
-            avatarUrl: apiUser.avatarUrl,
-          };
-          localStorage.setItem("user", JSON.stringify(updatedUserData));
-        } else if (data.data && data.data.user) {
-          // Fallback: if status is missing but data exists
-          const apiUser = data.data.user;
-          const currentUser = {
-            name: apiUser.name || user.name || "Demo User",
-            role: apiUser.role || user.role || "Member",
-            avatarUrl: apiUser.avatarUrl || user.avatarUrl || "",
-          };
-          console.log(
-            "Setting dynamic user from API (fallback) to:",
-            currentUser
-          );
-          setDynamicUser(currentUser);
-
-          // Update localStorage with fresh data
-          const updatedUserData = {
-            ...JSON.parse(localStorage.getItem("user") || "{}"),
-            name: apiUser.name,
-            role: apiUser.role,
-            avatarUrl: apiUser.avatarUrl,
-          };
-          localStorage.setItem("user", JSON.stringify(updatedUserData));
-        } else {
-          console.log("No user data found in API response:", data);
-        }
-      } else {
-        console.warn("Failed to fetch user data from API:", res.status);
-      }
-    } catch (error) {
-      console.warn("Error fetching user data from API:", error);
-    }
-  };
-
-  const fetchWorkspaceData = async () => {
-    try {
-      const workspace = await getWorkspaceDetails();
-      console.log("Workspace data from API:", workspace);
-      console.log("Workspace ID from API:", workspace.id);
-      console.log("Workspace name from API:", workspace.name);
-
-      // Clear any test data from localStorage and use the real workspace name
+  useEffect(() => {
+    const updateWorkspaceName = () => {
       const storedWorkspaceName = localStorage.getItem("workspaceName");
       if (
         storedWorkspaceName &&
@@ -162,74 +94,51 @@ const WorkspaceDashboard: React.FC<WorkspaceDashboardProps> = ({
         localStorage.removeItem("workspaceName");
         console.log("Cleared test workspace name from localStorage");
       }
+      setDynamicWorkspaceName(workspaceName);
+    };
 
-      // Clear any test user data from localStorage
-      const storedUserData = localStorage.getItem("user");
-      if (storedUserData) {
-        try {
-          const userData = JSON.parse(storedUserData);
-          if (userData.name && userData.name.includes("Test User")) {
-            localStorage.removeItem("user");
-            console.log("Cleared test user data from localStorage");
-          }
-        } catch (error) {
-          console.warn("Error parsing user data from localStorage:", error);
-        }
-      }
-
-      // Update workspace name to use the real name from API
-      setDynamicWorkspaceName(workspace.name);
-      localStorage.setItem("workspaceName", workspace.name);
-      localStorage.setItem("workspaceId", workspace.id);
-    } catch (error) {
-      console.error("Error fetching workspace data from API:", error);
-    }
-  };
-
-  useEffect(() => {
-    const fetchWorkspaceStats = async () => {
-      setLoadingStats(true);
+    const updateUserData = () => {
       try {
-        const backendUrl =
-          import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
-        console.log("WorkspaceId:", workspaceId);
-        console.log("Backend URL:", backendUrl);
-
-        // Stats endpoint doesn't exist in backend, use default values
-        console.log("Stats endpoint not available, using default values");
-        setDynamicStats({
-          members: "0",
-          users: "0",
-        });
+        const userData = JSON.parse(localStorage.getItem("user") || "{}");
+        const currentUser = {
+          name: userData.name || user.name || "Demo User",
+          role: userData.role || user.role || "Member",
+          avatarUrl: userData.avatar || user.avatarUrl || "",
+        };
+        setDynamicUser(currentUser);
       } catch (error) {
-        console.warn("Error fetching workspace stats:", error);
-        // Set default stats for any error
-        setDynamicStats({
-          members: "0",
-          users: "0",
-        });
-      } finally {
-        setLoadingStats(false);
+        console.warn("Error parsing user data from localStorage:", error);
       }
     };
 
-    // Listen for storage changes to update workspace name and user data immediately
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === "workspaceName" && e.newValue) {
-        setDynamicWorkspaceName(e.newValue);
-      }
-      if (e.key === "user" && e.newValue) {
-        try {
-          const userData = JSON.parse(e.newValue);
-          const currentUser = {
-            name: userData.name || user.name || "Demo User",
-            role: userData.role || user.role || "Member",
-            avatarUrl: userData.avatar || user.avatarUrl || "",
-          };
-          setDynamicUser(currentUser);
-        } catch (error) {
-          console.warn("Error parsing user data from storage event:", error);
+    const fetchUserData = async () => {
+      try {
+        const backendUrl =
+          import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
+        const res = await fetchWithAuth(`${backendUrl}/api/users/me`);
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data.status === "success" && data.data && data.data.user) {
+            const apiUser = data.data.user;
+            const currentUser = {
+              name: apiUser.name || user.name || "Demo User",
+              role: apiUser.role || user.role || "Member",
+              avatarUrl: apiUser.avatarUrl || user.avatarUrl || "",
+            };
+            setDynamicUser(currentUser);
+
+            const updatedUserData = {
+              ...JSON.parse(localStorage.getItem("user") || "{}"),
+              name: apiUser.name,
+              role: apiUser.role,
+              avatarUrl: apiUser.avatarUrl,
+            };
+            localStorage.setItem("user", JSON.stringify(updatedUserData));
+          }
         }
+      } catch (error) {
+        console.warn("Error fetching user data from API:", error);
       }
     };
 
@@ -237,24 +146,18 @@ const WorkspaceDashboard: React.FC<WorkspaceDashboardProps> = ({
       fetchWorkspaceStats();
       updateWorkspaceName();
       updateUserData();
-      fetchUserData(); // Fetch user data on mount
-      fetchWorkspaceData(); // Fetch workspace data on mount
+      fetchUserData();
 
-      // Set up real-time data syncing every 5 seconds
-      const statsInterval = setInterval(fetchWorkspaceStats, 5000);
-      const nameInterval = setInterval(updateWorkspaceName, 5000);
-      const userInterval = setInterval(updateUserData, 5000);
-      const userDataInterval = setInterval(fetchUserData, 5000); // Fetch user data every 5 seconds
-
-      // Add storage event listener for immediate updates
-      window.addEventListener("storage", handleStorageChange);
+      const statsInterval = setInterval(fetchWorkspaceStats, 10000);
+      const nameInterval = setInterval(updateWorkspaceName, 15000);
+      const userInterval = setInterval(updateUserData, 15000);
+      const userDataInterval = setInterval(fetchUserData, 30000);
 
       return () => {
         clearInterval(statsInterval);
         clearInterval(nameInterval);
         clearInterval(userInterval);
-        clearInterval(userDataInterval); // Clear user data interval on unmount
-        window.removeEventListener("storage", handleStorageChange);
+        clearInterval(userDataInterval);
       };
     }
   }, [workspaceId, workspaceName, user]);

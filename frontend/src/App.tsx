@@ -42,6 +42,7 @@ const WorkspaceSettingsPage = lazy(
 );
 const Discovery = lazy(() => import("./pages/Discovery"));
 const AdminListPage = lazy(() => import("./pages/AdminListPage"));
+const NotificationsPage = lazy(() => import("./pages/NotificationsPage"));
 const EmailVerificationSuccessPage = lazy(
   () => import("./pages/EmailVerificationSuccessPage")
 );
@@ -248,6 +249,7 @@ const AppContent: React.FC = () => {
             {/* User Management Routes */}
             <Route path="/active-users" element={<ActiveUsersPage />} />
             <Route path="/admins" element={<AdminListPage />} />
+            <Route path="/notifications" element={<NotificationsPage />} />
 
             {/* Admin-Only Routes */}
             <Route
