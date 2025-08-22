@@ -248,7 +248,7 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
             aria-label="Open profile menu"
           >
             <Avatar
-              src="https://img.freepik.com/free-vector/smiling-young-man-illustration_1308-174669.jpg?semt=ais_hybrid&w=740"
+              src=""
               sx={{ width: { xs: 28, sm: 32 }, height: { xs: 28, sm: 32 } }}
               imgProps={{ loading: "lazy" }}
             />

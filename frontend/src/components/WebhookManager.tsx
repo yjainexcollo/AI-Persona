@@ -107,8 +107,8 @@ const WebhookManager: React.FC<WebhookManagerProps> = ({
           <div className="flex items-center gap-2">
             <span className="text-xs text-gray-500">Status</span>
             {connectionStatus === true && (
-              <span className="inline-flex items-center rounded-full bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20">
-                <span className="mr-1 block h-1.5 w-1.5 rounded-full bg-green-600" />
+              <span className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-600/20">
+                <span className="mr-1 block h-1.5 w-1.5 rounded-full bg-blue-600" />
                 Connected
               </span>
             )}

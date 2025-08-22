@@ -60,7 +60,7 @@ const GlobalLoader: React.FC<GlobalLoaderProps> = ({
           size={60}
           thickness={4}
           sx={{
-            color: "#0A9969",
+            color: "#2950DA",
           }}
           aria-label="Loading"
         />
@@ -68,9 +68,10 @@ const GlobalLoader: React.FC<GlobalLoaderProps> = ({
         <Typography
           variant="h6"
           sx={{
-            color: "#fff",
-            fontWeight: 500,
-            fontSize: "18px",
+            color: "#2950DA",
+            fontWeight: 600,
+            textAlign: "center",
+            mt: 2,
           }}
         >
           {message}

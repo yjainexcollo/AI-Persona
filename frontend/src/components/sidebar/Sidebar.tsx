@@ -36,6 +36,7 @@ import ConversationSettingsDialog from "../ConversationSettingsDialog";
 interface FavoritePersona {
   id: string;
   name: string;
+  personalName?: string;
   avatar: string;
   role?: string;
 }
@@ -88,8 +89,9 @@ const Sidebar: React.FC<{
           .map((persona) => ({
             id: persona.id,
             name: persona.name,
+            personalName: persona.personalName,
             avatar: persona.avatarUrl || persona.avatar || "",
-            role: persona.role || "",
+            role: persona.name || "",
           }));
         setFavoritePersonas(favoritePersonaData);
       } catch (error) {
@@ -287,21 +289,26 @@ const Sidebar: React.FC<{
           />
         </IconButton>
         <Typography
-          variant="h5"
+          variant="h6"
           sx={{
-            fontFamily: "Inter, Roboto, Helvetica, Arial, sans-serif",
             fontWeight: 700,
-            fontSize: { xs: "16px", sm: "18px" },
-            lineHeight: { xs: "20px", sm: "23px" },
-            letterSpacing: 0,
-            color: "#0D1A12",
+            color: "#012A1F",
+            fontSize: { xs: 20, sm: 22 },
             whiteSpace: "nowrap",
             overflow: "hidden",
             textOverflow: "ellipsis",
             ml: { xs: 1, sm: 1.2 },
           }}
         >
-          Crudo.ai
+          <img
+            src="/logo.png"
+            alt="Logo"
+            style={{
+              height: "50px",
+              width: "auto",
+              verticalAlign: "middle",
+            }}
+          />
         </Typography>
       </Box>
 
@@ -503,11 +510,11 @@ const Sidebar: React.FC<{
                       textOverflow: "ellipsis",
                     }}
                   >
-                    {persona.name}
+                    {persona.personalName || persona.name}
                   </Typography>
                 }
                 secondary={
-                  persona.role && (
+                  persona.name && (
                     <Typography
                       sx={{
                         color: "#666",
@@ -517,7 +524,7 @@ const Sidebar: React.FC<{
                         textOverflow: "ellipsis",
                       }}
                     >
-                      {persona.role}
+                      {persona.name}
                     </Typography>
                   )
                 }

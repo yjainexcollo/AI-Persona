@@ -5,6 +5,7 @@ const backendUrl = import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
 export interface Persona {
   id: string;
   name: string;
+  personalName?: string; // The actual name of the persona (e.g., "Sarah Chen", "John Smith")
   description: string;
   avatarUrl?: string;
   isActive: boolean;

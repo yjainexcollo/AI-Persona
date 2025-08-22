@@ -249,7 +249,7 @@ const WorkspaceDashboard: React.FC<WorkspaceDashboardProps> = ({
                 px: 4,
                 textTransform: "none",
                 borderRadius: 2,
-                bgcolor: "#f3f6f4",
+                bgcolor: "#F5F7FA",
                 borderColor: "#e0e0e0",
               }}
               onClick={onUsePersona}
@@ -264,7 +264,7 @@ const WorkspaceDashboard: React.FC<WorkspaceDashboardProps> = ({
                 p: 3,
                 minWidth: 180,
                 borderRadius: 3,
-                bgcolor: "#f3f6f4",
+                bgcolor: "#F5F7FA",
                 position: "relative",
               }}
             >
@@ -292,7 +292,7 @@ const WorkspaceDashboard: React.FC<WorkspaceDashboardProps> = ({
                 p: 3,
                 minWidth: 180,
                 borderRadius: 3,
-                bgcolor: "#f3f6f4",
+                bgcolor: "#F5F7FA",
                 position: "relative",
               }}
             >

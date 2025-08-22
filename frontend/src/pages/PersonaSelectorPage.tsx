@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Box } from "@mui/material";
+import { Box, Typography, CircularProgress } from "@mui/material";
 import Header from "../components/discover/Header";
 import PersonaSelectorHeader from "../components/personaSelector/PersonaSelectorHeader";
 import SearchBar from "../components/discover/SearchBar";
@@ -7,7 +7,10 @@ import PersonaSelectorGrid from "../components/personaSelector/PersonaSelectorGr
 import ChatInputBar from "../components/ChatInputBar";
 import type { Persona } from "../types";
 import { useNavigate } from "react-router-dom";
-import { getPersonas, type Persona as BackendPersona } from "../services/personaService";
+import {
+  getPersonas,
+  type Persona as BackendPersona,
+} from "../services/personaService";
 
 const PersonaSelectorPage: React.FC = () => {
   const [search, setSearch] = useState("");
@@ -25,8 +28,10 @@ const PersonaSelectorPage: React.FC = () => {
         const response = await getPersonas();
         setPersonas(response.data || []);
       } catch (err) {
-        console.error('Error fetching personas from backend:', err);
-        setError(err instanceof Error ? err.message : "Failed to load personas");
+        console.error("Error fetching personas from backend:", err);
+        setError(
+          err instanceof Error ? err.message : "Failed to load personas"
+        );
         setPersonas([]);
       } finally {
         setLoading(false);
@@ -39,7 +44,10 @@ const PersonaSelectorPage: React.FC = () => {
     .filter(
       (p) =>
         p.name.toLowerCase().includes(search.toLowerCase()) ||
-        p.description.toLowerCase().includes(search.toLowerCase())
+        ((p as any).personalName || "")
+          .toLowerCase()
+          .includes(search.toLowerCase()) ||
+        (p.description || "").toLowerCase().includes(search.toLowerCase())
     )
     .slice(0, 6); // Only show first six personas
 
@@ -51,7 +59,11 @@ const PersonaSelectorPage: React.FC = () => {
     navigate(`/view-persona/${persona.id}`);
   };
 
-  const handleSendMessage = (msgObj: { message: string; fileUrl?: string; fileType?: string }) => {
+  const handleSendMessage = (msgObj: {
+    message: string;
+    fileUrl?: string;
+    fileType?: string;
+  }) => {
     // For now, just log the message. Later you can implement logic to:
     // 1. Select a default persona or ask user to select one
     // 2. Navigate to chat with the message pre-filled
@@ -62,9 +74,12 @@ const PersonaSelectorPage: React.FC = () => {
 
     // Example: Navigate to first persona with message
     if (filteredPersonas.length > 0) {
-      navigate(`/chat/${filteredPersonas[0].id}`, {
-        state: { initialMessage: msgObj.message },
-      });
+      const firstPersona = filteredPersonas[0];
+      if (firstPersona) {
+        navigate(`/chat/${firstPersona.id}`, {
+          state: { initialMessage: msgObj.message },
+        });
+      }
     }
   };
 
@@ -89,7 +104,14 @@ const PersonaSelectorPage: React.FC = () => {
       >
         <Header />
         <PersonaSelectorHeader />
-        <Box sx={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+        <Box
+          sx={{
+            flex: 1,
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
           <Typography>Loading personas...</Typography>
         </Box>
       </Box>
@@ -109,7 +131,14 @@ const PersonaSelectorPage: React.FC = () => {
       >
         <Header />
         <PersonaSelectorHeader />
-        <Box sx={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+        <Box
+          sx={{
+            flex: 1,
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
           <Typography color="error">{error}</Typography>
         </Box>
       </Box>

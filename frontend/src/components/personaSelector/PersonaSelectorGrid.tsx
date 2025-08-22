@@ -52,7 +52,7 @@ const PersonaSelectorGrid: React.FC<PersonaSelectorGridProps> = ({
               "&:hover": { textDecoration: "underline" },
             }}
           >
-            {persona.name}
+            {persona.personalName || persona.name}
           </Typography>
           <Box
             sx={{
@@ -74,7 +74,7 @@ const PersonaSelectorGrid: React.FC<PersonaSelectorGridProps> = ({
                 "&:hover": { textDecoration: "underline" },
               }}
             >
-              {persona.role}
+              {persona.name}
             </Typography>
             <ArrowOutwardIcon
               sx={{

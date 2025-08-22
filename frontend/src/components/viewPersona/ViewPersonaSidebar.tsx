@@ -51,14 +51,14 @@ const ViewPersonaSidebar: React.FC<ViewPersonaSidebarProps> = ({
           <ListItemText
             primary={
               <Typography sx={{ fontWeight: 700, fontSize: 16, color: "#222" }}>
-                {p.name}
+                {p.personalName || "Unknown Name"}
               </Typography>
             }
             secondary={
               <Typography
                 sx={{ color: "#2950DA", fontWeight: 500, fontSize: 14 }}
               >
-                {p.role}
+                {p.name || "Unknown Role"}
               </Typography>
             }
           />

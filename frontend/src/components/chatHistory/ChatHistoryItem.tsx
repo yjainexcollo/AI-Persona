@@ -80,7 +80,7 @@ const ChatHistoryItem: React.FC<ChatHistoryItemProps> = ({
         px: 0,
         borderRadius: 2,
         cursor: "pointer",
-        "&:hover": { background: "#f5f8f6" },
+        "&:hover": { background: "#F5F7FA" },
         opacity: archived ? 0.7 : 1,
       }}
       onClick={onClick}

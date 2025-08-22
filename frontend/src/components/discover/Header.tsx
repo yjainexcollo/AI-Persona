@@ -392,7 +392,7 @@ const Header: React.FC = () => {
                 sx={{
                   "& .MuiListItemText-primary": {
                     color:
-                      location.pathname === "/discovery" ? "#059134" : "#333",
+                      location.pathname === "/discovery" ? "#2950DA" : "#333",
                     fontWeight: location.pathname === "/discovery" ? 600 : 400,
                   },
                 }}
@@ -417,7 +417,7 @@ const Header: React.FC = () => {
                   "& .MuiListItemText-primary": {
                     color:
                       location.pathname === "/chat-history"
-                        ? "#059134"
+                        ? "#2950DA"
                         : "#333",
                     fontWeight:
                       location.pathname === "/chat-history" ? 600 : 400,
@@ -439,7 +439,7 @@ const Header: React.FC = () => {
                 primary="My Workspace"
                 sx={{
                   "& .MuiListItemText-primary": {
-                    color: location.pathname === "/" ? "#059134" : "#333",
+                    color: location.pathname === "/" ? "#2950DA" : "#333",
                     fontWeight: location.pathname === "/" ? 600 : 400,
                   },
                 }}

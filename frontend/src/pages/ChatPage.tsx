@@ -50,7 +50,7 @@ const TypingIndicator = () => (
         width: 8,
         height: 8,
         borderRadius: "50%",
-        bgcolor: "#52946B",
+        bgcolor: "#2950DA",
         animation: "typing 1.4s infinite ease-in-out",
         animationDelay: "0s",
         "@keyframes typing": {
@@ -70,7 +70,7 @@ const TypingIndicator = () => (
         width: 8,
         height: 8,
         borderRadius: "50%",
-        bgcolor: "#52946B",
+        bgcolor: "#2950DA",
         animation: "typing 1.4s infinite ease-in-out",
         animationDelay: "0.2s",
         "@keyframes typing": {
@@ -90,7 +90,7 @@ const TypingIndicator = () => (
         width: 8,
         height: 8,
         borderRadius: "50%",
-        bgcolor: "#52946B",
+        bgcolor: "#2950DA",
         animation: "typing 1.4s infinite ease-in-out",
         animationDelay: "0.4s",
         "@keyframes typing": {
@@ -632,7 +632,7 @@ export default function ChatPage() {
         >
           <CircularProgress color="inherit" />
         </Backdrop>
-        <Typography variant="h6" sx={{ color: "#52946B" }}>
+        <Typography variant="h6" sx={{ color: "#2950DA" }}>
           Persona not found
         </Typography>
       </Box>
@@ -948,7 +948,7 @@ export default function ChatPage() {
                     textAlign: "center",
                   }}
                 >
-                  {persona.name}
+                  {persona.personalName || persona.name}
                   {persona.isAvailable === false && (
                     <Box
                       component="span"
@@ -978,7 +978,7 @@ export default function ChatPage() {
                     textAlign: "center",
                   }}
                 >
-                  {persona.role}
+                  {persona.name}
                 </Typography>
 
                 {/* Department */}
@@ -1024,7 +1024,7 @@ export default function ChatPage() {
                       cursor: "pointer",
                       borderRadius: "50%",
                       transition: "background 0.2s",
-                      "&:hover": { background: "#e8f5e9" },
+                      "&:hover": { background: "#E8ECF2" },
                     }}
                   />
                 </Box>
@@ -1142,24 +1142,38 @@ export default function ChatPage() {
                         flexDirection: "row",
                         alignItems: "flex-start",
                         gap: 2,
+                        maxWidth: "100%",
                       }}
                     >
-                      <Avatar
+                      {/* <Avatar
                         sx={{
                           width: 42,
                           height: 42,
-                          mt: 0.5,
                           alignSelf: "flex-start",
+                          flexShrink: 0,
                         }}
                       >
                         <img
                           key={persona.id}
                           src={persona.avatarUrl || persona.avatar || ""}
                           alt="AI"
-                          style={{ width: 48, height: 48, borderRadius: "50%" }}
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            borderRadius: "50%",
+                            objectFit: "cover",
+                          }}
                         />
-                      </Avatar>
-                      <Box>
+                      </Avatar> */}
+                      <Box
+                        sx={{
+                          flex: 1,
+                          minWidth: 0,
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "flex-start",
+                        }}
+                      >
                         <Box
                           sx={{
                             color: "#2950DA",
@@ -1330,37 +1344,56 @@ export default function ChatPage() {
                         flexDirection: "row-reverse",
                         alignItems: "flex-end",
                         gap: 1,
+                        maxWidth: "100%",
                       }}
                     >
-                      <Avatar sx={{ width: 42, height: 42, mb: 0.5 }}>
-                        {userAvatar ? (
+                      {/* <Avatar
+                        sx={{
+                          width: 42,
+                          height: 42,
+                          flexShrink: 0,
+                          bgcolor: "#2950DA",
+                        }}
+                      >
+                        {userAvatar && userAvatar.trim() !== "" ? (
                           <img
                             src={userAvatar}
                             alt="User"
                             style={{
-                              width: 48,
-                              height: 48,
+                              width: "100%",
+                              height: "100%",
                               borderRadius: "50%",
+                              objectFit: "cover",
+                            }}
+                            onError={(e) => {
+                              // If image fails to load, hide it and show default
+                              e.currentTarget.style.display = "none";
+                              e.currentTarget.nextElementSibling?.setAttribute(
+                                "style",
+                                "display: flex !important"
+                              );
                             }}
                           />
-                        ) : (
-                          <span
-                            style={{
-                              width: 48,
-                              height: 48,
-                              borderRadius: "50%",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              fontSize: 18,
-                              fontWeight: 500,
-                              color: "#fff",
-                            }}
-                          >
-                            U
-                          </span>
-                        )}
-                      </Avatar>
+                        ) : null}
+                        <span
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            borderRadius: "50%",
+                            display:
+                              userAvatar && userAvatar.trim() !== ""
+                                ? "none"
+                                : "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontSize: 18,
+                            fontWeight: 600,
+                            color: "#fff",
+                          }}
+                        >
+                          U
+                        </span>
+                      </Avatar> */}
                       <Box
                         sx={{
                           display: "flex",
@@ -1587,7 +1620,7 @@ export default function ChatPage() {
                     top: { xs: 140, sm: 160 },
                     left: { xs: "50%", sm: "calc(50% + 100px)" },
                     transform: { xs: "translateX(-50%)", sm: "none" },
-                    bgcolor: "#fafbfa",
+                    bgcolor: "#F8F9FA",
                     borderRadius: 2,
                     boxShadow: "0 2px 8px 0 rgba(44,62,80,0.10)",
                     p: { xs: 1, sm: 1.1 },

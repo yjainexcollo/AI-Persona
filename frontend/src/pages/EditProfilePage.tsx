@@ -235,7 +235,7 @@ const EditProfilePage: React.FC = () => {
             p: 0,
             mb: 4,
             overflow: "hidden",
-            bgcolor: "#f2f7f3",
+            bgcolor: "#F5F7FA",
           }}
         >
           <Box

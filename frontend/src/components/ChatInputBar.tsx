@@ -8,6 +8,7 @@ import {
   Chip,
   Menu,
   MenuItem,
+  Typography,
 } from "@mui/material";
 import { IoSend } from "react-icons/io5";
 import AttachFileIcon from "@mui/icons-material/AttachFile";
@@ -480,17 +481,26 @@ const ChatInputBar: React.FC<ChatInputBarProps> = ({
             bottom: 0,
             top: 0,
             zIndex: 100,
-            bgcolor: "rgba(41,80,218,0.08)",
-            border: "2px dashed #2950DA",
+            bgcolor: "rgba(41,80,218,0.1)",
+            border: "3px dashed #2950DA",
+            borderRadius: 3,
             display: "flex",
+            flexDirection: "column",
             alignItems: "center",
             justifyContent: "center",
             color: "#2950DA",
             fontSize: 22,
             fontWeight: 600,
+            backdropFilter: "blur(4px)",
           }}
         >
-          Drop files here to attach
+          <AttachFileIcon sx={{ fontSize: 48, mb: 2, opacity: 0.8 }} />
+          <Typography variant="h6" sx={{ mb: 1 }}>
+            Drop files here to attach
+          </Typography>
+          <Typography variant="body2" sx={{ opacity: 0.8 }}>
+            Supports images, documents, and other file types
+          </Typography>
         </Box>
       )}
       {/* Suggestion Chips */}
@@ -552,42 +562,39 @@ const ChatInputBar: React.FC<ChatInputBarProps> = ({
           onChange={handleFileChange}
           multiple
         />
-        {/* File preview (if any) */}
+        {/* File previews */}
         {selectedFiles.length > 0 && (
           <Box
             sx={{
               display: "flex",
               flexWrap: "wrap",
-              gap: 1.5,
-              ml: 2,
-              maxWidth: 220,
+              gap: 1,
+              mb: 2,
+              p: 1.5,
+              bgcolor: "#F8F9FA",
+              borderRadius: 2,
+              border: "1px solid #E8ECF2",
             }}
           >
             {selectedFiles.map((file, idx) =>
-              filePreviewUrls[idx] ? (
-                // Image preview: only thumbnail, 2 per row
+              file.type.startsWith("image/") ? (
                 <Box
                   key={idx}
                   sx={{
-                    width: 60,
-                    height: 60,
-                    borderRadius: 2,
                     position: "relative",
+                    borderRadius: 2,
                     overflow: "hidden",
-                    mr: idx % 2 === 1 ? 0 : 1.5,
-                    mb: 1.5,
-                    display: "inline-block",
+                    border: "2px solid #E8ECF2",
                   }}
                 >
-                  <Box
-                    component="img"
-                    src={filePreviewUrls[idx] as string}
-                    alt="preview"
-                    sx={{
-                      width: "100%",
-                      height: "100%",
+                  <img
+                    src={filePreviewUrls[idx] || ""}
+                    alt={file.name}
+                    style={{
+                      width: 80,
+                      height: 80,
                       objectFit: "cover",
-                      borderRadius: 2,
+                      display: "block",
                     }}
                   />
                   <IconButton
@@ -595,12 +602,12 @@ const ChatInputBar: React.FC<ChatInputBarProps> = ({
                     onClick={() => handleRemoveFile(idx)}
                     sx={{
                       position: "absolute",
-                      top: 2,
-                      right: 2,
-                      bgcolor: "rgba(255,255,255,0.7)",
-                      color: "#333",
-                      p: 0.2,
-                      zIndex: 2,
+                      top: 4,
+                      right: 4,
+                      bgcolor: "rgba(255,255,255,0.9)",
+                      color: "#dc3545",
+                      width: 24,
+                      height: 24,
                       "&:hover": { bgcolor: "rgba(255,255,255,1)" },
                     }}
                   >
@@ -608,12 +615,18 @@ const ChatInputBar: React.FC<ChatInputBarProps> = ({
                   </IconButton>
                 </Box>
               ) : (
-                // Non-image: show as chip
                 <Chip
                   key={idx}
                   label={file.name}
                   onDelete={() => handleRemoveFile(idx)}
-                  sx={{ bgcolor: "#E8ECF2", fontWeight: 500 }}
+                  sx={{
+                    bgcolor: "#E8ECF2",
+                    fontWeight: 500,
+                    "& .MuiChip-deleteIcon": {
+                      color: "#dc3545",
+                      "&:hover": { color: "#c82333" },
+                    },
+                  }}
                 />
               )
             )}
@@ -643,6 +656,14 @@ const ChatInputBar: React.FC<ChatInputBarProps> = ({
             onClick={handleClipClick}
             disabled={disabled}
             title="Attach file"
+            sx={{
+              color: "#2950DA",
+              "&:hover": {
+                bgcolor: "#F5F7FA",
+                transform: "scale(1.05)",
+              },
+              transition: "all 0.2s ease",
+            }}
           >
             <AttachFileIcon sx={{ fontSize: 20 }} />
           </IconButton>
@@ -650,10 +671,68 @@ const ChatInputBar: React.FC<ChatInputBarProps> = ({
             anchorEl={anchorEl}
             open={Boolean(anchorEl)}
             onClose={handleMenuClose}
+            PaperProps={{
+              sx: {
+                mt: 1,
+                minWidth: 200,
+                boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
+                borderRadius: 2,
+                border: "1px solid #e5e7eb",
+              },
+            }}
           >
-            <MenuItem onClick={handleLocalUpload}>Upload from device</MenuItem>
-            <MenuItem onClick={handleGoogleDrive}>
-              Pick from Google Drive
+            <MenuItem
+              onClick={handleLocalUpload}
+              sx={{
+                py: 1.5,
+                px: 2,
+                gap: 1.5,
+                "&:hover": { bgcolor: "#F5F7FA" },
+              }}
+            >
+              <AttachFileIcon sx={{ fontSize: 20, color: "#2950DA" }} />
+              <Box>
+                <Typography sx={{ fontWeight: 500, fontSize: 14 }}>
+                  Upload from device
+                </Typography>
+                <Typography sx={{ fontSize: 12, color: "#6b7280" }}>
+                  Select files from your computer
+                </Typography>
+              </Box>
+            </MenuItem>
+            <MenuItem
+              onClick={handleGoogleDrive}
+              sx={{
+                py: 1.5,
+                px: 2,
+                gap: 1.5,
+                "&:hover": { bgcolor: "#F5F7FA" },
+              }}
+            >
+              <Box
+                sx={{
+                  width: 20,
+                  height: 20,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="#4285F4">
+                  <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                  <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                  <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                  <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+                </svg>
+              </Box>
+              <Box>
+                <Typography sx={{ fontWeight: 500, fontSize: 14 }}>
+                  Pick from Google Drive
+                </Typography>
+                <Typography sx={{ fontSize: 12, color: "#6b7280" }}>
+                  Select files from your Drive
+                </Typography>
+              </Box>
             </MenuItem>
           </Menu>
 
@@ -666,12 +745,22 @@ const ChatInputBar: React.FC<ChatInputBarProps> = ({
               "& input": {
                 fontSize: { xs: 14, sm: 16 },
                 py: 0.5,
+                caretColor: "#2950DA",
+                "&::placeholder": {
+                  color: "#9ca3af",
+                  opacity: 1,
+                },
               },
               "& textarea": {
                 fontSize: { xs: 14, sm: 16 },
                 resize: "none",
                 lineHeight: 1.4,
                 py: 0.5,
+                caretColor: "#2950DA",
+                "&::placeholder": {
+                  color: "#9ca3af",
+                  opacity: 1,
+                },
               },
             }}
             placeholder={placeholder}

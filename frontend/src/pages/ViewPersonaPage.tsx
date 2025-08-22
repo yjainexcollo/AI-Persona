@@ -41,6 +41,7 @@ interface Trait {
 interface PersonaData {
   id: string;
   name: string;
+  personalName?: string;
   role: string;
   avatar: string;
   traits: Trait[];
@@ -51,6 +52,7 @@ interface PersonaData {
 interface SimilarPersona {
   id: string;
   name: string;
+  personalName?: string;
   role: string;
   avatar: string;
   personaRole?: string;
@@ -92,6 +94,7 @@ const ViewPersonaPage: React.FC<ViewPersonaPageProps> = ({
       setPersonaData({
         id: persona.id,
         name: persona.name,
+        personalName: (persona as any).personalName || "",
         role: (persona as any).personaRole || "",
         avatar: persona.avatarUrl || "",
         traits: [
@@ -141,7 +144,8 @@ const ViewPersonaPage: React.FC<ViewPersonaPageProps> = ({
           (persona) => ({
             id: persona.id,
             name: persona.name,
-            role: persona.role || "Unknown",
+            personalName: (persona as any).personalName,
+            role: persona.name || "Unknown", // This is the professional role
             avatar: persona.avatarUrl || "",
             personaRole: (persona as any).personaRole,
             avatarUrl: persona.avatarUrl,
@@ -221,7 +225,7 @@ const ViewPersonaPage: React.FC<ViewPersonaPageProps> = ({
     );
 
     if (diffInDays < 7) {
-      return { status: "recent", color: "#4caf50", text: "Recently updated" };
+      return { status: "recent", color: "#2950DA", text: "Recently updated" };
     } else if (diffInDays < 30) {
       return { status: "moderate", color: "#ff9800", text: "Updated recently" };
     } else {
@@ -294,7 +298,8 @@ const ViewPersonaPage: React.FC<ViewPersonaPageProps> = ({
       .map((persona) => ({
         id: persona.id,
         name: persona.name,
-        role: persona.role || persona.personaRole || "",
+        personalName: persona.personalName,
+        role: persona.name || persona.personaRole || "",
         avatar: persona.avatarUrl || persona.avatar || "",
       }));
   };
@@ -453,8 +458,8 @@ const ViewPersonaPage: React.FC<ViewPersonaPageProps> = ({
         >
           <ViewPersonaHeader
             avatar={persona?.avatar || ""}
-            name={persona?.name || ""}
-            role={persona?.role || ""}
+            name={persona?.personalName || persona?.name || ""}
+            role={persona?.name || ""}
             onStartChat={() => navigate(`/chat/${persona?.id}`)}
           />
           {/* Sync tile for traits update */}
@@ -612,6 +617,7 @@ const ViewPersonaPage: React.FC<ViewPersonaPageProps> = ({
                         ? formatLastSyncTime((persona as any).createdAt)
                         : "Unknown"}
                     </Typography>
+
                     {/* Last fetched note */}
                     {lastFetched && (
                       <Typography
@@ -638,9 +644,9 @@ const ViewPersonaPage: React.FC<ViewPersonaPageProps> = ({
                     mt: 1,
                   }}
                 >
-                  <CheckCircleIcon sx={{ fontSize: 14, color: "#4caf50" }} />
+                  <CheckCircleIcon sx={{ fontSize: 14, color: "#2950DA" }} />
                   <Typography
-                    sx={{ color: "#4caf50", fontSize: 12, fontWeight: 500 }}
+                    sx={{ color: "#2950DA", fontSize: 12, fontWeight: 500 }}
                   >
                     {updateStatus}
                   </Typography>
@@ -863,7 +869,7 @@ const ViewPersonaPage: React.FC<ViewPersonaPageProps> = ({
                               width: 40,
                               height: 40,
                               borderRadius: 2,
-                              bgcolor: "#cfe7db",
+                              bgcolor: "#E8ECF2",
                             }}
                           />
                         )}
@@ -916,7 +922,7 @@ const ViewPersonaPage: React.FC<ViewPersonaPageProps> = ({
                         </Typography>
                         <Box
                           sx={{
-                            bgcolor: "#e8f5e9",
+                            bgcolor: "#E8ECF2",
                             borderRadius: 2,
                             px: 2,
                             py: 1,

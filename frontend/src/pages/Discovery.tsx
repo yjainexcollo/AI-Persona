@@ -111,6 +111,8 @@ const Discovery: React.FC<DiscoveryProps> = ({ onStartChat }) => {
       const haystack = (
         (persona.name ?? "") +
         " " +
+        ((persona as any).personalName ?? "") +
+        " " +
         (persona.description ?? "")
       ).toLowerCase();
       const matchesSearch = q === "" || haystack.includes(q);

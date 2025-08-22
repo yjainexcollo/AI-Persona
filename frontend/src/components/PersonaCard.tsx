@@ -55,9 +55,7 @@ const PersonaCard: React.FC<PersonaCardProps> = ({
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const isTablet = useMediaQuery(theme.breakpoints.down("md"));
   const navigate = useNavigate();
-  const hasRole = Boolean(
-    (persona as any).role && String((persona as any).role).trim().length
-  );
+  const hasRole = Boolean(persona.name && String(persona.name).trim().length);
 
   /**
    * Handle view persona click event
@@ -215,7 +213,7 @@ const PersonaCard: React.FC<PersonaCardProps> = ({
             whiteSpace: "normal",
           }}
         >
-          {persona.name}
+          {persona.personalName || persona.name}
         </Typography>
 
         {/* Clickable Role with External Link Icon */}
@@ -247,7 +245,7 @@ const PersonaCard: React.FC<PersonaCardProps> = ({
                 color: "inherit",
               }}
             >
-              {(persona as any).role}
+              {persona.name}
             </Typography>
           </Box>
         )}

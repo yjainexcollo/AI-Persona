@@ -16,6 +16,8 @@ export interface Persona {
   id: string;
   /** Display name of the persona */
   name: string;
+  /** The actual name of the persona (e.g., "Sarah Chen", "John Smith") */
+  personalName?: string;
   /** Role or job title of the persona */
   role?: string;
   /** Department or team the persona belongs to */
