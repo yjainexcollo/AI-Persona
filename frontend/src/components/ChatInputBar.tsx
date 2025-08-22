@@ -509,9 +509,9 @@ const ChatInputBar: React.FC<ChatInputBarProps> = ({
           sx={{
             display: "flex",
             gap: { xs: 1, sm: 2 },
-            maxWidth: sidebarOpen
-              ? { xs: "100%", sm: `calc(${maxWidth}px - ${sidebarWidth}px)` }
-              : { xs: "100%", sm: maxWidth },
+            // Keep input aligned with messages. The main content already accounts
+            // for sidebar width, so don't subtract it here.
+            maxWidth: { xs: "100%", sm: maxWidth },
             width: "100%",
             px: { xs: 2, sm: 3 },
             mb: 0,
@@ -546,9 +546,8 @@ const ChatInputBar: React.FC<ChatInputBarProps> = ({
         sx={{
           display: "flex",
           alignItems: "center",
-          maxWidth: sidebarOpen
-            ? { xs: "100%", sm: `calc(${maxWidth}px - ${sidebarWidth}px)` }
-            : { xs: "100%", sm: maxWidth },
+          // Match messages container width regardless of sidebar state
+          maxWidth: { xs: "100%", sm: maxWidth },
           width: "100%",
           px: { xs: 2, sm: 3 },
           mt: { xs: 2, sm: 3 },

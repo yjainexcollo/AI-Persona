@@ -22,12 +22,14 @@ import Sidebar from "../components/sidebar/Sidebar";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import FormattedOutput from "../components/FormattedOutput";
 import ChatInputBar from "../components/ChatInputBar";
+import ChatSearchModal from "../components/ChatSearchModal";
 import {
   getPersonas,
   getPersonaById,
   sendMessageToPersona,
   getConversations,
   getChatSessionById,
+  getUserChatSessions,
   editMessage,
   type Conversation,
   type MessageResponse,
@@ -152,6 +154,40 @@ export default function ChatPage() {
     useState<Conversation | null>(null);
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
   const [loadingPersona, setLoadingPersona] = useState(true);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [chatSessions, setChatSessions] = useState<any[]>([]);
+
+  const loadSearchSessions = useCallback(async () => {
+    try {
+      const sessions = await getUserChatSessions();
+      const compact = (sessions || [])
+        .map((s) => ({
+          session_id: s.conversation?.id || s.sessionId || s.conversationId,
+          date: s.conversation?.updatedAt || s.user?.updatedAt,
+          messages: (s.messages || []).map((m) => ({
+            sender: m.role === "USER" ? "user" : "ai",
+            text: m.content,
+          })),
+        }))
+        .filter((s) => s.session_id);
+      setChatSessions(compact);
+    } catch (e) {
+      // Fallback: try to build from conversations (may not include messages)
+      try {
+        const res = await getConversations();
+        const convs = res.data || [];
+        const sessionsFallback = convs.map((c) => ({
+          session_id: c.id,
+          date: c.updatedAt,
+          messages: (c.messages || []).map((m) => ({
+            sender: m.role === "USER" ? "user" : "ai",
+            text: m.content,
+          })),
+        }));
+        setChatSessions(sessionsFallback);
+      } catch {}
+    }
+  }, []);
 
   const [allPersonas, setAllPersonas] = useState<Persona[]>([]);
 
@@ -445,13 +481,13 @@ export default function ChatPage() {
     const handler = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
-        // Search functionality temporarily disabled - will be reimplemented with backend conversations
-        console.log("Search functionality temporarily disabled");
+        setSearchOpen(true);
+        loadSearchSessions();
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, []);
+  }, [loadSearchSessions]);
 
   // Edit message handlers
   const handleEditMessage = (messageId: string, currentText: string) => {
@@ -846,7 +882,7 @@ export default function ChatPage() {
           <Sidebar
             onClose={handleSidebarClose}
             currentPersonaId={persona.id}
-            onSearchChats={() => {}}
+            onSearchChats={() => setSearchOpen(true)}
           />
         </Box>
 
@@ -1470,6 +1506,8 @@ export default function ChatPage() {
                               display: "flex",
                               flexDirection: "column",
                               gap: 1,
+                              position: "relative",
+                              "&:hover .edit-button": { opacity: 1 },
                             }}
                           >
                             <Box
@@ -1487,10 +1525,6 @@ export default function ChatPage() {
                                 textAlign: "start",
                                 whiteSpace: "pre-wrap",
                                 maxWidth: "100%",
-                                "&:hover + .edit-button-container .edit-button":
-                                  {
-                                    opacity: 1,
-                                  },
                               }}
                             >
                               {editingMessageId === msg.id ? (
@@ -1573,32 +1607,29 @@ export default function ChatPage() {
                             </Box>
                             {editingMessageId !== msg.id &&
                               msg.sender === "user" && (
-                                <Box
-                                  className="edit-button-container"
+                                <IconButton
+                                  className="edit-button"
+                                  size="small"
+                                  onClick={() =>
+                                    handleEditMessage(msg.id!, msg.text)
+                                  }
                                   sx={{
-                                    display: "flex",
-                                    justifyContent: "flex-end",
+                                    position: "absolute",
+                                    right: 8,
+                                    bottom: -32,
+                                    color: "#666",
+                                    bgcolor: "rgba(0,0,0,0.05)",
+                                    opacity: 0,
+                                    transition: "opacity 0.2s",
+                                    pointerEvents: "auto",
+                                    "&:hover": {
+                                      bgcolor: "rgba(0,0,0,0.1)",
+                                      opacity: 1,
+                                    },
                                   }}
                                 >
-                                  <IconButton
-                                    className="edit-button"
-                                    size="small"
-                                    onClick={() =>
-                                      handleEditMessage(msg.id!, msg.text)
-                                    }
-                                    sx={{
-                                      color: "#666",
-                                      bgcolor: "rgba(0,0,0,0.05)",
-                                      opacity: 0,
-                                      transition: "opacity 0.2s",
-                                      "&:hover": {
-                                        bgcolor: "rgba(0,0,0,0.1)",
-                                      },
-                                    }}
-                                  >
-                                    <EditIcon fontSize="small" />
-                                  </IconButton>
-                                </Box>
+                                  <EditIcon fontSize="small" />
+                                </IconButton>
                               )}
 
                             {/* Reactions hidden for user messages */}
@@ -1701,6 +1732,21 @@ export default function ChatPage() {
         onClose={handleCloseSettings}
         conversation={currentConversation}
         onConversationUpdate={handleConversationUpdate}
+      />
+
+      {/* Chat search modal */}
+      <ChatSearchModal
+        open={searchOpen}
+        onClose={() => setSearchOpen(false)}
+        sessions={chatSessions}
+        onSelect={({ session_id }) => {
+          setSearchOpen(false);
+          navigate(`/chat/${persona.id}?conversationId=${session_id}`);
+        }}
+        onStartNewChat={() => {
+          setSearchOpen(false);
+          navigate(`/chat/${persona.id}`);
+        }}
       />
     </Box>
   );
