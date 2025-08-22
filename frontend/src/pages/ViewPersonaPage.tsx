@@ -1,5 +1,11 @@
 import React, { useState, useEffect } from "react";
-import { Box, Typography, CircularProgress, Button } from "@mui/material";
+import {
+  Box,
+  Typography,
+  CircularProgress,
+  Button,
+  Tooltip,
+} from "@mui/material";
 import { useParams, useNavigate } from "react-router-dom";
 import Header from "../components/discover/Header";
 import ViewPersonaHeader from "../components/viewPersona/ViewPersonaHeader";
@@ -15,6 +21,8 @@ import ComputerOutlinedIcon from "@mui/icons-material/ComputerOutlined";
 import StorageOutlinedIcon from "@mui/icons-material/StorageOutlined";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import PublicOutlinedIcon from "@mui/icons-material/PublicOutlined";
+import AccessTimeIcon from "@mui/icons-material/AccessTime";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import {
   getPersonas,
   getPersonaById,
@@ -36,6 +44,8 @@ interface PersonaData {
   role: string;
   avatar: string;
   traits: Trait[];
+  updatedAt?: string;
+  createdAt?: string;
 }
 
 interface SimilarPersona {
@@ -61,6 +71,7 @@ const ViewPersonaPage: React.FC<ViewPersonaPageProps> = ({
   const [updating, setUpdating] = useState(false);
   const [updateStatus, setUpdateStatus] = useState("");
   const [updateError, setUpdateError] = useState("");
+  const [lastFetched, setLastFetched] = useState<Date | null>(null);
 
   // Fetch persona data function - moved outside useEffect for reuse
   const fetchPersonaData = async () => {
@@ -106,7 +117,10 @@ const ViewPersonaPage: React.FC<ViewPersonaPageProps> = ({
             description: (persona as any).keyResponsibility || "",
           },
         ],
+        updatedAt: persona.updatedAt,
+        createdAt: persona.createdAt,
       });
+      setLastFetched(new Date());
     } catch (error) {
       console.error("Error fetching persona data:", error);
       setError(
@@ -170,6 +184,49 @@ const ViewPersonaPage: React.FC<ViewPersonaPageProps> = ({
       communicationTrait?.description ||
       "No communication style information available."
     );
+  };
+
+  // Helper function to format timestamp in a user-friendly way
+  const formatLastSyncTime = (timestamp: string) => {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffInMs = now.getTime() - date.getTime();
+    const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
+    const diffInHours = Math.floor(diffInMs / (1000 * 60 * 60));
+    const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
+
+    if (diffInMinutes < 1) {
+      return "Just now";
+    } else if (diffInMinutes < 60) {
+      return `${diffInMinutes} minute${diffInMinutes === 1 ? "" : "s"} ago`;
+    } else if (diffInHours < 24) {
+      return `${diffInHours} hour${diffInHours === 1 ? "" : "s"} ago`;
+    } else if (diffInDays < 7) {
+      return `${diffInDays} day${diffInDays === 1 ? "" : "s"} ago`;
+    } else {
+      return (
+        date.toLocaleDateString() +
+        " " +
+        date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+      );
+    }
+  };
+
+  // Helper function to determine if traits need updating
+  const getTraitsUpdateStatus = (timestamp: string) => {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffInDays = Math.floor(
+      (now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24)
+    );
+
+    if (diffInDays < 7) {
+      return { status: "recent", color: "#4caf50", text: "Recently updated" };
+    } else if (diffInDays < 30) {
+      return { status: "moderate", color: "#ff9800", text: "Updated recently" };
+    } else {
+      return { status: "old", color: "#f44336", text: "Needs update" };
+    }
   };
 
   // Helper to extract array from value
@@ -446,12 +503,148 @@ const ViewPersonaPage: React.FC<ViewPersonaPageProps> = ({
                   fontWeight: 600,
                 }}
               >
-                {updating ? "Updating..." : "Update persona traits"}
+                {updating ? (
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <CircularProgress size={16} sx={{ color: "white" }} />
+                    Updating...
+                  </Box>
+                ) : (
+                  "Update persona traits"
+                )}
               </Button>
+              {/* Last sync time display */}
+              {persona?.updatedAt ? (
+                <Tooltip title={new Date(persona.updatedAt).toLocaleString()}>
+                  <Box>
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 0.5,
+                        mt: 1,
+                      }}
+                    >
+                      <AccessTimeIcon sx={{ fontSize: 14, color: "#666" }} />
+                      <Typography
+                        sx={{
+                          color: "#666",
+                          fontSize: 12,
+                          fontStyle: "italic",
+                        }}
+                      >
+                        Last updated: {formatLastSyncTime(persona.updatedAt)}
+                      </Typography>
+                      {/* Status indicator */}
+                      {(() => {
+                        const status = getTraitsUpdateStatus(persona.updatedAt);
+                        return (
+                          <Box
+                            sx={{
+                              width: 8,
+                              height: 8,
+                              borderRadius: "50%",
+                              bgcolor: status.color,
+                              ml: 1,
+                            }}
+                            title={status.text}
+                          />
+                        );
+                      })()}
+                    </Box>
+                    {/* Status text */}
+                    {(() => {
+                      const status = getTraitsUpdateStatus(persona.updatedAt);
+                      return (
+                        <Typography
+                          sx={{
+                            color: status.color,
+                            fontSize: 11,
+                            mt: 0.5,
+                            fontWeight: 500,
+                          }}
+                        >
+                          {status.text}
+                        </Typography>
+                      );
+                    })()}
+                    {/* Last fetched note */}
+                    {lastFetched && (
+                      <Typography
+                        sx={{
+                          color: "#999",
+                          fontSize: 10,
+                          mt: 0.5,
+                          fontStyle: "italic",
+                        }}
+                      >
+                        Data refreshed:{" "}
+                        {formatLastSyncTime(lastFetched.toISOString())}
+                      </Typography>
+                    )}
+                  </Box>
+                </Tooltip>
+              ) : (
+                <Tooltip
+                  title={`Created on ${
+                    (persona as any)?.createdAt
+                      ? new Date((persona as any).createdAt).toLocaleString()
+                      : "unknown date"
+                  }`}
+                >
+                  <Box
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 0.5,
+                      mt: 1,
+                    }}
+                  >
+                    <AccessTimeIcon sx={{ fontSize: 14, color: "#f44336" }} />
+                    <Typography
+                      sx={{
+                        color: "#f44336",
+                        fontSize: 12,
+                        fontStyle: "italic",
+                      }}
+                    >
+                      Created:{" "}
+                      {(persona as any)?.createdAt
+                        ? formatLastSyncTime((persona as any).createdAt)
+                        : "Unknown"}
+                    </Typography>
+                    {/* Last fetched note */}
+                    {lastFetched && (
+                      <Typography
+                        sx={{
+                          color: "#999",
+                          fontSize: 10,
+                          mt: 0.5,
+                          fontStyle: "italic",
+                        }}
+                      >
+                        Data refreshed:{" "}
+                        {formatLastSyncTime(lastFetched.toISOString())}
+                      </Typography>
+                    )}
+                  </Box>
+                </Tooltip>
+              )}
               {updateStatus && (
-                <Typography sx={{ color: "#2950DA", fontSize: 12, mt: 1 }}>
-                  {updateStatus}
-                </Typography>
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 0.5,
+                    mt: 1,
+                  }}
+                >
+                  <CheckCircleIcon sx={{ fontSize: 14, color: "#4caf50" }} />
+                  <Typography
+                    sx={{ color: "#4caf50", fontSize: 12, fontWeight: 500 }}
+                  >
+                    {updateStatus}
+                  </Typography>
+                </Box>
               )}
               {updateError && (
                 <Typography sx={{ color: "#c62828", fontSize: 12, mt: 1 }}>

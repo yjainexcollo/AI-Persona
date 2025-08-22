@@ -11,6 +11,14 @@ export interface Persona {
   isAvailable?: boolean;
   createdAt: string;
   updatedAt: string;
+  // Additional fields for persona traits
+  about?: string;
+  traits?: any[];
+  painPoints?: any[];
+  coreExpertise?: any[];
+  communicationStyle?: string;
+  keyResponsibility?: any[];
+  personaRole?: string;
   _count?: {
     conversations: number;
     messages: number;
@@ -21,7 +29,6 @@ export interface Persona {
   department?: string;
   avatar?: string;
   hasStartChat?: boolean;
-  traits?: any[];
 }
 
 export interface PersonasResponse {
