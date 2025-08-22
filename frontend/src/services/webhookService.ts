@@ -21,7 +21,7 @@ const WEBHOOK_URL =
 const TRAITS_WEBHOOK_URL =
   "https://n8n-excollo.azurewebsites.net/webhook-test/traits";
 
-import { getSessionId } from "../utils/session";
+import { getSessionId, fetchWithAuth } from "../utils/session";
 
 /**
  * Webhook Message Interface
@@ -283,69 +283,49 @@ export const updatePersonaTraitsViaN8n = async (
 /**
  * Update persona traits via backend API
  *
- * Sends persona traits update to our backend API endpoint.
- * This function updates the database directly and should be used
- * for testing or manual updates.
- *
- * @param traitsUpdate - The persona traits update data
- * @param authToken - JWT authentication token
- * @returns Promise that resolves to the update result
- * @throws Error if API request fails
+ * Calls POST /api/webhooks/traits to update persona traits in the database.
+ * This is the primary method for updating persona traits.
  */
-export const updatePersonaTraits = async (
+export const updatePersonaTraitsViaBackend = async (
   traitsUpdate: PersonaTraitsUpdate,
   authToken: string
 ): Promise<any> => {
-  try {
-    console.log(
-      "🔄 Updating persona traits via backend API:",
-      traitsUpdate.personaName
+  const backendUrl =
+    import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
+
+  console.log("🌐 Backend URL:", backendUrl);
+  console.log(
+    "🚀 Making fetch request to:",
+    `${backendUrl}/api/webhooks/traits`
+  );
+
+  const response = await fetchWithAuth(`${backendUrl}/api/webhooks/traits`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify(traitsUpdate),
+  });
+
+  console.log("📡 Backend API response status:", response.status);
+  console.log(
+    "📡 Backend API response headers:",
+    Object.fromEntries(Array.from(response.headers.entries()))
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("❌ Backend API error:", errorText);
+    throw new Error(
+      `Backend API update failed: ${response.status} - ${errorText}`
     );
-    console.log("📦 Payload:", JSON.stringify(traitsUpdate, null, 2));
-    console.log("🔑 Auth token length:", authToken ? authToken.length : 0);
-
-    // Get backend URL from environment or use default
-    const backendUrl =
-      import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
-
-    console.log("🌐 Backend URL:", backendUrl);
-    console.log(
-      "🚀 Making fetch request to:",
-      `${backendUrl}/api/webhooks/traits`
-    );
-
-    const response = await fetch(`${backendUrl}/api/webhooks/traits`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        Authorization: `Bearer ${authToken}`,
-      },
-      body: JSON.stringify(traitsUpdate),
-    });
-
-    console.log("📡 Backend API response status:", response.status);
-    console.log(
-      "📡 Backend API response headers:",
-      Object.fromEntries(Array.from(response.headers.entries()))
-    );
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("❌ Backend API error:", errorText);
-      throw new Error(
-        `Backend API update failed: ${response.status} - ${errorText}`
-      );
-    }
-
-    const result = await response.json();
-    console.log("✅ Backend API update successful:", result);
-
-    return result;
-  } catch (error) {
-    console.error("❌ Error updating persona traits via backend:", error);
-    throw error;
   }
+
+  const result = await response.json();
+  console.log("✅ Backend API update successful:", result);
+
+  return result;
 };
 
 /**
@@ -364,12 +344,11 @@ export const forwardPersonaTraitsViaBackend = async (
   const backendUrl =
     import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
 
-  const res = await fetch(`${backendUrl}/api/webhooks/traits/forward`, {
+  const res = await fetchWithAuth(`${backendUrl}/api/webhooks/traits/forward`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Accept: "application/json",
-      Authorization: `Bearer ${authToken}`,
     },
     body: JSON.stringify(traitsUpdate),
   });
@@ -395,7 +374,7 @@ export const testWebhookConnection = async (
     // Get or create session ID
     const sessionId = getSessionId(personaId);
 
-    const response = await fetch(WEBHOOK_URL, {
+    const response = await fetchWithAuth(WEBHOOK_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

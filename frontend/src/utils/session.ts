@@ -9,6 +9,67 @@ import { v4 as uuidv4 } from "uuid";
 import { env } from "@/lib/config/env";
 import { storage } from "@/lib/storage/localStorage";
 
+// Track ongoing refresh operations to prevent multiple simultaneous refreshes
+let refreshPromise: Promise<string> | null = null;
+let refreshInterval: NodeJS.Timeout | null = null;
+
+/**
+ * Start proactive token refresh
+ *
+ * Sets up a timer to refresh the access token before it expires.
+ * This prevents users from being logged out due to expired tokens.
+ */
+export function startProactiveTokenRefresh() {
+  // Clear any existing interval
+  if (refreshInterval) {
+    clearInterval(refreshInterval);
+  }
+
+  // Refresh token every 23 hours (access tokens expire in 24 hours)
+  // This gives us a 1-hour buffer before expiration
+  refreshInterval = setInterval(async () => {
+    try {
+      const token = storage.getToken();
+      const refreshTokenValue = storage.getRefreshToken();
+
+      if (token && refreshTokenValue) {
+        console.log("🔄 Proactively refreshing access token...");
+        await refreshToken();
+      }
+    } catch (error) {
+      console.warn("Proactive token refresh failed:", error);
+      // Don't redirect on proactive refresh failure
+      // Let the next API call handle it
+    }
+  }, 23 * 60 * 60 * 1000); // 23 hours
+}
+
+/**
+ * Stop proactive token refresh
+ */
+export function stopProactiveTokenRefresh() {
+  if (refreshInterval) {
+    clearInterval(refreshInterval);
+    refreshInterval = null;
+  }
+}
+
+/**
+ * Check if proactive token refresh should be started
+ *
+ * This function checks if we have valid tokens and starts proactive refresh if needed.
+ * Call this when the app initializes to ensure token refresh is running.
+ */
+export function initializeTokenRefresh() {
+  const token = storage.getToken();
+  const refreshTokenValue = storage.getRefreshToken();
+
+  if (token && refreshTokenValue) {
+    console.log("🔑 Valid tokens found, starting proactive refresh...");
+    startProactiveTokenRefresh();
+  }
+}
+
 /**
  * Get or create a session ID for a specific persona
  *
@@ -49,39 +110,60 @@ export function startNewSession(personaId: string): string {
  *
  * Makes a request to the backend to refresh the current authentication token.
  * Uses httpOnly cookies for secure token storage when available.
+ * Prevents multiple simultaneous refresh operations.
  *
  * @returns Promise that resolves to the new token string
  * @throws Error if token refresh fails
  */
 export async function refreshToken() {
-  const backendUrl = env.backendUrl;
-  const refreshToken = storage.getRefreshToken();
-
-  if (!refreshToken) {
-    throw new Error("No refresh token available");
+  // If a refresh is already in progress, wait for it
+  if (refreshPromise) {
+    return refreshPromise;
   }
 
-  const response = await fetch(`${backendUrl}/api/auth/refresh`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ refreshToken }),
-  });
+  // Start new refresh operation
+  refreshPromise = (async () => {
+    try {
+      const backendUrl = env.backendUrl;
+      const refreshToken = storage.getRefreshToken();
 
-  if (!response.ok) {
-    throw new Error("Failed to refresh token");
-  }
+      if (!refreshToken) {
+        throw new Error("No refresh token available");
+      }
 
-  const data = await response.json();
-  if (data.data && data.data.accessToken) {
-    storage.setToken(data.data.accessToken);
-    if (data.data.refreshToken) {
-      storage.setRefreshToken(data.data.refreshToken);
+      console.log("🔄 Attempting to refresh access token...");
+
+      const response = await fetch(`${backendUrl}/api/auth/refresh`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ refreshToken }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("❌ Token refresh failed:", response.status, errorText);
+        throw new Error("Failed to refresh token");
+      }
+
+      const data = await response.json();
+      if (data.data && data.data.accessToken) {
+        storage.setToken(data.data.accessToken);
+        if (data.data.refreshToken) {
+          storage.setRefreshToken(data.data.refreshToken);
+        }
+        console.log("✅ Token refreshed successfully");
+        return data.data.accessToken;
+      }
+      throw new Error("No token returned");
+    } finally {
+      // Clear the promise reference
+      refreshPromise = null;
     }
-    return data.data.accessToken;
-  }
-  throw new Error("No token returned");
+  })();
+
+  return refreshPromise;
 }
 
 /**
@@ -96,6 +178,7 @@ export async function refreshToken() {
  * - Workspace ID inclusion in headers when available
  * - Automatic token refresh on 401 responses
  * - Redirect to login on refresh failure
+ * - Prevents multiple simultaneous refresh operations
  *
  * @param url - The URL to fetch from
  * @param options - Fetch options (headers, method, body, etc.)
@@ -123,15 +206,18 @@ export async function fetchWithAuth(url: string, options: RequestInit = {}) {
   // If unauthorized, try to refresh token and retry
   if (response.status === 401) {
     try {
+      console.log("🔄 Received 401, attempting token refresh...");
       token = await refreshToken();
       headers = { ...(headers || {}), Authorization: `Bearer ${token}` };
       if (workspaceId) {
         headers["x-workspace-id"] = workspaceId;
       }
       response = await fetch(url, { ...options, headers });
+      console.log("✅ Request retried with new token");
     } catch (err) {
-      // If refresh fails, clear token and redirect to login
-      storage.removeToken();
+      console.error("❌ Token refresh failed, redirecting to login");
+      // If refresh fails, clear all tokens and redirect to login
+      storage.clearAll();
       window.location.href = "/login";
       throw err;
     }
@@ -153,15 +239,22 @@ export async function fetchWithAuth(url: string, options: RequestInit = {}) {
           errorData.error.message.includes("Invalid or expired token"))
       ) {
         try {
+          console.log(
+            "🔄 Received 500 with auth error, attempting token refresh..."
+          );
           token = await refreshToken();
           headers = { ...(headers || {}), Authorization: `Bearer ${token}` };
           if (workspaceId) {
             headers["x-workspace-id"] = workspaceId;
           }
           response = await fetch(url, { ...options, headers });
+          console.log("✅ Request retried with new token after 500 auth error");
         } catch (err) {
-          // If refresh fails, clear token and redirect to login
-          storage.removeToken();
+          console.error(
+            "❌ Token refresh failed after 500 auth error, redirecting to login"
+          );
+          // If refresh fails, clear all tokens and redirect to login
+          storage.clearAll();
           window.location.href = "/login";
           throw err;
         }

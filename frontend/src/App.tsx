@@ -20,6 +20,7 @@ import {
 import GlobalLoader from "./components/GlobalLoader";
 import { usePageLoader } from "./hooks/usePageLoader";
 import BrandLogo from "./components/BrandLogo";
+import { initializeTokenRefresh } from "./utils/session";
 const ChatPage = lazy(() => import("./pages/ChatPage"));
 const ChatHistoryPage = lazy(() => import("./pages/ChatHistoryPage"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
@@ -143,6 +144,11 @@ const AppContent: React.FC = () => {
       mainRef.current.focus();
     }
   }, [location]);
+
+  // Initialize token refresh when the app loads
+  useEffect(() => {
+    initializeTokenRefresh();
+  }, []);
 
   return (
     <>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Box, Typography, CircularProgress } from "@mui/material";
+import { Box, Typography, CircularProgress, Button } from "@mui/material";
 import { useParams, useNavigate } from "react-router-dom";
 import Header from "../components/discover/Header";
 import ViewPersonaHeader from "../components/viewPersona/ViewPersonaHeader";
@@ -7,7 +7,8 @@ import ViewPersonaTabs from "../components/viewPersona/ViewPersonaTabs";
 import ViewPersonaSection from "../components/viewPersona/ViewPersonaSection";
 import ViewPersonaChips from "../components/viewPersona/ViewPersonaChips";
 import ViewPersonaSidebar from "../components/viewPersona/ViewPersonaSidebar";
-import WebhookManager from "../components/WebhookManager";
+import { forwardPersonaTraitsViaBackend } from "../services/webhookService";
+import { useAuth } from "../hooks/useAuth";
 import type { Persona } from "../types";
 import InsertDriveFileOutlinedIcon from "@mui/icons-material/InsertDriveFileOutlined";
 import ComputerOutlinedIcon from "@mui/icons-material/ComputerOutlined";
@@ -56,6 +57,10 @@ const ViewPersonaPage: React.FC<ViewPersonaPageProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [allPersonas, setAllPersonas] = useState<SimilarPersona[]>([]);
   const navigate = useNavigate();
+  const { getAuthToken } = useAuth();
+  const [updating, setUpdating] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState("");
+  const [updateError, setUpdateError] = useState("");
 
   // Fetch persona data function - moved outside useEffect for reuse
   const fetchPersonaData = async () => {
@@ -168,35 +173,33 @@ const ViewPersonaPage: React.FC<ViewPersonaPageProps> = ({
   };
 
   // Helper to extract array from value
-  function extractArray(val: any): string[] {
-    if (Array.isArray(val)) return val;
-    if (val && typeof val === "object" && Object.keys(val).length === 1) {
-      const arr = val[Object.keys(val)[0]];
-      if (Array.isArray(arr)) return arr;
+  function extractArray(val: unknown): string[] {
+    if (Array.isArray(val)) return val as string[];
+    if (val && typeof val === "object") {
+      const rec = val as Record<string, unknown>;
+      for (const k in rec) {
+        const first = rec[k];
+        if (Array.isArray(first)) return first as string[];
+        break;
+      }
     }
     if (typeof val === "string") {
-      // Try to parse stringified JSON
       const trimmed = val.trim();
-      if (
-        (trimmed.startsWith("{") && trimmed.endsWith("}")) ||
-        (trimmed.startsWith("[") && trimmed.endsWith("]"))
-      ) {
-        try {
-          const parsed = JSON.parse(trimmed);
-          if (Array.isArray(parsed)) return parsed;
-          if (
-            parsed &&
-            typeof parsed === "object" &&
-            Object.keys(parsed).length === 1
-          ) {
-            const arr = parsed[Object.keys(parsed)[0]];
-            if (Array.isArray(arr)) return arr;
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) return parsed as string[];
+        if (parsed && typeof parsed === "object") {
+          const rec = parsed as Record<string, unknown>;
+          for (const k in rec) {
+            const first = rec[k];
+            if (Array.isArray(first)) return first as string[];
+            break;
           }
-        } catch {}
-      }
+        }
+      } catch {}
       return [val];
     }
-    return [String(val)];
+    return [String(val ?? "")];
   }
   // Update getCoreExpertiseItems
   const getCoreExpertiseItems = () => {
@@ -397,17 +400,66 @@ const ViewPersonaPage: React.FC<ViewPersonaPageProps> = ({
             role={persona?.role || ""}
             onStartChat={() => navigate(`/chat/${persona?.id}`)}
           />
-
-          {/* Webhook Manager for Admin Users */}
-          <WebhookManager
-            personaName={persona?.name || ""}
-            onTraitsUpdated={() => {
-              // Refresh persona data when traits are updated
-              if (id) {
-                fetchPersonaData();
-              }
-            }}
-          />
+          {/* Sync tile for traits update */}
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
+            <Box sx={{ display: "flex", flexDirection: "column" }}>
+              <Button
+                variant="contained"
+                onClick={async () => {
+                  try {
+                    setUpdating(true);
+                    setUpdateError("");
+                    setUpdateStatus("Triggering traits update...");
+                    const token = await getAuthToken();
+                    await forwardPersonaTraitsViaBackend(
+                      {
+                        personaName: persona?.name || "",
+                        metadata: {
+                          about: (
+                            getAboutContent() || "About not available"
+                          ).trim(),
+                          coreExpertise: getCoreExpertiseItems(),
+                          communicationStyle: (
+                            getCommunicationStyleContent() || "Not specified"
+                          ).trim(),
+                          traits: getTraitsItems(),
+                          painPoints: getPainPointsItems(),
+                          keyResponsibilities: getKeyResponsibilitiesItems(),
+                        },
+                      },
+                      token
+                    );
+                    setUpdateStatus("Traits update triggered successfully!");
+                    if (id) fetchPersonaData();
+                  } catch (e: any) {
+                    setUpdateError(e?.message || "Failed to update traits");
+                    setUpdateStatus("");
+                  } finally {
+                    setUpdating(false);
+                  }
+                }}
+                disabled={updating}
+                sx={{
+                  background:
+                    "linear-gradient(90deg, #2950DA 0%, #1E88E5 100%)",
+                  textTransform: "none",
+                  fontWeight: 600,
+                }}
+              >
+                {updating ? "Updating..." : "Update persona traits"}
+              </Button>
+              {updateStatus && (
+                <Typography sx={{ color: "#2950DA", fontSize: 12, mt: 1 }}>
+                  {updateStatus}
+                </Typography>
+              )}
+              {updateError && (
+                <Typography sx={{ color: "#c62828", fontSize: 12, mt: 1 }}>
+                  {updateError}
+                </Typography>
+              )}
+            </Box>
+          </Box>
 
           <ViewPersonaTabs value={tab} onChange={setTab} />
           {tab === 0 && (

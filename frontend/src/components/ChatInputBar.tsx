@@ -289,7 +289,7 @@ const ChatInputBar: React.FC<ChatInputBarProps> = ({
       return suggestions;
     }
     if (persona) {
-      return getSuggestionChips(persona.department, persona.id);
+      return getSuggestionChips(persona.department || "", persona.id || "");
     }
     return [];
   }, [suggestions, persona]);
@@ -708,8 +708,8 @@ const ChatInputBar: React.FC<ChatInputBarProps> = ({
                 transform: value.trim() && !disabled ? "scale(1.05)" : "none",
               },
             }}
-            onClick={() => handleSendMessage()}
             disabled={!value.trim() || disabled}
+            type="submit"
           >
             <IoSend size={16} />
           </IconButton>

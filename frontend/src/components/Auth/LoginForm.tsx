@@ -13,6 +13,7 @@ import VisibilityOff from "@mui/icons-material/VisibilityOff";
 import Visibility from "@mui/icons-material/Visibility";
 import AppleIcon from "@mui/icons-material/Apple";
 import { useNavigate, useLocation } from "react-router-dom";
+import { startProactiveTokenRefresh } from "../../utils/session";
 
 const LoginForm: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -103,6 +104,9 @@ const LoginForm: React.FC = () => {
         localStorage.setItem("workspaceId", data.data.workspaceId);
       if (data.data.workspaceName)
         localStorage.setItem("workspaceName", data.data.workspaceName);
+
+      // Start proactive token refresh to prevent automatic logouts
+      startProactiveTokenRefresh();
 
       // Login successful - redirect to Discovery page
       navigate("/", { replace: true });

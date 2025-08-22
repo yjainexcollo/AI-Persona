@@ -53,21 +53,32 @@ function getJson<T>(key: string): T | null {
 
 export const storage = {
   getToken(): string | null {
-    return getString(KEYS.token);
+    const token = getString(KEYS.token);
+    console.log("🔍 getToken:", token ? "Token found" : "No token");
+    return token;
   },
   setToken(token: string) {
+    console.log("💾 setToken: Storing new access token");
     setString(KEYS.token, token);
   },
   removeToken() {
+    console.log("🗑️ removeToken: Removing access token");
     remove(KEYS.token);
   },
   getRefreshToken(): string | null {
-    return getString(KEYS.refreshToken);
+    const refreshToken = getString(KEYS.refreshToken);
+    console.log(
+      "🔍 getRefreshToken:",
+      refreshToken ? "Refresh token found" : "No refresh token"
+    );
+    return refreshToken;
   },
   setRefreshToken(token: string) {
+    console.log("💾 setRefreshToken: Storing new refresh token");
     setString(KEYS.refreshToken, token);
   },
   removeRefreshToken() {
+    console.log("🗑️ removeRefreshToken: Removing refresh token");
     remove(KEYS.refreshToken);
   },
   getUser(): StoredUser {
@@ -92,6 +103,7 @@ export const storage = {
     setString(KEYS.workspaceName, name);
   },
   clearAll() {
+    console.log("🗑️ clearAll: Clearing all storage");
     try {
       window.localStorage.clear();
     } catch {

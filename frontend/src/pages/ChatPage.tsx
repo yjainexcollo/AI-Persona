@@ -1140,11 +1140,18 @@ export default function ChatPage() {
                       sx={{
                         display: "flex",
                         flexDirection: "row",
-                        alignItems: "flex-end",
+                        alignItems: "flex-start",
                         gap: 2,
                       }}
                     >
-                      <Avatar sx={{ width: 42, height: 42, mb: 0.5 }}>
+                      <Avatar
+                        sx={{
+                          width: 42,
+                          height: 42,
+                          mt: 0.5,
+                          alignSelf: "flex-start",
+                        }}
+                      >
                         <img
                           key={persona.id}
                           src={persona.avatarUrl || persona.avatar || ""}
@@ -1155,7 +1162,7 @@ export default function ChatPage() {
                       <Box>
                         <Box
                           sx={{
-                            color: "#52946B",
+                            color: "#2950DA",
                             fontWeight: 500,
                             fontSize: 16,
                             mb: 1,
@@ -1166,8 +1173,8 @@ export default function ChatPage() {
                         {msg.isTyping ? (
                           <Box
                             sx={{
-                              bgcolor: "#F0F5F2",
-                              color: "#4e5357",
+                              bgcolor: "#EEF3FF",
+                              color: "#1E3A8A",
                               px: { xs: 2.5, sm: 2 },
                               py: { xs: 2, sm: 2.5 },
                               borderRadius: 3,
@@ -1196,7 +1203,7 @@ export default function ChatPage() {
                             {msg.fileUrl && (
                               <Box
                                 sx={{
-                                  bgcolor: "#F0F5F2",
+                                  bgcolor: "#EEF3FF",
                                   borderRadius: 3,
                                   p: 1,
                                   boxShadow: "none",
@@ -1221,7 +1228,7 @@ export default function ChatPage() {
                                     sx={{
                                       width: 20,
                                       height: 20,
-                                      bgcolor: "#4e5357",
+                                      bgcolor: "#1E3A8A",
                                       borderRadius: 1,
                                       display: "flex",
                                       alignItems: "center",
@@ -1248,8 +1255,8 @@ export default function ChatPage() {
                               <>
                                 <Box
                                   sx={{
-                                    bgcolor: "#F0F5F2",
-                                    color: "#4e5357",
+                                    bgcolor: "#EEF3FF",
+                                    color: "#1E3A8A",
                                     px: { xs: 2.5, sm: 2 },
                                     py: { xs: 2, sm: 2.5 },
                                     borderRadius: 3,
@@ -1275,7 +1282,7 @@ export default function ChatPage() {
                                   sx={{
                                     mt: 0.5,
                                     alignSelf: "flex-start",
-                                    color: "#4e5357",
+                                    color: "#1E3A8A",
                                   }}
                                   onClick={() => {
                                     if (msg.text) {

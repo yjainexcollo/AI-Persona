@@ -10,7 +10,6 @@ import RequireAuth from "@/app/guards/RequireAuth";
 import RequireAdmin from "@/app/guards/RequireAdmin";
 import { paths } from "@/lib/routing/paths";
 import GlobalLoader from "@/components/GlobalLoader";
-import BrandLogo from "@/components/BrandLogo";
 import type { Persona } from "@/types";
 import { storage } from "@/lib/storage/localStorage";
 import { logout } from "@/services/authService";
@@ -83,8 +82,6 @@ const AppRoutes: React.FC = () => {
       <a href="#main-content" className="skip-link">
         Skip to content
       </a>
-      {!location.pathname.includes("/discovery") &&
-        !location.pathname.includes("/chat") && <BrandLogo />}
       <Suspense fallback={<GlobalLoader open message="Loading page..." />}>
         <main id="main-content" ref={mainRef} tabIndex={-1} role="main">
           <Routes>

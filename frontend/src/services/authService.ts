@@ -7,6 +7,7 @@
 import { fetchWithAuth } from "../utils/session";
 import { env } from "@/lib/config/env";
 import { storage } from "@/lib/storage/localStorage";
+import { stopProactiveTokenRefresh } from "../utils/session";
 
 /**
  * Logout the current user
@@ -22,13 +23,15 @@ export async function logout(): Promise<void> {
 
     if (accessToken) {
       // Call backend logout endpoint with access token in Authorization header
-      const response = await fetch(`${env.backendUrl}/api/auth/logout`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
-        },
-      });
+      const response = await fetchWithAuth(
+        `${env.backendUrl}/api/auth/logout`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
 
       // Log the response for debugging (optional)
       if (!response.ok) {
@@ -41,6 +44,9 @@ export async function logout(): Promise<void> {
     // Even if backend call fails, proceed with local cleanup
     console.warn("Logout error:", error);
   } finally {
+    // Stop proactive token refresh
+    stopProactiveTokenRefresh();
+
     // Always clear local storage and redirect
     storage.clearAll();
     window.location.href = "/login";
