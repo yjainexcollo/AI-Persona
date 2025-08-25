@@ -186,10 +186,10 @@ const resendVerificationLimiter = rateLimit({
   skipFailedRequests: true,
 });
 
-// Rate limiting for chat messages (60 requests/min per persona) - SLIDING WINDOW
+// Rate limiting for chat messages (120 requests/min per persona) - SLIDING WINDOW
 const chatLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
-  max: 60, // 60 requests per minute
+  max: 120, // 120 requests per minute (doubled from 60)
   message: {
     error: {
       message: "Too many chat requests, please try again later.",
@@ -212,7 +212,7 @@ const chatLimiter = rateLimit({
 // Rate limiting for general persona requests - SLIDING WINDOW
 const personaLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
-  max: 100, // 100 requests per minute
+  max: 200, // 200 requests per minute (doubled from 100)
   message: {
     error: {
       message: "Too many requests, please try again later.",
@@ -234,7 +234,7 @@ const personaLimiter = rateLimit({
 // Rate limiting for public routes (stricter limits) - SLIDING WINDOW
 const publicLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
-  max: 30, // 30 requests per minute (stricter for public routes)
+  max: 60, // 60 requests per minute (doubled from 30)
   message: {
     error: {
       message: "Too many requests from this IP, please try again later.",
@@ -246,6 +246,28 @@ const publicLimiter = rateLimit({
   },
   store: new SlidingWindowRedisStore({
     prefix: "rl:public:",
+    windowMs: 60 * 1000,
+  }),
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipFailedRequests: true,
+});
+
+// Development-friendly rate limiter (much more lenient for development)
+const devLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 1000, // 1000 requests per minute for development
+  message: {
+    error: {
+      message: "Development rate limit exceeded. Please try again later.",
+    },
+  },
+  keyGenerator: (req) => {
+    // Rate limit per user for authenticated requests, fallback to IP
+    return `dev:${req.user?.id || ipKeyGenerator(req)}`;
+  },
+  store: new SlidingWindowRedisStore({
+    prefix: "rl:dev:",
     windowMs: 60 * 1000,
   }),
   standardHeaders: true,
@@ -433,7 +455,7 @@ const getRateLimitStatus = async (key, prefix = "rl:") => {
 // Auth-specific rate limiters (used by authRoutes.js)
 const registerLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
-  max: 5, // 5 requests per hour per IP
+  max: 20, // 20 requests per hour per IP (increased from 5)
   message: {
     error: {
       message: "Too many registration attempts, please try again later.",
@@ -450,7 +472,7 @@ const registerLimiter = rateLimit({
 
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10, // 10 requests per 15 minutes per IP
+  max: 30, // 30 requests per 15 minutes per IP (increased from 10)
   message: {
     error: {
       message: "Too many login attempts, please try again later.",
@@ -467,7 +489,7 @@ const loginLimiter = rateLimit({
 
 const passwordResetLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
-  max: 3, // 3 requests per hour per IP
+  max: 10, // 10 requests per hour per IP (increased from 3)
   message: {
     error: {
       message: "Too many password reset attempts, please try again later.",
@@ -518,6 +540,7 @@ module.exports = {
   chatLimiter,
   personaLimiter,
   publicLimiter,
+  devLimiter,
   // Auth rate limiters
   registerLimiter,
   loginLimiter,

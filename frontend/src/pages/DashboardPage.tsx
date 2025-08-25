@@ -18,6 +18,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Legend } from "recharts";
 import NotificationsNoneOutlinedIcon from "@mui/icons-material/NotificationsNoneOutlined";
 import ArrowOutwardIcon from "@mui/icons-material/ArrowOutward";
 import AdminSidebar from "../components/sidebar/AdminSidebar";
+import { colors, spacing, typography } from "../styles/tokens";
 import { useNavigate } from "react-router-dom";
 import { fetchWithAuth } from "../utils/session";
 import { getPersonas, type Persona } from "../services/personaService";
@@ -244,8 +245,8 @@ const DashboardPage: React.FC = () => {
         <Box
           sx={{
             flex: 1,
-            px: { xs: 2, md: 6 },
-            py: { xs: 2, md: 4 },
+            px: spacing.pagePx,
+            py: spacing.pagePy,
             minWidth: 0,
             overflow: "auto",
           }}
@@ -260,7 +261,17 @@ const DashboardPage: React.FC = () => {
             }}
           >
             <Box>
-              <Typography variant="h4" sx={{ fontWeight: 700, color: "#222" }}>
+              <Typography
+                variant="h4"
+                sx={{
+                  fontWeight: typography.title.weight,
+                  color: colors.textPrimary,
+                  fontSize: {
+                    xs: typography.title.xs,
+                    md: typography.title.md,
+                  },
+                }}
+              >
                 Dashboard
               </Typography>
             </Box>
@@ -268,7 +279,7 @@ const DashboardPage: React.FC = () => {
               <Button
                 variant="contained"
                 sx={{
-                  bgcolor: "#2950DA",
+                  bgcolor: colors.primary,
                   color: "#fff",
                   fontWeight: 700,
                   borderRadius: 2,
@@ -534,7 +545,9 @@ const DashboardPage: React.FC = () => {
                     onClick={() => navigate(`/view-persona/${p.id}`)}
                   >
                     <Avatar
-                      src={p.avatar}
+                      src={getAvatarUrl(
+                        (p as any).avatarUrl || (p as any).avatar || ""
+                      )}
                       alt={p.name}
                       sx={{
                         width: { xs: 56, md: 72 },

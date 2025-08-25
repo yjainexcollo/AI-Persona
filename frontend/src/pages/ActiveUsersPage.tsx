@@ -47,6 +47,7 @@ import CheckBoxIcon from "@mui/icons-material/CheckBox";
 import CheckBoxOutlineBlankIcon from "@mui/icons-material/CheckBoxOutlineBlank";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import AdminSidebar from "../components/sidebar/AdminSidebar";
+import { colors, spacing, typography } from "../styles/tokens";
 import { fetchWithAuth } from "../utils/session";
 import { logout } from "../services/authService";
 import { getAvatarUrl } from "../services/avatarService";
@@ -420,6 +421,8 @@ const ActiveUsersPage: React.FC = () => {
           flexDirection: "column",
           ml: { xs: 0, md: "220px" },
           minWidth: 0,
+          px: spacing.pagePx,
+          py: spacing.pagePy,
         }}
       >
         {/* Header (matches Dashboard) */}
@@ -429,7 +432,6 @@ const ActiveUsersPage: React.FC = () => {
             alignItems: "center",
             justifyContent: "space-between",
             mb: 2,
-            px: { xs: 2, md: 6 },
             pt: { xs: 2, md: 3 },
             fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
           }}
@@ -437,9 +439,9 @@ const ActiveUsersPage: React.FC = () => {
           <Box>
             <Typography
               sx={{
-                fontWeight: 700,
-                fontSize: { xs: 18, md: 24 },
-                color: "#222",
+                fontWeight: typography.title.weight,
+                fontSize: { xs: typography.title.xs, md: typography.title.md },
+                color: colors.textPrimary,
               }}
             >
               Workspace Members
@@ -452,11 +454,16 @@ const ActiveUsersPage: React.FC = () => {
                   width: 8,
                   height: 8,
                   borderRadius: "50%",
-                  bgcolor: "#2950DA",
+                  bgcolor: colors.primary,
                   opacity: 0.7,
                 }}
               />
-              <Typography sx={{ color: "#666", fontSize: 12 }}>
+              <Typography
+                sx={{
+                  color: colors.textSecondary,
+                  fontSize: typography.caption.size,
+                }}
+              >
                 {totalMembers} members
               </Typography>
             </Box>
@@ -483,15 +490,12 @@ const ActiveUsersPage: React.FC = () => {
         </Box>
 
         {successMessage && (
-          <Alert severity="success" sx={{ mb: 2, mx: { xs: 2, md: 6 } }}>
+          <Alert severity="success" sx={{ mb: 2 }}>
             {successMessage}
           </Alert>
         )}
 
-        <Paper
-          elevation={0}
-          sx={{ borderRadius: 3, p: { xs: 2, md: 3 }, mx: { xs: 2, md: 6 } }}
-        >
+        <Paper elevation={0} sx={{ borderRadius: 3, p: { xs: 2, md: 3 } }}>
           <Box
             sx={{
               display: "flex",

@@ -31,6 +31,7 @@ import LogoutOutlinedIcon from "@mui/icons-material/LogoutOutlined";
 import { fetchWithAuth } from "../utils/session";
 import AdminSidebar from "../components/sidebar/AdminSidebar";
 import { logout } from "../services/authService";
+import { colors, spacing, typography } from "../styles/tokens";
 import { getAvatarUrl } from "../services/avatarService";
 
 const ProfilePage: React.FC = () => {
@@ -272,26 +273,8 @@ const ProfilePage: React.FC = () => {
           ml: { xs: 0, md: "220px" },
         }}
       >
-        {/* Top Bar with CommonNavbar */}
-        <Box
-          sx={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            p: 2,
-            bgcolor: "#fff",
-            boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-          }}
-        >
-          <Typography variant="h5" sx={{ fontWeight: 700, color: "#222" }}>
-            Profile
-          </Typography>
-          <IconButton onClick={() => setSidebarOpen(true)}>
-            <PhotoCameraIcon sx={{ color: "#2950DA", fontSize: 28 }} />
-          </IconButton>
-        </Box>
         {/* Content */}
-        <Box sx={{ flex: 1, px: { xs: 2, md: 6 }, py: { xs: 2, md: 4 } }}>
+        <Box sx={{ flex: 1, px: spacing.pagePx, py: spacing.pagePy }}>
           {/* Header */}
           <Box
             sx={{
@@ -301,9 +284,41 @@ const ProfilePage: React.FC = () => {
               mb: 2,
             }}
           >
-            <Typography variant="h4" sx={{ fontWeight: 700, color: "#222" }}>
-              Profile
-            </Typography>
+            <Box>
+              <Typography
+                sx={{
+                  fontWeight: typography.title.weight,
+                  fontSize: {
+                    xs: typography.title.xs,
+                    md: typography.title.md,
+                  },
+                  color: colors.textPrimary,
+                }}
+              >
+                Profile
+              </Typography>
+              <Box
+                sx={{ display: "flex", alignItems: "center", gap: 1, mt: 0.5 }}
+              >
+                <Box
+                  sx={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: "50%",
+                    bgcolor: colors.primary,
+                    opacity: 0.7,
+                  }}
+                />
+                <Typography
+                  sx={{
+                    color: colors.textSecondary,
+                    fontSize: typography.caption.size,
+                  }}
+                >
+                  {profile?.email || ""}
+                </Typography>
+              </Box>
+            </Box>
           </Box>
           {loading ? (
             <Box
@@ -338,7 +353,7 @@ const ProfilePage: React.FC = () => {
               p: 0,
               mb: 4,
               overflow: "hidden",
-              bgcolor: "#F5F7FA",
+              bgcolor: colors.surfaceMuted,
             }}
           >
             <Box

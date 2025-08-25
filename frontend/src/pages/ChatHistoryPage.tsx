@@ -13,6 +13,7 @@ import {
   getUserChatSessions,
   toggleConversationArchive,
   createShareableLink,
+  getConversations,
   type Persona as BackendPersona,
   type Conversation,
 } from "../services/personaService";
@@ -128,22 +129,6 @@ const ChatHistoryPage: React.FC = () => {
   // Archive functionality is now integrated with the backend through ConversationArchiveToggle component
 
   useEffect(() => {
-    // Get user from localStorage
-    let userId = "";
-    try {
-      const user = JSON.parse(localStorage.getItem("user") || "{}");
-      userId = user.id || "";
-      console.log("User from localStorage:", user);
-      console.log("User ID:", userId);
-    } catch (error) {
-      console.error("Error parsing user from localStorage:", error);
-    }
-
-    if (!userId) {
-      console.log("No user ID found, skipping fetch");
-      return;
-    }
-
     console.log("Starting chat history fetch for tab:", tab);
     // Fetch chat sessions from backend API
     const fetchChatHistory = async () => {
@@ -197,8 +182,36 @@ const ChatHistoryPage: React.FC = () => {
 
           setSessions(sessionChats);
         } else {
-          console.log("No chat sessions found");
-          setSessions([]);
+          console.log(
+            "No chat sessions found, falling back to conversations list"
+          );
+          try {
+            const convRes = await getConversations(tab === "archived");
+            const conversations = convRes?.data || [];
+            const sessionChats: SessionChat[] = conversations.map((c: any) => {
+              const lastMessage = c.lastMessage || "No messages";
+              return {
+                conversation_id: c.id,
+                persona: c.persona?.name || "Unknown Persona",
+                personaId: c.persona?.id,
+                sessionId: "",
+                last_message: lastMessage,
+                date: new Date(c.updatedAt).toLocaleDateString(),
+                chats: [],
+                archived: !!c.archivedAt,
+                lastTimestamp: c.updatedAt,
+              } as SessionChat;
+            });
+            sessionChats.sort(
+              (a, b) =>
+                new Date(b.lastTimestamp).getTime() -
+                new Date(a.lastTimestamp).getTime()
+            );
+            setSessions(sessionChats);
+          } catch (fallbackErr) {
+            console.error("Fallback to conversations failed:", fallbackErr);
+            setSessions([]);
+          }
         }
       } catch (error) {
         console.error("Error fetching chat sessions:", error);
@@ -318,8 +331,9 @@ const ChatHistoryPage: React.FC = () => {
     const persona = personas.find((p) => p.id === session.personaId);
     console.log("Found persona for session:", persona);
 
+    const avatarSrc = getAvatarUrl(persona?.avatarUrl || persona?.avatar || "");
     const chat = {
-      avatar: getAvatarUrl(persona?.avatarUrl || persona?.avatar || ""),
+      avatar: avatarSrc || "",
       name: persona?.name || `Persona: ${session.persona}`,
       message: session.last_message,
       date: session.date,

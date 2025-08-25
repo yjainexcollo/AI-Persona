@@ -113,9 +113,10 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
             alt="crudo.ai logo"
             loading="lazy"
             sx={{
-              height: { xs: 40, md: 50 },
+              height: { xs: 10, md: 20 },
               width: "auto",
               transition: "height 0.3s ease",
+              cursor: "pointer",
             }}
           />
         </Box>

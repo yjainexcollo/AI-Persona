@@ -191,6 +191,7 @@ model AuditEvent {
 model Persona {
     id                  String   @id @default(cuid())
     name                String
+    personalName        String?  // The actual name of the persona (e.g., "Sarah Chen", "John Smith")
     personaRole         String?  // The role this persona represents (e.g., "CFO", "Marketing Manager")
     about               String?  // Brief description about the persona
     traits              Json?  // Key personality traits

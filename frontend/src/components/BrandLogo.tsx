@@ -33,7 +33,7 @@ const BrandLogo: React.FC<BrandLogoProps> = ({
         src={imgSrc}
         alt={alt}
         loading="lazy"
-        sx={{ height: { xs: 28, sm: 50 }, width: "auto" }}
+        sx={{ height: { xs: 10, sm: 20 }, width: "auto", cursor: "pointer" }}
       />
     </Box>
   );

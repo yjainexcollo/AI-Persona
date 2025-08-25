@@ -35,6 +35,7 @@ interface ChatSearchModalProps {
   sessions: ChatSession[];
   onSelect: (result: { session_id: string; msgIdx: number }) => void;
   onStartNewChat: () => void;
+  hasPersonaContext?: boolean; // Add this prop to know if we have persona context
 }
 
 // Highlight search terms in text
@@ -61,6 +62,7 @@ const ChatSearchModal: React.FC<ChatSearchModalProps> = ({
   sessions,
   onSelect,
   onStartNewChat,
+  hasPersonaContext = true, // Default to true for backward compatibility
 }) => {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<any[]>([]); // [{session_id, msgIdx, message, date}]
@@ -72,16 +74,16 @@ const ChatSearchModal: React.FC<ChatSearchModalProps> = ({
     if (open) {
       setQuery("");
       setResults([]);
-      setSelected(0);
+      setSelected(hasPersonaContext ? 0 : 1);
       setTimeout(() => inputRef.current?.focus(), 100);
     }
-  }, [open]);
+  }, [open, hasPersonaContext]);
 
   // Search through chat sessions (robust to different message shapes)
   useEffect(() => {
     if (!query.trim()) {
       setResults([]);
-      setSelected(0);
+      setSelected(hasPersonaContext ? 0 : 1);
       return;
     }
     const lower = query.toLowerCase();
@@ -146,23 +148,28 @@ const ChatSearchModal: React.FC<ChatSearchModalProps> = ({
       });
     });
     setResults(found);
-    setSelected(0);
-  }, [query, sessions]);
+    setSelected(hasPersonaContext ? 0 : 1);
+  }, [query, sessions, hasPersonaContext]);
 
   // Handle keyboard navigation
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "ArrowDown") {
-      setSelected((s) => Math.min(s + 1, results.length)); // +1 for new chat option
+      setSelected((s) => {
+        const maxIndex = hasPersonaContext
+          ? results.length
+          : results.length - 1;
+        return Math.min(s + 1, maxIndex);
+      });
       e.preventDefault();
     } else if (e.key === "ArrowUp") {
-      setSelected((s) => Math.max(s - 1, 0));
+      setSelected((s) => Math.max(s - 1, hasPersonaContext ? 0 : 1));
       e.preventDefault();
     } else if (e.key === "Enter") {
-      if (selected === 0) {
+      if (selected === 0 && hasPersonaContext) {
         onStartNewChat();
         onClose();
-      } else if (results[selected - 1]) {
-        onSelect(results[selected - 1]);
+      } else if (results[selected - (hasPersonaContext ? 1 : 0)]) {
+        onSelect(results[selected - (hasPersonaContext ? 1 : 0)]);
         onClose();
       }
     } else if (e.key === "Escape") {
@@ -199,12 +206,38 @@ const ChatSearchModal: React.FC<ChatSearchModalProps> = ({
               gap: 2,
             }}
           >
+            <Box
+              sx={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                mb: 1,
+              }}
+            >
+              <Typography
+                variant="h6"
+                sx={{ fontWeight: 600, color: "#374151" }}
+              >
+                Search Chats
+              </Typography>
+              <Typography
+                variant="caption"
+                sx={{ color: "#6B7280", fontFamily: "monospace" }}
+              >
+                ⌘K
+              </Typography>
+            </Box>
             <InputBase
               inputRef={inputRef}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Search all chats..."
+              placeholder={
+                hasPersonaContext
+                  ? "Search all chats..."
+                  : "Search chats (navigate to a persona first)"
+              }
+              disabled={!hasPersonaContext}
               sx={{
                 fontSize: 18,
                 px: 1,
@@ -212,32 +245,94 @@ const ChatSearchModal: React.FC<ChatSearchModalProps> = ({
                 border: "1px solid #e0e0e0",
                 borderRadius: 2,
                 mb: 1,
-                bgcolor: "#fafafa",
+                bgcolor: hasPersonaContext ? "#fafafa" : "#f5f5f5",
+                opacity: hasPersonaContext ? 1 : 0.7,
+                cursor: hasPersonaContext ? "text" : "not-allowed",
               }}
               fullWidth
-              autoFocus
+              autoFocus={hasPersonaContext}
             />
+
+            {!hasPersonaContext && (
+              <Box
+                sx={{
+                  p: 2,
+                  mb: 1,
+                  bgcolor: "#FEF3C7",
+                  border: "1px solid #F59E0B",
+                  borderRadius: 2,
+                  textAlign: "center",
+                }}
+              >
+                <Typography
+                  variant="body2"
+                  color="#92400E"
+                  sx={{ fontWeight: 500 }}
+                >
+                  🔍 Search Unavailable
+                </Typography>
+                <Typography
+                  variant="caption"
+                  color="#92400E"
+                  sx={{ display: "block", mt: 0.5 }}
+                >
+                  Navigate to a persona chat page to search through
+                  conversations
+                </Typography>
+              </Box>
+            )}
             <List sx={{ maxHeight: 320, overflowY: "auto", p: 0 }}>
               {/* Start new chat option */}
               <ListItem
                 selected={selected === 0}
                 onClick={() => {
-                  onStartNewChat();
-                  onClose();
+                  if (hasPersonaContext) {
+                    onStartNewChat();
+                    onClose();
+                  }
                 }}
+                disabled={!hasPersonaContext}
                 sx={{
                   bgcolor: selected === 0 ? "#E8ECF2" : undefined,
                   borderRadius: 2,
                   mb: 0.5,
-                  cursor: "pointer",
+                  cursor: hasPersonaContext ? "pointer" : "not-allowed",
                   alignItems: "center",
                   fontWeight: 600,
-                  color: "#2950DA",
+                  color: hasPersonaContext ? "#2950DA" : "#9CA3AF",
+                  opacity: hasPersonaContext ? 1 : 0.6,
                 }}
               >
                 + Start a new chat
+                {!hasPersonaContext && (
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      ml: 1,
+                      color: "#6B7280",
+                      fontStyle: "italic",
+                    }}
+                  >
+                    (No persona context)
+                  </Typography>
+                )}
               </ListItem>
               <Divider sx={{ my: 1 }} />
+              {!hasPersonaContext && (
+                <ListItem sx={{ px: 2, py: 1 }}>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{
+                      fontStyle: "italic",
+                      textAlign: "center",
+                      width: "100%",
+                    }}
+                  >
+                    Navigate to a persona chat to start new conversations
+                  </Typography>
+                </ListItem>
+              )}
               {results.length === 0 && query.trim() && (
                 <ListItem>
                   <Typography color="text.secondary">

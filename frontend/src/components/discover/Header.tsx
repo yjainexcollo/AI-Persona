@@ -124,9 +124,10 @@ const Header: React.FC = () => {
               src="/logo.png"
               alt="Crudo.ai"
               sx={{
-                height: { xs: 22, sm: 50 },
+                height: { xs: 10, sm: 20 },
                 width: "auto",
                 display: "block",
+                cursor: "pointer",
               }}
               onClick={() => navigate("/")}
             />

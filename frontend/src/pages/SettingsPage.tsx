@@ -16,10 +16,6 @@ import {
   Select,
   MenuItem,
   Grid,
-  Card,
-  CardContent,
-  CardHeader,
-  Divider,
   Alert,
   CircularProgress,
 } from "@mui/material";
@@ -29,6 +25,7 @@ import PolicyIcon from "@mui/icons-material/Policy";
 import WorkspacesIcon from "@mui/icons-material/Workspaces";
 import MenuIcon from "@mui/icons-material/Menu";
 import AdminSidebar from "../components/sidebar/AdminSidebar";
+import { colors, spacing, typography } from "../styles/tokens";
 import { fetchWithAuth } from "../utils/session";
 import { logout } from "../services/authService";
 import {
@@ -328,6 +325,8 @@ const SettingsPage: React.FC = () => {
           flexDirection: "column",
           minHeight: "100vh",
           bgcolor: "#f8f9fa",
+          px: spacing.pagePx,
+          py: spacing.pagePy,
         }}
       >
         {/* Top Bar with CommonNavbar */}
@@ -341,7 +340,14 @@ const SettingsPage: React.FC = () => {
             boxShadow: "0 2px 8px 0 rgba(44,62,80,0.04)",
           }}
         >
-          <Typography variant="h5" sx={{ fontWeight: 700, color: "#222" }}>
+          <Typography
+            variant="h5"
+            sx={{
+              fontWeight: typography.title.weight,
+              color: colors.textPrimary,
+              fontSize: { xs: typography.title.xs, md: typography.title.md },
+            }}
+          >
             Settings
           </Typography>
           <Button
@@ -437,7 +443,7 @@ const SettingsPage: React.FC = () => {
           <Box
             sx={{
               flex: 1,
-              p: { xs: 2, md: 6 },
+              p: 0,
               bgcolor: "#f7f8fa",
               display: "flex",
               flexDirection: "column",

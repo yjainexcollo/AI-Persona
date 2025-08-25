@@ -361,7 +361,7 @@ const getConversations = asyncHandler(async (req, res) => {
     logger.info("Conversations retrieved successfully", {
       userId,
       workspaceId,
-      count: conversations.conversations?.length || 0,
+      count: Array.isArray(conversations) ? conversations.length : 0,
       archived: options.archived,
       ipAddress,
       userAgent,

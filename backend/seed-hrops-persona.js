@@ -6,6 +6,7 @@ const prisma = new PrismaClient();
 
 const hrOpsPersona = {
   name: "HR Ops / Payroll Manager",
+  personalName: "Sarah Chen",
   description:
     "Experienced HR operations and payroll professionals with deep expertise in end-to-end payroll processing, statutory compliance, and employee data management.",
   avatarUrl:
@@ -47,6 +48,7 @@ async function seedHrOpsPersona() {
         where: { id: existingHrOps.id },
         data: {
           name: hrOpsPersona.name,
+          personalName: hrOpsPersona.personalName,
           description: hrOpsPersona.description,
           avatarUrl: hrOpsPersona.avatarUrl,
           webhookUrl: encrypt(hrOpsPersona.webhookUrl, encryptionKey),
@@ -64,6 +66,7 @@ async function seedHrOpsPersona() {
     const createdPersona = await prisma.persona.create({
       data: {
         name: hrOpsPersona.name,
+        personalName: hrOpsPersona.personalName,
         description: hrOpsPersona.description,
         avatarUrl: hrOpsPersona.avatarUrl,
         webhookUrl: encrypt(hrOpsPersona.webhookUrl, encryptionKey),

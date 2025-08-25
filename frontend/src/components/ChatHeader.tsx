@@ -1,4 +1,3 @@
-// Header component for chat interface with navigation and user menu
 import React from "react";
 import {
   AppBar,
@@ -211,6 +210,24 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
                 onClick={() => navigate("/chat-history")}
               >
                 Chat History
+              </Button>
+              <Button
+                sx={{
+                  color: location.pathname === "/" ? "#2950DA" : "#666",
+                  fontFamily: "Inter, Roboto, Helvetica, Arial, sans-serif",
+                  fontWeight: 500,
+                  fontSize: "16px",
+                  lineHeight: "24px",
+                  letterSpacing: 0,
+                  textTransform: "none",
+                  "&:hover": {
+                    backgroundColor: "transparent",
+                    color: "#2950DA",
+                  },
+                }}
+                onClick={() => navigate("/")}
+              >
+                My Workspace
               </Button>
             </Stack>
           )}

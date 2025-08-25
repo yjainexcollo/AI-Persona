@@ -71,6 +71,7 @@ async function getPersonas(userId, options = {}) {
     return personas.map((persona) => ({
       id: persona.id,
       name: persona.name,
+      personalName: persona.personalName,
       personaRole: persona.personaRole,
       about: persona.about,
       traits: persona.traits,
@@ -136,6 +137,7 @@ async function getPersonaById(personaId, userId) {
     return {
       id: persona.id,
       name: persona.name,
+      personalName: persona.personalName,
       personaRole: persona.personaRole,
       about: persona.about,
       traits: persona.traits,
@@ -564,8 +566,9 @@ async function getConversations(userId, workspaceId, options = {}) {
     return conversations.map((conversation) => ({
       id: conversation.id,
       title: conversation.title,
+      personaId: conversation.personaId,
       persona: conversation.persona,
-      owner: conversation.user,
+      user: conversation.user,
       visibility: conversation.visibility,
       archivedAt: conversation.archivedAt,
       lastMessage: conversation.messages[0]?.content || null,
@@ -621,9 +624,7 @@ async function updateConversationVisibility(
 
     // Check permissions: owner or workspace admin
     const isOwner = conversation.userId === userId;
-    const isAdmin =
-      conversation.user.role === "ADMIN" &&
-      conversation.user.workspaceId === conversation.user.workspaceId;
+    const isAdmin = conversation.user.role === "ADMIN";
 
     if (!isOwner && !isAdmin) {
       throw new ApiError(

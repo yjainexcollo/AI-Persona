@@ -28,6 +28,7 @@ import type { Persona } from "../../types";
 import {
   getPersonas,
   getConversations,
+  getUserChatSessions,
   createShareableLink,
   type Conversation,
 } from "../../services/personaService";
@@ -44,8 +45,18 @@ interface FavoritePersona {
 const Sidebar: React.FC<{
   onClose?: () => void;
   currentPersonaId?: string;
+  currentConversationId?: string;
   onSearchChats?: () => void;
-}> = ({ onClose, currentPersonaId, onSearchChats }) => {
+  activePersona?: { id: string; name: string; avatarUrl?: string };
+  activeLastMessage?: string;
+}> = ({
+  onClose,
+  currentPersonaId,
+  currentConversationId,
+  onSearchChats,
+  activePersona,
+  activeLastMessage,
+}) => {
   const navigate = useNavigate();
   const [personas, setPersonas] = useState<Persona[]>([]);
   const [favoritePersonas, setFavoritePersonas] = useState<FavoritePersona[]>(
@@ -103,30 +114,55 @@ const Sidebar: React.FC<{
     fetchFavorites();
   }, [personas]);
 
-  // Fetch recent chats from backend API
+  // Fetch recent chats from backend API (use sessions for proper message loading)
   useEffect(() => {
     const fetchRecentChats = async () => {
       setLoadingRecentChats(true);
       try {
-        const response = await getConversations();
-        const conversations = response.data || [];
+        // Use chat sessions API like ChatHistory does for consistency
+        const sessions = await getUserChatSessions();
+        const normalized: Conversation[] = (sessions || [])
+          .map((s: any) => {
+            const lastMsg = (s.messages || []).slice(-1)[0];
+            // Only include sessions that have a valid conversation ID
+            if (!s.conversation?.id) return null;
+            return {
+              id: s.conversation.id,
+              title: s.conversation?.title || "",
+              userId: s.user?.id || "",
+              personaId: s.persona?.id || s.conversation?.personaId || "",
+              visibility: (s.conversation?.visibility || "PRIVATE") as any,
+              archivedAt: s.conversation?.archivedAt || null,
+              createdAt: s.conversation?.createdAt || new Date().toISOString(),
+              updatedAt: s.conversation?.updatedAt || new Date().toISOString(),
+              persona: {
+                id: s.persona?.id || "",
+                name: s.persona?.name || "",
+                avatarUrl: s.persona?.avatarUrl || "",
+              },
+              user: s.user || { id: "", name: "", email: "" },
+              messages: s.messages || [],
+              _count: { messages: (s.messages || []).length },
+              lastMessage: lastMsg ? lastMsg.content || lastMsg.text : "",
+              // Store sessionId for proper navigation
+              sessionId: s.sessionId,
+            } as Conversation & { sessionId?: string };
+          })
+          .filter((c) => c !== null);
 
-        // Filter conversations by current persona and take the last 10
+        let list = normalized;
         if (currentPersonaId) {
-          const personaConversations = conversations
-            .filter(
-              (conversation) => conversation.personaId === currentPersonaId
-            )
-            .sort(
-              (a, b) =>
-                new Date(b.updatedAt).getTime() -
-                new Date(a.updatedAt).getTime()
-            )
-            .slice(0, 10);
-          setRecentChats(personaConversations);
-        } else {
-          setRecentChats([]);
+          list = list.filter((c) => c.personaId === currentPersonaId);
         }
+
+        list = list
+          .sort(
+            (a, b) =>
+              new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+          )
+          .slice(0, 10);
+
+        setRecentChats(list);
       } catch (error) {
         console.error("Error fetching recent chats:", error);
         setRecentChats([]);
@@ -138,13 +174,25 @@ const Sidebar: React.FC<{
 
   // Handler for New Chat button
   const handleNewChat = () => {
+    const draftId = `${Date.now().toString(36)}-${Math.random()
+      .toString(36)
+      .slice(2, 8)}`;
+    // Prefer starting a new chat for the current persona context if provided
+    if (currentPersonaId) {
+      navigate(`/chat/${currentPersonaId}?draft=${draftId}`);
+      if (onClose) onClose();
+      return;
+    }
+
     const defaultPersona = personas[0];
     if (defaultPersona) {
-      // Generate a unique session id for a new chat
-      const sessionId = Date.now().toString();
-      navigate(`/chat/${defaultPersona.id}?session=${sessionId}`);
+      navigate(`/chat/${defaultPersona.id}?draft=${draftId}`);
       if (onClose) onClose();
+      return;
     }
+    // If no personas available, route to discovery to pick one
+    navigate(`/discovery`);
+    if (onClose) onClose();
   };
 
   // Handler for favorite persona click
@@ -229,15 +277,56 @@ const Sidebar: React.FC<{
   };
 
   // Handler for clicking on a recent chat
-  const handleRecentChatClick = (conversation: Conversation) => {
+  const handleRecentChatClick = (
+    conversation: Conversation & { sessionId?: string }
+  ) => {
     const personaId = conversation.personaId;
     const conversationId = conversation.id;
+    const sessionId = (conversation as any).sessionId;
 
     if (personaId && conversationId) {
-      navigate(`/chat/${personaId}?conversationId=${conversationId}`);
+      // Navigate with both conversationId and sessionId like ChatHistory does
+      const url = sessionId
+        ? `/chat/${personaId}?conversationId=${conversationId}&sessionId=${sessionId}`
+        : `/chat/${personaId}?conversationId=${conversationId}`;
+      navigate(url);
       if (onClose) onClose();
     }
   };
+
+  // Determine the active conversation (if provided)
+  let activeConversation =
+    currentConversationId && recentChats.length
+      ? recentChats.find((c) => c.id === currentConversationId) || null
+      : null;
+
+  // If not found in recent list but we have current persona context, synthesize a placeholder active chat
+  if (!activeConversation && activePersona) {
+    activeConversation = {
+      id: currentConversationId || `draft-${activePersona.id}`,
+      title: "",
+      userId: "",
+      personaId: activePersona.id,
+      visibility: "PRIVATE" as any,
+      archivedAt: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      persona: {
+        id: activePersona.id,
+        name: activePersona.name,
+        avatarUrl: activePersona.avatarUrl || "",
+      },
+      user: { id: "", name: "", email: "" },
+      messages: [],
+      _count: { messages: 0 },
+      lastMessage: activeLastMessage || "",
+    } as Conversation;
+  }
+
+  // Build the recent list excluding the active conversation to avoid duplication
+  const recentWithoutActive = activeConversation
+    ? recentChats.filter((c) => c.id !== activeConversation.id)
+    : recentChats;
 
   return (
     <Box
@@ -304,9 +393,10 @@ const Sidebar: React.FC<{
             src="/logo.png"
             alt="Logo"
             style={{
-              height: "50px",
+              height: "20px",
               width: "auto",
               verticalAlign: "middle",
+              cursor: "pointer",
             }}
           />
         </Typography>
@@ -317,16 +407,15 @@ const Sidebar: React.FC<{
         variant="contained"
         size="medium"
         startIcon={<AddIcon sx={{ fontSize: 18 }} />}
-        disabled={personas.length === 0}
         aria-label="Start a new chat"
         sx={{
           background: "linear-gradient(90deg, #2950DA 0%, #1E88E5 100%)",
           color: "#fff",
           borderRadius: 2,
-          fontWeight: 600,
-          fontSize: { xs: 14, sm: 15 },
-          py: { xs: 1.1, sm: 1.3 },
-          mb: { xs: 1.25, sm: 1.5 },
+          fontWeight: 700,
+          fontSize: { xs: 15, sm: 16 },
+          py: { xs: 1.3, sm: 3 },
+          mb: { xs: 1.5, sm: 1.8 },
           mt: { xs: 1.5, sm: 2 },
           boxShadow: "0 4px 12px rgba(41,80,218,0.18)",
           textTransform: "none",
@@ -551,6 +640,110 @@ const Sidebar: React.FC<{
         )}
       </List>
 
+      {/* Active Chat (pinned at top if available) */}
+      {activeConversation && (
+        <List
+          sx={{
+            mx: { xs: 1.5, sm: 2 },
+            width: "100%",
+            maxWidth: "100%",
+            mb: 1,
+          }}
+          subheader={
+            <ListSubheader
+              component="div"
+              disableSticky
+              sx={{
+                bgcolor: "transparent",
+                fontWeight: 800,
+                color: "#111",
+                fontSize: { xs: 18, sm: 20 },
+                letterSpacing: -1,
+                px: 0,
+                py: 0.5,
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                maxWidth: "100%",
+              }}
+            >
+              Active Chat
+            </ListSubheader>
+          }
+        >
+          <ListItem
+            button
+            sx={{
+              px: 0,
+              py: { xs: 1, sm: 1.2 },
+              minWidth: 0,
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
+              overflow: "visible",
+              bgcolor: "#EEF3FF",
+              borderRadius: 1.5,
+            }}
+            onClick={() => handleRecentChatClick(activeConversation)}
+          >
+            <ListItemAvatar sx={{ minWidth: 36, flexShrink: 0 }}>
+              <Avatar
+                src={activeConversation.persona?.avatarUrl || ""}
+                sx={{ width: 28, height: 28, mr: 1 }}
+              />
+            </ListItemAvatar>
+            <Box
+              sx={{
+                flex: 1,
+                minWidth: 0,
+                overflow: "visible",
+                display: "flex",
+                flexDirection: "column",
+                pr: 1,
+              }}
+            >
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  width: "100%",
+                  mb: 0,
+                }}
+              >
+                <Typography
+                  sx={{
+                    fontWeight: 600,
+                    color: "#1E3A8A",
+                    fontSize: 14,
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    flex: "1 1 0%",
+                    minWidth: 0,
+                    maxWidth: "calc(100% - 40px)",
+                    mr: 0,
+                  }}
+                >
+                  {activeConversation.persona?.name || "Unknown Persona"}
+                </Typography>
+              </Box>
+              <Typography
+                sx={{
+                  color: "#1E3A8A",
+                  fontSize: 12,
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  minWidth: 0,
+                }}
+              >
+                {activeConversation.lastMessage || "No messages"}
+              </Typography>
+            </Box>
+          </ListItem>
+        </List>
+      )}
+
       {/* Recent Chats */}
       <List
         sx={{ mx: { xs: 1.5, sm: 2 }, width: "100%", maxWidth: "100%" }}
@@ -595,8 +788,8 @@ const Sidebar: React.FC<{
               }
             />
           </ListItem>
-        ) : recentChats.length > 0 ? (
-          recentChats.map((conversation) => (
+        ) : recentWithoutActive.length > 0 ? (
+          recentWithoutActive.map((conversation) => (
             <ListItem
               key={conversation.id}
               button

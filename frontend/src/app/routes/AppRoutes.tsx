@@ -122,7 +122,14 @@ const AppRoutes: React.FC = () => {
                 </RequireAuth>
               }
             />
-            <Route path={paths.chatHistory} element={<ChatHistoryPage />} />
+            <Route
+              path={paths.chatHistory}
+              element={
+                <RequireAuth>
+                  <ChatHistoryPage />
+                </RequireAuth>
+              }
+            />
             <Route path={paths.settings} element={<SettingsPage />} />
             <Route
               path={paths.workspaceSettings}

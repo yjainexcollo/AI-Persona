@@ -34,6 +34,8 @@ import {
   type Conversation,
   type MessageResponse,
 } from "../services/personaService";
+import { getWorkspaceDetails } from "../services/workspaceService";
+import { storage } from "../lib/storage/localStorage";
 import MessageReaction from "../components/MessageReaction";
 
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
@@ -115,6 +117,7 @@ export default function ChatPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const conversationIdFromUrl = searchParams.get("conversationId");
+  const draftIdFromUrl = searchParams.get("draft");
 
   // All hooks must be called unconditionally at the top
   const [persona, setPersona] = useState<Persona | null>(null);
@@ -156,14 +159,32 @@ export default function ChatPage() {
   const [loadingPersona, setLoadingPersona] = useState(true);
   const [searchOpen, setSearchOpen] = useState(false);
   const [chatSessions, setChatSessions] = useState<any[]>([]);
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+  const [isRestoringConversation, setIsRestoringConversation] = useState(false);
+  const [workspaceName, setWorkspaceName] = useState<string>("");
+
+  // Fetch workspace details
+  const loadWorkspaceDetails = useCallback(async () => {
+    try {
+      const workspace = await getWorkspaceDetails();
+      setWorkspaceName(workspace.name);
+    } catch (error) {
+      console.error("Error loading workspace details:", error);
+      // Fallback to localStorage
+      const storedWorkspaceName = storage.getWorkspaceName();
+      if (storedWorkspaceName) {
+        setWorkspaceName(storedWorkspaceName);
+      }
+    }
+  }, []);
 
   const loadSearchSessions = useCallback(async () => {
     try {
       const sessions = await getUserChatSessions();
       const compact = (sessions || [])
         .map((s) => ({
-          session_id: s.conversation?.id || s.sessionId || s.conversationId,
-          date: s.conversation?.updatedAt || s.user?.updatedAt,
+          session_id: s.conversation?.id || s.sessionId,
+          date: s.conversation?.updatedAt || s.conversation?.createdAt,
           messages: (s.messages || []).map((m) => ({
             sender: m.role === "USER" ? "user" : "ai",
             text: m.content,
@@ -200,6 +221,20 @@ export default function ChatPage() {
   const loadConversations = useCallback(async () => {
     // Only load conversations if we have a persona
     if (!persona?.id) return;
+
+    // Set restoring state if we're trying to load a conversation from URL
+    if (draftIdFromUrl) {
+      // In draft mode, skip any restore work inside this loader
+      return;
+    }
+
+    if (conversationIdFromUrl) {
+      setIsRestoringConversation(true);
+      // Add a timeout fallback to prevent infinite loading
+      setTimeout(() => {
+        setIsRestoringConversation(false);
+      }, 10000); // 10 second timeout
+    }
 
     try {
       const response = await getConversations();
@@ -317,8 +352,27 @@ export default function ChatPage() {
       }
     } catch (error) {
       console.error("Error loading conversations:", error);
+    } finally {
+      // Always clear restoring state when conversation loading completes
+      setIsRestoringConversation(false);
     }
   }, [persona?.id, conversationIdFromUrl, currentConversationId, searchParams]);
+
+  // Immediately react to draft mode by clearing current conversation and messages
+  useEffect(() => {
+    if (draftIdFromUrl) {
+      setCurrentConversationId("");
+      setCurrentConversation(null);
+      setMessages([]);
+      setIsRestoringConversation(false);
+      // Remove stale conversationId from URL to avoid accidental restores
+      const url = new URL(window.location.href);
+      if (url.searchParams.has("conversationId")) {
+        url.searchParams.delete("conversationId");
+        window.history.replaceState({}, "", url.toString());
+      }
+    }
+  }, [draftIdFromUrl]);
 
   // Load conversations from backend when persona changes
   useEffect(() => {
@@ -369,6 +423,11 @@ export default function ChatPage() {
       fetchAllPersonas();
     }
   }, [allPersonas.length]);
+
+  // Load workspace details on component mount
+  useEffect(() => {
+    loadWorkspaceDetails();
+  }, [loadWorkspaceDetails]);
 
   useEffect(() => {
     try {
@@ -481,13 +540,16 @@ export default function ChatPage() {
     const handler = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
-        setSearchOpen(true);
-        loadSearchSessions();
+        // Only open search if we have a valid persona
+        if (persona?.id) {
+          setSearchOpen(true);
+          loadSearchSessions();
+        }
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [loadSearchSessions]);
+  }, [loadSearchSessions, persona?.id]);
 
   // Edit message handlers
   const handleEditMessage = (messageId: string, currentText: string) => {
@@ -501,8 +563,6 @@ export default function ChatPage() {
       return;
     }
 
-    // Check if message is recent (10 minutes - basic check)
-    // Note: Backend will do the actual validation
     if (message.id) {
       const messageTime = new Date(message.id).getTime(); // Using ID as timestamp for now
       const tenMinutesAgo = Date.now() - 10 * 60 * 1000;
@@ -796,6 +856,10 @@ export default function ChatPage() {
   const hasUserMessages =
     messages.filter((msg) => msg.sender === "user").length > 0;
 
+  // Check if we're in a conversation restoration state
+  const isInConversationRestoration =
+    conversationIdFromUrl && (isRestoringConversation || messages.length === 0);
+
   return (
     <Box
       sx={{
@@ -882,6 +946,17 @@ export default function ChatPage() {
           <Sidebar
             onClose={handleSidebarClose}
             currentPersonaId={persona.id}
+            currentConversationId={currentConversationId}
+            activePersona={{
+              id: persona.id,
+              name: persona.personalName || persona.name,
+              avatarUrl: persona.avatarUrl || persona.avatar,
+            }}
+            activeLastMessage={
+              messages.length > 0
+                ? messages[messages.length - 1]?.text || ""
+                : ""
+            }
             onSearchChats={() => setSearchOpen(true)}
           />
         </Box>
@@ -933,255 +1008,309 @@ export default function ChatPage() {
                 overflow: "visible",
               }}
             >
-              {/* Persona Profile with separate click handlers */}
-              <Box
-                sx={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  mb: { xs: 2, sm: 3 },
-                  px: { xs: 2, sm: 0 },
-                  pt: { xs: 2, sm: 3 },
-                  pb: { xs: 1, sm: 2 },
-                  position: "relative",
-                }}
-              >
-                {/* Avatar - clicks to view persona */}
-                <Avatar
-                  key={persona.id}
-                  src={persona.avatarUrl || persona.avatar || ""}
+              {/* Persona Profile with separate click handlers - Hide when restoring conversation */}
+              {!isInConversationRestoration && (
+                <Box
                   sx={{
-                    width: { xs: 80, sm: 96 },
-                    height: { xs: 80, sm: 96 },
-                    mb: { xs: 1.5, sm: 2 },
-                    cursor: "pointer",
-                    transition: "transform 0.2s ease-in-out",
-                    "&:hover": {
-                      transform: "scale(1.05)",
-                    },
-                  }}
-                  onClick={handleAvatarClick}
-                  onError={(e) => {
-                    console.error(
-                      "Avatar image failed to load:",
-                      persona.avatarUrl || persona.avatar
-                    );
-                    console.error("Error event:", e);
-                  }}
-                  onLoad={() => {
-                    // Avatar image loaded successfully
-                  }}
-                />
-
-                {/* Name */}
-                <Typography
-                  variant="h5"
-                  sx={{
-                    fontWeight: 600,
-                    color: "#222",
-                    mb: 0.5,
-                    fontSize: { xs: "20px", sm: "24px" },
-                    textAlign: "center",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    mb: { xs: 2, sm: 3 },
+                    px: { xs: 2, sm: 0 },
+                    pt: { xs: 2, sm: 3 },
+                    pb: { xs: 1, sm: 2 },
+                    position: "relative",
                   }}
                 >
-                  {persona.personalName || persona.name}
-                  {persona.isAvailable === false && (
-                    <Box
-                      component="span"
-                      sx={{
-                        ml: 1,
-                        px: 1,
-                        py: 0.5,
-                        bgcolor: "#ffebee",
-                        color: "#c62828",
-                        fontSize: "12px",
-                        borderRadius: 1,
-                        fontWeight: 500,
-                      }}
-                    >
-                      Temporarily Unavailable
-                    </Box>
-                  )}
-                </Typography>
-
-                {/* Role */}
-                <Typography
-                  variant="subtitle1"
-                  sx={{
-                    color: "#2950DA",
-                    fontWeight: 400,
-                    fontSize: { xs: 16, sm: 18 },
-                    textAlign: "center",
-                  }}
-                >
-                  {persona.name}
-                </Typography>
-
-                {/* Department */}
-                {persona.department && (
-                  <Typography
-                    variant="body2"
+                  {/* Avatar - clicks to view persona */}
+                  <Avatar
+                    key={persona.id}
+                    src={persona.avatarUrl || persona.avatar || ""}
                     sx={{
-                      color: "#666",
-                      fontWeight: 400,
-                      fontSize: { xs: 14, sm: 16 },
-                      textAlign: "center",
-                      mt: 0.5,
-                    }}
-                  >
-                    {persona.department}
-                  </Typography>
-                )}
-
-                {/* Description */}
-                {persona.description && (
-                  <Typography
-                    variant="body2"
-                    sx={{
-                      color: "#888",
-                      fontWeight: 400,
-                      fontSize: { xs: 13, sm: 15 },
-                      textAlign: "center",
-                      mt: 0.5,
-                    }}
-                  >
-                    {persona.description}
-                  </Typography>
-                )}
-
-                {/* Switch Persona Button - moved here under description */}
-                <Box sx={{ display: "flex", justifyContent: "center", mt: 1 }}>
-                  <AutorenewIcon
-                    onClick={() => setSwitcherOpen(true)}
-                    sx={{
-                      ml: 1,
-                      color: "#2950DA",
-                      fontSize: 32,
+                      width: { xs: 80, sm: 96 },
+                      height: { xs: 80, sm: 96 },
+                      mb: { xs: 1.5, sm: 2 },
                       cursor: "pointer",
-                      borderRadius: "50%",
-                      transition: "background 0.2s",
-                      "&:hover": { background: "#E8ECF2" },
+                      transition: "transform 0.2s ease-in-out",
+                      "&:hover": {
+                        transform: "scale(1.05)",
+                      },
+                    }}
+                    onClick={handleAvatarClick}
+                    onError={(e) => {
+                      console.error(
+                        "Avatar image failed to load:",
+                        persona.avatarUrl || persona.avatar
+                      );
+                      console.error("Error event:", e);
+                    }}
+                    onLoad={() => {
+                      // Avatar image loaded successfully
                     }}
                   />
-                </Box>
 
-                {/* Switch Persona Modal */}
-                <Dialog
-                  open={switcherOpen}
-                  onClose={handleSwitcherClose}
-                  maxWidth="xs"
-                  fullWidth
-                >
-                  <DialogTitle
+                  {/* Name */}
+                  <Typography
+                    variant="h5"
                     sx={{
                       fontWeight: 600,
-                      fontSize: 22,
                       color: "#222",
+                      mb: 0.5,
+                      fontSize: { xs: "20px", sm: "24px" },
                       textAlign: "center",
                     }}
                   >
-                    Switch Persona
-                  </DialogTitle>
-                  <DialogContent sx={{ p: 3 }}>
-                    {allPersonas
-                      .filter((p) => p.id !== persona.id)
-                      .map((p) => (
-                        <Box
-                          key={p.id}
-                          sx={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 2,
-                            mb: 2,
-                            cursor: "pointer",
-                            borderRadius: 2,
-                            p: 1.2,
-                            "&:hover": { background: "#f5f5f5" },
-                          }}
-                          onClick={() => handleSwitchPersona(p.id)}
-                        >
-                          <Avatar
-                            key={p.id}
-                            src={p.avatarUrl || p.avatar || ""}
-                            sx={{ width: 48, height: 48 }}
-                          />
-                          <Box>
-                            <Typography
-                              sx={{
-                                fontWeight: 600,
-                                fontSize: 18,
-                                color: "#222",
-                              }}
-                            >
-                              {p.name}
-                              {p.isAvailable === false && (
-                                <Box
-                                  component="span"
-                                  sx={{
-                                    ml: 1,
-                                    px: 1,
-                                    py: 0.5,
-                                    bgcolor: "#ffebee",
-                                    color: "#c62828",
-                                    fontSize: "10px",
-                                    borderRadius: 1,
-                                    fontWeight: 500,
-                                  }}
-                                >
-                                  Unavailable
-                                </Box>
-                              )}
-                            </Typography>
-                            <Typography sx={{ color: "#2950DA", fontSize: 16 }}>
-                              {p.role}
-                            </Typography>
-                          </Box>
-                        </Box>
-                      ))}
-                    {allPersonas.filter((p) => p.id !== persona.id).length ===
-                      0 && (
-                      <Typography
-                        sx={{ color: "#888", textAlign: "center", mt: 2 }}
+                    {persona.personalName || persona.name}
+                    {persona.isAvailable === false && (
+                      <Box
+                        component="span"
+                        sx={{
+                          ml: 1,
+                          px: 1,
+                          py: 0.5,
+                          bgcolor: "#ffebee",
+                          color: "#c62828",
+                          fontSize: "12px",
+                          borderRadius: 1,
+                          fontWeight: 500,
+                        }}
                       >
-                        No other personas available.
-                      </Typography>
+                        Temporarily Unavailable
+                      </Box>
                     )}
-                  </DialogContent>
-                  <DialogActions sx={{ justifyContent: "center", pb: 2 }}>
-                    <Button
-                      onClick={handleSwitcherClose}
-                      variant="outlined"
-                      color="primary"
-                    >
-                      Cancel
-                    </Button>
-                  </DialogActions>
-                </Dialog>
-              </Box>
+                  </Typography>
 
-              {/* Messages */}
-              {messages.map((msg, idx) =>
-                msg.sender === "ai" ? (
-                  <Box
-                    key={idx}
-                    data-msg-idx={idx}
+                  {/* Role */}
+                  <Typography
+                    variant="subtitle1"
                     sx={{
-                      width: "100%",
-                      display: "flex",
-                      justifyContent: "flex-start",
-                      mb: 2,
+                      color: "#2950DA",
+                      fontWeight: 400,
+                      fontSize: { xs: 16, sm: 18 },
+                      textAlign: "center",
                     }}
                   >
-                    <Box
+                    {persona.name}
+                  </Typography>
+
+                  {/* Department */}
+                  {persona.department && (
+                    <Typography
+                      variant="body2"
                       sx={{
-                        display: "flex",
-                        flexDirection: "row",
-                        alignItems: "flex-start",
-                        gap: 2,
-                        maxWidth: "100%",
+                        color: "#666",
+                        fontWeight: 400,
+                        fontSize: { xs: 14, sm: 16 },
+                        textAlign: "center",
+                        mt: 0.5,
                       }}
                     >
-                      {/* <Avatar
+                      {persona.department}
+                    </Typography>
+                  )}
+
+                  {/* Description */}
+                  {persona.description && (
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        color: "#888",
+                        fontWeight: 400,
+                        fontSize: { xs: 13, sm: 15 },
+                        textAlign: "center",
+                        mt: 0.5,
+                      }}
+                    >
+                      {persona.description}
+                    </Typography>
+                  )}
+
+                  {/* Switch Persona Button - moved here under description */}
+                  <Box
+                    sx={{ display: "flex", justifyContent: "center", mt: 1 }}
+                  >
+                    <AutorenewIcon
+                      onClick={() => setSwitcherOpen(true)}
+                      sx={{
+                        ml: 1,
+                        color: "#2950DA",
+                        fontSize: 32,
+                        cursor: "pointer",
+                        borderRadius: "50%",
+                        transition: "background 0.2s",
+                        "&:hover": { background: "#E8ECF2" },
+                      }}
+                    />
+                  </Box>
+
+                  {/* Switch Persona Modal */}
+                  <Dialog
+                    open={switcherOpen}
+                    onClose={handleSwitcherClose}
+                    maxWidth="xs"
+                    fullWidth
+                  >
+                    <DialogTitle
+                      sx={{
+                        fontWeight: 600,
+                        fontSize: 22,
+                        color: "#222",
+                        textAlign: "center",
+                      }}
+                    >
+                      Switch Persona
+                    </DialogTitle>
+                    <DialogContent sx={{ p: 3 }}>
+                      {allPersonas
+                        .filter((p) => p.id !== persona.id)
+                        .map((p) => (
+                          <Box
+                            key={p.id}
+                            sx={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 2,
+                              mb: 2,
+                              cursor: "pointer",
+                              borderRadius: 2,
+                              p: 1.2,
+                              "&:hover": { background: "#f5f5f5" },
+                            }}
+                            onClick={() => handleSwitchPersona(p.id)}
+                          >
+                            <Avatar
+                              key={p.id}
+                              src={p.avatarUrl || p.avatar || ""}
+                              sx={{ width: 48, height: 48 }}
+                            />
+                            <Box>
+                              <Typography
+                                sx={{
+                                  fontWeight: 600,
+                                  fontSize: 18,
+                                  color: "#222",
+                                }}
+                              >
+                                {p.name}
+                                {p.isAvailable === false && (
+                                  <Box
+                                    component="span"
+                                    sx={{
+                                      ml: 1,
+                                      px: 1,
+                                      py: 0.5,
+                                      bgcolor: "#ffebee",
+                                      color: "#c62828",
+                                      fontSize: "10px",
+                                      borderRadius: 1,
+                                      fontWeight: 500,
+                                    }}
+                                  >
+                                    Unavailable
+                                  </Box>
+                                )}
+                              </Typography>
+                              <Typography
+                                sx={{ color: "#2950DA", fontSize: 16 }}
+                              >
+                                {p.role}
+                              </Typography>
+                            </Box>
+                          </Box>
+                        ))}
+                      {allPersonas.filter((p) => p.id !== persona.id).length ===
+                        0 && (
+                        <Typography
+                          sx={{ color: "#888", textAlign: "center", mt: 2 }}
+                        >
+                          No other personas available.
+                        </Typography>
+                      )}
+                    </DialogContent>
+                    <DialogActions sx={{ justifyContent: "center", pb: 2 }}>
+                      <Button
+                        onClick={handleSwitcherClose}
+                        variant="outlined"
+                        color="primary"
+                      >
+                        Cancel
+                      </Button>
+                    </DialogActions>
+                  </Dialog>
+                </Box>
+              )}
+
+              {/* Conversation Restoring Indicator */}
+              {isRestoringConversation && (
+                <Box
+                  sx={{
+                    display: "flex",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    py: 4,
+                    color: "#666",
+                  }}
+                >
+                  <CircularProgress size={24} sx={{ mr: 2 }} />
+                  <Typography variant="body2">
+                    Restoring conversation...
+                  </Typography>
+                </Box>
+              )}
+
+              {/* Conversation Restore Failed */}
+              {!isRestoringConversation &&
+                conversationIdFromUrl &&
+                !draftIdFromUrl &&
+                messages.length === 0 && (
+                  <Box
+                    sx={{
+                      display: "flex",
+                      flexDirection: "column",
+                      justifyContent: "center",
+                      alignItems: "center",
+                      py: 4,
+                      color: "#666",
+                      textAlign: "center",
+                    }}
+                  >
+                    <Typography variant="body1" sx={{ mb: 2 }}>
+                      Failed to restore conversation
+                    </Typography>
+                    <Button
+                      variant="outlined"
+                      onClick={() => loadConversations()}
+                      sx={{ color: "#2950DA", borderColor: "#2950DA" }}
+                    >
+                      Retry
+                    </Button>
+                  </Box>
+                )}
+
+              {/* Messages */}
+              {!isRestoringConversation &&
+                messages.map((msg, idx) =>
+                  msg.sender === "ai" ? (
+                    <Box
+                      key={idx}
+                      data-msg-idx={idx}
+                      sx={{
+                        width: "100%",
+                        display: "flex",
+                        justifyContent: "flex-start",
+                        mb: 2,
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          display: "flex",
+                          flexDirection: "row",
+                          alignItems: "flex-start",
+                          gap: 2,
+                          maxWidth: "100%",
+                        }}
+                      >
+                        {/* <Avatar
                         sx={{
                           width: 42,
                           height: 42,
@@ -1201,189 +1330,207 @@ export default function ChatPage() {
                           }}
                         />
                       </Avatar> */}
-                      <Box
-                        sx={{
-                          flex: 1,
-                          minWidth: 0,
-                          display: "flex",
-                          flexDirection: "column",
-                          alignItems: "flex-start",
-                        }}
-                      >
                         <Box
                           sx={{
-                            color: "#2950DA",
-                            fontWeight: 500,
-                            fontSize: 16,
-                            mb: 1,
+                            flex: 1,
+                            minWidth: 0,
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "flex-start",
                           }}
                         >
-                          {persona.name}
-                        </Box>
-                        {msg.isTyping ? (
                           <Box
                             sx={{
-                              bgcolor: "#EEF3FF",
-                              color: "#1E3A8A",
-                              px: { xs: 2.5, sm: 2 },
-                              py: { xs: 2, sm: 2.5 },
-                              borderRadius: 3,
+                              color: "#2950DA",
+                              fontWeight: 500,
                               fontSize: 16,
-                              fontWeight: 400,
-                              maxWidth: { xs: "100%", sm: 600 },
-                              wordBreak: "break-word",
-                              boxShadow: "none",
-                              lineHeight: 1.5,
-                              textAlign: "left",
-                              whiteSpace: "pre-wrap",
+                              mb: 1,
                             }}
                           >
-                            <TypingIndicator />
+                            {persona.name}
                           </Box>
-                        ) : (
-                          <Box
-                            sx={{
-                              display: "flex",
-                              flexDirection: "column",
-                              alignItems: "flex-start",
-                              gap: 1,
-                              maxWidth: { xs: "100%", sm: 600 },
-                            }}
-                          >
-                            {msg.fileUrl && (
-                              <Box
-                                sx={{
-                                  bgcolor: "#EEF3FF",
-                                  borderRadius: 3,
-                                  p: 1,
-                                  boxShadow: "none",
-                                }}
-                              >
-                                {msg.fileType &&
-                                msg.fileType.startsWith("image/") ? (
-                                  <img
-                                    src={msg.fileUrl}
-                                    alt="attachment"
-                                    style={{
-                                      maxWidth: 250,
-                                      maxHeight: 250,
-                                      borderRadius: 8,
-                                      display: "block",
-                                      width: "100%",
-                                      height: "auto",
-                                    }}
-                                  />
-                                ) : (
-                                  <Box
-                                    sx={{
-                                      width: 20,
-                                      height: 20,
-                                      bgcolor: "#1E3A8A",
-                                      borderRadius: 1,
-                                      display: "flex",
-                                      alignItems: "center",
-                                      justifyContent: "center",
-                                      cursor: "pointer",
-                                    }}
-                                    onClick={() =>
-                                      window.open(msg.fileUrl, "_blank")
-                                    }
-                                  >
-                                    <Box
-                                      sx={{
-                                        width: 12,
-                                        height: 12,
-                                        bgcolor: "#fff",
-                                        borderRadius: 0.5,
-                                      }}
-                                    />
-                                  </Box>
-                                )}
-                              </Box>
-                            )}
-                            {msg.text && (
-                              <>
+                          {msg.isTyping ? (
+                            <Box
+                              sx={{
+                                bgcolor: "#EEF3FF",
+                                color: "#1E3A8A",
+                                px: { xs: 2.5, sm: 2 },
+                                py: { xs: 2, sm: 2.5 },
+                                borderRadius: 3,
+                                fontSize: 16,
+                                fontWeight: 400,
+                                maxWidth: { xs: "100%", sm: 600 },
+                                wordBreak: "break-word",
+                                boxShadow: "none",
+                                lineHeight: 1.5,
+                                textAlign: "left",
+                                whiteSpace: "pre-wrap",
+                              }}
+                            >
+                              <TypingIndicator />
+                            </Box>
+                          ) : (
+                            <Box
+                              sx={{
+                                display: "flex",
+                                flexDirection: "column",
+                                alignItems: "flex-start",
+                                gap: 1,
+                                maxWidth: { xs: "100%", sm: 600 },
+                              }}
+                            >
+                              {msg.fileUrl && (
                                 <Box
                                   sx={{
                                     bgcolor: "#EEF3FF",
-                                    color: "#1E3A8A",
-                                    px: { xs: 2.5, sm: 2 },
-                                    py: { xs: 2, sm: 2.5 },
                                     borderRadius: 3,
-                                    fontSize: 16,
-                                    fontWeight: 400,
-                                    wordBreak: "break-word",
+                                    p: 1,
                                     boxShadow: "none",
-                                    lineHeight: 1.5,
-                                    textAlign: "left",
-                                    whiteSpace: "pre-wrap",
-                                    maxWidth: "100%",
                                   }}
                                 >
-                                  {msg.text.match(/(\n\s*[-*]|^\d+\.|^#)/m) ? (
-                                    <FormattedOutput content={msg.text} />
+                                  {msg.fileType &&
+                                  msg.fileType.startsWith("image/") ? (
+                                    <img
+                                      src={msg.fileUrl}
+                                      alt="attachment"
+                                      style={{
+                                        maxWidth: 250,
+                                        maxHeight: 250,
+                                        borderRadius: 8,
+                                        display: "block",
+                                        width: "100%",
+                                        height: "auto",
+                                      }}
+                                    />
                                   ) : (
-                                    msg.text
+                                    <Box
+                                      sx={{
+                                        width: 20,
+                                        height: 20,
+                                        bgcolor: "#1E3A8A",
+                                        borderRadius: 1,
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        cursor: "pointer",
+                                      }}
+                                      onClick={() =>
+                                        window.open(msg.fileUrl, "_blank")
+                                      }
+                                    >
+                                      <Box
+                                        sx={{
+                                          width: 12,
+                                          height: 12,
+                                          bgcolor: "#fff",
+                                          borderRadius: 0.5,
+                                        }}
+                                      />
+                                    </Box>
                                   )}
                                 </Box>
-                                <IconButton
-                                  size="small"
-                                  aria-label="Copy AI response"
-                                  sx={{
-                                    mt: 0.5,
-                                    alignSelf: "flex-start",
-                                    color: "#1E3A8A",
-                                  }}
-                                  onClick={() => {
-                                    if (msg.text) {
-                                      navigator.clipboard.writeText(msg.text);
-                                    }
-                                  }}
-                                >
-                                  <ContentCopyIcon fontSize="small" />
-                                </IconButton>
-                              </>
-                            )}
+                              )}
+                              {msg.text && (
+                                <>
+                                  <Box
+                                    sx={{
+                                      bgcolor: "#EEF3FF",
+                                      color: "#1E3A8A",
+                                      px: { xs: 2.5, sm: 2 },
+                                      py: { xs: 2, sm: 2.5 },
+                                      borderRadius: 3,
+                                      fontSize: 16,
+                                      fontWeight: 400,
+                                      wordBreak: "break-word",
+                                      boxShadow: "none",
+                                      lineHeight: 1.5,
+                                      textAlign: "left",
+                                      whiteSpace: "pre-wrap",
+                                      maxWidth: "100%",
+                                    }}
+                                  >
+                                    {msg.text.match(
+                                      /(\n\s*[-*]|^\d+\.|^#)/m
+                                    ) ? (
+                                      <FormattedOutput content={msg.text} />
+                                    ) : (
+                                      msg.text
+                                    )}
+                                  </Box>
+                                  <IconButton
+                                    size="small"
+                                    aria-label="Copy AI response"
+                                    sx={{
+                                      mt: 0.5,
+                                      alignSelf: "flex-start",
+                                      color: "#1E3A8A",
+                                    }}
+                                    onClick={() => {
+                                      if (msg.text) {
+                                        navigator.clipboard.writeText(msg.text);
+                                        setCopiedMessageId(
+                                          msg.id || `msg-${idx}`
+                                        );
+                                        // Reset after 2 seconds
+                                        setTimeout(() => {
+                                          setCopiedMessageId(null);
+                                        }, 2000);
+                                      }
+                                    }}
+                                  >
+                                    {copiedMessageId ===
+                                    (msg.id || `msg-${idx}`) ? (
+                                      <CheckIcon
+                                        fontSize="small"
+                                        sx={{ color: "#10B981" }}
+                                      />
+                                    ) : (
+                                      <ContentCopyIcon fontSize="small" />
+                                    )}
+                                  </IconButton>
+                                </>
+                              )}
 
-                            {/* Message Reactions */}
-                            {msg.id && (
-                              <MessageReaction
-                                messageId={msg.id}
-                                reactions={msg.reactions}
-                                currentUserId="current-user" // This should come from auth context
-                                onReactionUpdate={handleReactionUpdate}
-                                disabled={
-                                  isLoading || !!currentConversation?.archivedAt
-                                }
-                              />
-                            )}
-                          </Box>
-                        )}
+                              {/* Message Reactions */}
+                              {msg.id && (
+                                <MessageReaction
+                                  messageId={msg.id}
+                                  reactions={msg.reactions}
+                                  currentUserId="current-user" // This should come from auth context
+                                  onReactionUpdate={handleReactionUpdate}
+                                  disabled={
+                                    isLoading ||
+                                    !!currentConversation?.archivedAt
+                                  }
+                                />
+                              )}
+                            </Box>
+                          )}
+                        </Box>
                       </Box>
                     </Box>
-                  </Box>
-                ) : (
-                  <Box
-                    key={idx}
-                    data-msg-idx={idx}
-                    sx={{
-                      width: "100%",
-                      display: "flex",
-                      justifyContent: "flex-end",
-                      mb: 2,
-                      mr: { xs: 0, sm: 4 },
-                    }}
-                  >
+                  ) : (
                     <Box
+                      key={idx}
+                      data-msg-idx={idx}
                       sx={{
+                        width: "100%",
                         display: "flex",
-                        flexDirection: "row-reverse",
-                        alignItems: "flex-end",
-                        gap: 1,
-                        maxWidth: "100%",
+                        justifyContent: "flex-end",
+                        mb: 2,
+                        mr: { xs: 0, sm: 4 },
                       }}
                     >
-                      {/* <Avatar
+                      <Box
+                        sx={{
+                          display: "flex",
+                          flexDirection: "row-reverse",
+                          alignItems: "flex-end",
+                          gap: 1,
+                          maxWidth: "100%",
+                        }}
+                      >
+                        {/* <Avatar
                         sx={{
                           width: 42,
                           height: 42,
@@ -1430,216 +1577,221 @@ export default function ChatPage() {
                           U
                         </span>
                       </Avatar> */}
-                      <Box
-                        sx={{
-                          display: "flex",
-                          flexDirection: "column",
-                          alignItems: "flex-end",
-                          gap: 1,
-                          maxWidth: { xs: "100%", sm: 400 },
-                        }}
-                      >
-                        {/* Multiple images support */}
-                        {msg.fileUrls && msg.fileUrls.length > 0 && (
-                          <Box
-                            sx={{
-                              display: "flex",
-                              gap: 1,
-                              flexWrap: "wrap",
-                              mb: 1,
-                            }}
-                          >
-                            {msg.fileUrls.map((url: string, i: number) => (
+                        <Box
+                          sx={{
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "flex-end",
+                            gap: 1,
+                            maxWidth: { xs: "100%", sm: 400 },
+                          }}
+                        >
+                          {/* Multiple images support */}
+                          {msg.fileUrls && msg.fileUrls.length > 0 && (
+                            <Box
+                              sx={{
+                                display: "flex",
+                                gap: 1,
+                                flexWrap: "wrap",
+                                mb: 1,
+                              }}
+                            >
+                              {msg.fileUrls.map((url: string, i: number) => (
+                                <img
+                                  key={i}
+                                  src={url}
+                                  alt={`attachment-${i}`}
+                                  style={{
+                                    width: "3rem",
+                                    height: "3rem",
+                                    display: "block",
+                                  }}
+                                />
+                              ))}
+                            </Box>
+                          )}
+                          {/* Single file fallback */}
+                          {msg.fileUrl &&
+                            !msg.fileUrls &&
+                            (msg.fileType &&
+                            msg.fileType.startsWith("image/") ? (
                               <img
-                                key={i}
-                                src={url}
-                                alt={`attachment-${i}`}
+                                src={msg.fileUrl}
+                                alt="attachment"
                                 style={{
                                   width: "3rem",
                                   height: "3rem",
                                   display: "block",
                                 }}
                               />
+                            ) : (
+                              <Box
+                                sx={{
+                                  width: 20,
+                                  height: 20,
+                                  bgcolor: "#fff",
+                                  borderRadius: 1,
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  cursor: "pointer",
+                                }}
+                                onClick={() =>
+                                  window.open(msg.fileUrl, "_blank")
+                                }
+                              >
+                                <Box
+                                  sx={{
+                                    width: 12,
+                                    height: 12,
+                                    bgcolor: "#2950DA",
+                                    borderRadius: 0.5,
+                                  }}
+                                />
+                              </Box>
                             ))}
-                          </Box>
-                        )}
-                        {/* Single file fallback */}
-                        {msg.fileUrl &&
-                          !msg.fileUrls &&
-                          (msg.fileType && msg.fileType.startsWith("image/") ? (
-                            <img
-                              src={msg.fileUrl}
-                              alt="attachment"
-                              style={{
-                                width: "3rem",
-                                height: "3rem",
-                                display: "block",
-                              }}
-                            />
-                          ) : (
+                          {msg.text && (
                             <Box
                               sx={{
-                                width: 20,
-                                height: 20,
-                                bgcolor: "#fff",
-                                borderRadius: 1,
                                 display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                cursor: "pointer",
+                                flexDirection: "column",
+                                gap: 1,
+                                position: "relative",
+                                "&:hover .edit-button": { opacity: 1 },
                               }}
-                              onClick={() => window.open(msg.fileUrl, "_blank")}
                             >
                               <Box
                                 sx={{
-                                  width: 12,
-                                  height: 12,
                                   bgcolor: "#2950DA",
-                                  borderRadius: 0.5,
+                                  color: "#fff",
+                                  px: { xs: 2.5, sm: 3 },
+                                  py: { xs: 2, sm: 2.5 },
+                                  borderRadius: 3,
+                                  fontSize: 16,
+                                  fontWeight: 400,
+                                  wordBreak: "break-word",
+                                  boxShadow: "0 2px 8px rgba(44,62,80,0.04)",
+                                  lineHeight: 1.5,
+                                  textAlign: "start",
+                                  whiteSpace: "pre-wrap",
+                                  maxWidth: "100%",
                                 }}
-                              />
-                            </Box>
-                          ))}
-                        {msg.text && (
-                          <Box
-                            sx={{
-                              display: "flex",
-                              flexDirection: "column",
-                              gap: 1,
-                              position: "relative",
-                              "&:hover .edit-button": { opacity: 1 },
-                            }}
-                          >
-                            <Box
-                              sx={{
-                                bgcolor: "#2950DA",
-                                color: "#fff",
-                                px: { xs: 2.5, sm: 3 },
-                                py: { xs: 2, sm: 2.5 },
-                                borderRadius: 3,
-                                fontSize: 16,
-                                fontWeight: 400,
-                                wordBreak: "break-word",
-                                boxShadow: "0 2px 8px rgba(44,62,80,0.04)",
-                                lineHeight: 1.5,
-                                textAlign: "start",
-                                whiteSpace: "pre-wrap",
-                                maxWidth: "100%",
-                              }}
-                            >
-                              {editingMessageId === msg.id ? (
-                                <Box
-                                  sx={{
-                                    display: "flex",
-                                    flexDirection: "column",
-                                    gap: 1,
-                                  }}
-                                >
-                                  <TextField
-                                    value={editingText}
-                                    onChange={(e) =>
-                                      setEditingText(e.target.value)
-                                    }
-                                    multiline
-                                    fullWidth
-                                    variant="outlined"
-                                    sx={{
-                                      "& .MuiOutlinedInput-root": {
-                                        color: "#fff",
-                                        "& fieldset": {
-                                          borderColor: "rgba(255,255,255,0.3)",
-                                        },
-                                        "&:hover fieldset": {
-                                          borderColor: "rgba(255,255,255,0.5)",
-                                        },
-                                        "&.Mui-focused fieldset": {
-                                          borderColor: "#fff",
-                                        },
-                                      },
-                                    }}
-                                  />
+                              >
+                                {editingMessageId === msg.id ? (
                                   <Box
                                     sx={{
                                       display: "flex",
+                                      flexDirection: "column",
                                       gap: 1,
-                                      justifyContent: "flex-end",
                                     }}
                                   >
-                                    <IconButton
-                                      size="small"
-                                      onClick={() => handleSaveEdit(msg.id!)}
+                                    <TextField
+                                      value={editingText}
+                                      onChange={(e) =>
+                                        setEditingText(e.target.value)
+                                      }
+                                      multiline
+                                      fullWidth
+                                      variant="outlined"
                                       sx={{
-                                        color: "#fff",
-                                        bgcolor: "rgba(255,255,255,0.1)",
+                                        "& .MuiOutlinedInput-root": {
+                                          color: "#fff",
+                                          "& fieldset": {
+                                            borderColor:
+                                              "rgba(255,255,255,0.3)",
+                                          },
+                                          "&:hover fieldset": {
+                                            borderColor:
+                                              "rgba(255,255,255,0.5)",
+                                          },
+                                          "&.Mui-focused fieldset": {
+                                            borderColor: "#fff",
+                                          },
+                                        },
+                                      }}
+                                    />
+                                    <Box
+                                      sx={{
+                                        display: "flex",
+                                        gap: 1,
+                                        justifyContent: "flex-end",
                                       }}
                                     >
-                                      <CheckIcon fontSize="small" />
-                                    </IconButton>
-                                    <IconButton
-                                      size="small"
-                                      onClick={handleCancelEdit}
-                                      sx={{
-                                        color: "#fff",
-                                        bgcolor: "rgba(255,255,255,0.1)",
-                                      }}
-                                    >
-                                      <CloseIcon fontSize="small" />
-                                    </IconButton>
+                                      <IconButton
+                                        size="small"
+                                        onClick={() => handleSaveEdit(msg.id!)}
+                                        sx={{
+                                          color: "#fff",
+                                          bgcolor: "rgba(255,255,255,0.1)",
+                                        }}
+                                      >
+                                        <CheckIcon fontSize="small" />
+                                      </IconButton>
+                                      <IconButton
+                                        size="small"
+                                        onClick={handleCancelEdit}
+                                        sx={{
+                                          color: "#fff",
+                                          bgcolor: "rgba(255,255,255,0.1)",
+                                        }}
+                                      >
+                                        <CloseIcon fontSize="small" />
+                                      </IconButton>
+                                    </Box>
                                   </Box>
-                                </Box>
-                              ) : (
-                                <Box>
-                                  {msg.text}
-                                  {msg.edited && (
-                                    <Typography
-                                      variant="caption"
-                                      sx={{
-                                        color: "rgba(255,255,255,0.6)",
-                                        fontSize: "0.75rem",
-                                        ml: 1,
-                                      }}
-                                    >
-                                      (edited)
-                                    </Typography>
-                                  )}
-                                </Box>
-                              )}
-                            </Box>
-                            {editingMessageId !== msg.id &&
-                              msg.sender === "user" && (
-                                <IconButton
-                                  className="edit-button"
-                                  size="small"
-                                  onClick={() =>
-                                    handleEditMessage(msg.id!, msg.text)
-                                  }
-                                  sx={{
-                                    position: "absolute",
-                                    right: 8,
-                                    bottom: -32,
-                                    color: "#666",
-                                    bgcolor: "rgba(0,0,0,0.05)",
-                                    opacity: 0,
-                                    transition: "opacity 0.2s",
-                                    pointerEvents: "auto",
-                                    "&:hover": {
-                                      bgcolor: "rgba(0,0,0,0.1)",
-                                      opacity: 1,
-                                    },
-                                  }}
-                                >
-                                  <EditIcon fontSize="small" />
-                                </IconButton>
-                              )}
+                                ) : (
+                                  <Box>
+                                    {msg.text}
+                                    {msg.edited && (
+                                      <Typography
+                                        variant="caption"
+                                        sx={{
+                                          color: "rgba(255,255,255,0.6)",
+                                          fontSize: "0.75rem",
+                                          ml: 1,
+                                        }}
+                                      >
+                                        (edited)
+                                      </Typography>
+                                    )}
+                                  </Box>
+                                )}
+                              </Box>
+                              {editingMessageId !== msg.id &&
+                                msg.sender === "user" && (
+                                  <IconButton
+                                    className="edit-button"
+                                    size="small"
+                                    onClick={() =>
+                                      handleEditMessage(msg.id!, msg.text)
+                                    }
+                                    sx={{
+                                      position: "absolute",
+                                      right: 8,
+                                      bottom: -32,
+                                      color: "#666",
+                                      bgcolor: "rgba(0,0,0,0.05)",
+                                      opacity: 0,
+                                      transition: "opacity 0.2s",
+                                      pointerEvents: "auto",
+                                      "&:hover": {
+                                        bgcolor: "rgba(0,0,0,0.1)",
+                                        opacity: 1,
+                                      },
+                                    }}
+                                  >
+                                    <EditIcon fontSize="small" />
+                                  </IconButton>
+                                )}
 
-                            {/* Reactions hidden for user messages */}
-                          </Box>
-                        )}
+                              {/* Reactions hidden for user messages */}
+                            </Box>
+                          )}
+                        </Box>
                       </Box>
                     </Box>
-                  </Box>
-                )
-              )}
+                  )
+                )}
             </Box>
 
             {/* Persona Switcher Popup */}
@@ -1713,14 +1865,18 @@ export default function ChatPage() {
               value={messageInput}
               onChange={setMessageInput}
               onSend={handleSendMessage}
-              disabled={isLoading || !!currentConversation?.archivedAt}
+              disabled={
+                isLoading ||
+                !!currentConversation?.archivedAt ||
+                isRestoringConversation
+              }
               persona={persona}
               conversationId={currentConversationId}
               sidebarOpen={sidebarOpen}
               sidebarWidth={SIDEBAR_WIDTH}
               maxWidth={960}
               suggestions={suggestionChips}
-              showSuggestions={!hasUserMessages}
+              showSuggestions={!hasUserMessages && !isInConversationRestoration}
             />
           </Box>
         </Box>
@@ -1741,12 +1897,23 @@ export default function ChatPage() {
         sessions={chatSessions}
         onSelect={({ session_id }) => {
           setSearchOpen(false);
-          navigate(`/chat/${persona.id}?conversationId=${session_id}`);
+          if (persona?.id) {
+            navigate(`/chat/${persona.id}?conversationId=${session_id}`);
+          }
         }}
         onStartNewChat={() => {
           setSearchOpen(false);
-          navigate(`/chat/${persona.id}`);
+          if (persona?.id) {
+            const draftId = `${Date.now().toString(36)}-${Math.random()
+              .toString(36)
+              .slice(2, 8)}`;
+            navigate(`/chat/${persona.id}?draft=${draftId}`);
+          } else {
+            // Fallback: navigate to personas page if no persona context
+            navigate("/personas");
+          }
         }}
+        hasPersonaContext={!!persona?.id}
       />
     </Box>
   );

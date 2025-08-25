@@ -6,6 +6,7 @@ const prisma = new PrismaClient();
 
 const hrisFinancePersona = {
   name: "HRIS Lead and Finance Ops/Controller",
+  personalName: "Michael Rodriguez",
   description:
     "Experienced HRIS and Finance operations professional with expertise in HR technology systems, financial controls, and operational processes.",
   avatarUrl:
@@ -40,6 +41,7 @@ async function seedHrisFinancePersona() {
         where: { id: existing.id },
         data: {
           name: hrisFinancePersona.name,
+          personalName: hrisFinancePersona.personalName,
           description: hrisFinancePersona.description,
           avatarUrl: hrisFinancePersona.avatarUrl,
           webhookUrl: encrypt(hrisFinancePersona.webhookUrl, encryptionKey),
@@ -57,6 +59,7 @@ async function seedHrisFinancePersona() {
     const created = await prisma.persona.create({
       data: {
         name: hrisFinancePersona.name,
+        personalName: hrisFinancePersona.personalName,
         description: hrisFinancePersona.description,
         avatarUrl: hrisFinancePersona.avatarUrl,
         webhookUrl: encrypt(hrisFinancePersona.webhookUrl, encryptionKey),
