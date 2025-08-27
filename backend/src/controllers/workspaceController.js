@@ -97,7 +97,7 @@ const validateRole = (role) => {
  */
 const validateStatus = (status) => {
   if (!status || typeof status !== "string") return false;
-  const validStatuses = ["ACTIVE", "INACTIVE", "SUSPENDED", "PENDING"];
+  const validStatuses = ["ACTIVE", "DEACTIVATED", "PENDING_VERIFY"];
   return validStatuses.includes(status.toUpperCase());
 };
 
@@ -748,6 +748,63 @@ const removeMember = asyncHandler(async (req, res) => {
   }
 });
 
+// DELETE /api/workspaces/:id/members/:uid/permanent
+const deleteMemberPermanent = asyncHandler(async (req, res) => {
+  const { ipAddress, userAgent, traceId } = getClientInfo(req);
+
+  try {
+    const workspaceId = req.params.id;
+    const memberId = req.params.uid;
+    const userId = req.user.id;
+
+    // Validate parameters
+    if (!validateId(workspaceId)) {
+      throw new ApiError(400, "Invalid workspace ID");
+    }
+
+    if (!validateId(memberId)) {
+      throw new ApiError(400, "Invalid member ID");
+    }
+
+    logger.info("Permanent member deletion requested", {
+      userId,
+      workspaceId,
+      memberId,
+      ipAddress,
+      userAgent,
+      traceId,
+    });
+
+    await workspaceService.deleteMemberPermanent(workspaceId, userId, memberId);
+
+    logger.info("Member permanently removed successfully", {
+      userId,
+      workspaceId,
+      memberId,
+      ipAddress,
+      userAgent,
+      traceId,
+    });
+
+    res.status(200).json({
+      status: "success",
+      message: "Member removed permanently",
+    });
+  } catch (error) {
+    logger.error("Permanent member deletion failed", {
+      userId: req.user.id,
+      workspaceId: req.params.id,
+      memberId: req.params.uid,
+      error: error.message,
+      stack: error.stack,
+      ipAddress,
+      userAgent,
+      traceId,
+    });
+    throw error;
+  }
+});
+
 // POST /api/workspaces/:id/delete
 const requestDeletion = asyncHandler(async (req, res) => {
   const { ipAddress, userAgent, traceId } = getClientInfo(req);
@@ -847,6 +904,7 @@ module.exports = {
   changeRole,
   changeStatus,
   removeMember,
+  deleteMemberPermanent,
   requestDeletion,
   getClientInfo,
   validateRequiredFields,

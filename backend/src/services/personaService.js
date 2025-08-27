@@ -462,7 +462,9 @@ async function sendMessage(
     return {
       reply,
       conversationId: conversation.id,
-      messageId: assistantMessage.id,
+      messageId: assistantMessage.id, // kept for backward compatibility (assistant message ID)
+      assistantMessageId: assistantMessage.id,
+      userMessageId: userMessage.id,
       sessionId: chatSession.sessionId,
     };
   } catch (error) {
@@ -622,9 +624,13 @@ async function updateConversationVisibility(
       );
     }
 
-    // Check permissions: owner or workspace admin
+    // Check permissions: owner or workspace admin (current user's role)
     const isOwner = conversation.userId === userId;
-    const isAdmin = conversation.user.role === "ADMIN";
+    const currentUser = await prisma.user.findUnique({ where: { id: userId } });
+    const isAdmin =
+      currentUser &&
+      currentUser.role === "ADMIN" &&
+      currentUser.workspaceId === conversation.user.workspaceId;
 
     if (!isOwner && !isAdmin) {
       throw new ApiError(
@@ -701,21 +707,48 @@ async function editMessage(messageId, userId, newContent) {
       throw new ApiError(422, "Only user messages can be edited");
     }
 
-    // Check time limit (10 minutes)
-    const timeDiff = Date.now() - message.createdAt.getTime();
-    const tenMinutes = 10 * 60 * 1000;
-    if (timeDiff > tenMinutes) {
-      throw new ApiError(422, "Messages can only be edited within 10 minutes");
+    // Check time limit (configurable)
+    const limitMinutesRaw = process.env.EDIT_TIME_LIMIT_MINUTES;
+    const limitMinutes = Number.isFinite(Number(limitMinutesRaw))
+      ? Number(limitMinutesRaw)
+      : 0; // default: no limit
+    if (limitMinutes > 0) {
+      const timeDiff = Date.now() - message.createdAt.getTime();
+      const limitMs = limitMinutes * 60 * 1000;
+      if (timeDiff > limitMs) {
+        throw new ApiError(
+          422,
+          `Messages can only be edited within ${limitMinutes} minutes`
+        );
+      }
     }
 
     // Check if message is already edited
-    if (message.edited) {
-      throw new ApiError(422, "Message has already been edited");
-    }
+    // Previously: block re-editing
+    // if (message.edited) {
+    //   throw new ApiError(422, "Message has already been edited");
+    // }
+    // Allow re-editing: keep audit trail via MessageEdit records
 
     // Check if message is deleted
     if (message.deleted) {
       throw new ApiError(422, "Cannot edit deleted message");
+    }
+
+    // Create a new chat session for this edit to track webhook interaction
+    let chatSession = null;
+    try {
+      chatSession = await chatSessionService.createChatSession(
+        message.conversationId,
+        message.personaId,
+        userId,
+        { isEdit: true, editedMessageId: messageId }
+      );
+    } catch (sessionErr) {
+      logger.warn("Failed to create chat session for edit", {
+        messageId,
+        error: sessionErr?.message,
+      });
     }
 
     // Use transaction for atomic operations
@@ -762,75 +795,96 @@ async function editMessage(messageId, userId, newContent) {
       });
 
       // 5. Call webhook with conversation history
-      const webhookUrl = decrypt(
-        message.persona.webhookUrl,
-        process.env.ENCRYPTION_KEY
-      );
+      let replyText = null;
+      try {
+        const webhookUrl = decrypt(
+          message.persona.webhookUrl,
+          process.env.ENCRYPTION_KEY
+        );
 
-      let webhookResponse;
-      let success = false;
+        if (webhookUrl) {
+          let webhookResponse;
+          let success = false;
 
-      for (let attempt = 1; attempt <= WEBHOOK_RETRIES + 1; attempt++) {
-        try {
-          webhookResponse = await axios.post(
-            webhookUrl,
-            {
-              message: newContent,
-              conversationId: message.conversationId,
-              personaId: message.personaId,
-              userId,
-              history: conversationHistory,
-            },
-            {
-              timeout: WEBHOOK_TIMEOUT,
-              headers: {
-                "Content-Type": "application/json",
-                "User-Agent": "AI-Persona-Backend/1.0",
-              },
+          for (let attempt = 1; attempt <= WEBHOOK_RETRIES + 1; attempt++) {
+            try {
+              webhookResponse = await axios.post(
+                webhookUrl,
+                {
+                  message: newContent,
+                  conversationId: message.conversationId,
+                  personaId: message.personaId,
+                  userId,
+                  history: conversationHistory,
+                  isEdit: true,
+                  editedMessageId: messageId,
+                  sessionId: chatSession?.sessionId || undefined,
+                },
+                {
+                  timeout: WEBHOOK_TIMEOUT,
+                  headers: {
+                    "Content-Type": "application/json",
+                    "User-Agent": "AI-Persona-Backend/1.0",
+                  },
+                }
+              );
+
+              success = true;
+              break;
+            } catch (error) {
+              logger.warn(
+                `Webhook attempt ${attempt} failed for message edit ${messageId}:`,
+                error.message
+              );
+
+              if (attempt <= WEBHOOK_RETRIES) {
+                const delay = WEBHOOK_RETRY_DELAY * Math.pow(2, attempt - 1);
+                await new Promise((resolve) => setTimeout(resolve, delay));
+              }
             }
-          );
+          }
 
-          success = true;
-          break;
-        } catch (error) {
-          logger.warn(
-            `Webhook attempt ${attempt} failed for message edit ${messageId}:`,
-            error.message
-          );
-
-          if (attempt <= WEBHOOK_RETRIES) {
-            const delay = WEBHOOK_RETRY_DELAY * Math.pow(2, attempt - 1);
-            await new Promise((resolve) => setTimeout(resolve, delay));
+          if (success) {
+            // Extract reply from various possible keys
+            replyText =
+              webhookResponse.data?.reply ||
+              webhookResponse.data?.message ||
+              webhookResponse.data?.response ||
+              webhookResponse.data?.output ||
+              webhookResponse.data?.data ||
+              (typeof webhookResponse.data === "string"
+                ? webhookResponse.data
+                : null);
           }
         }
+      } catch (err) {
+        // Swallow webhook errors; we'll fall back below
+        logger.warn(
+          "Webhook processing failed during edit; using fallback reply",
+          {
+            messageId,
+            error: err?.message,
+          }
+        );
       }
 
-      if (!success) {
-        throw new Error("Webhook failed");
-      }
-
-      // 6. Insert new assistant message
+      // 6. Insert new assistant message (use fallback if webhook had no reply)
       const assistantMessage = await tx.message.create({
         data: {
           conversationId: message.conversationId,
           personaId: message.personaId,
-          content:
-            webhookResponse.data?.reply ||
-            webhookResponse.data?.message ||
-            webhookResponse.data?.response ||
-            webhookResponse.data?.output ||
-            webhookResponse.data?.data ||
-            (typeof webhookResponse.data === "string"
-              ? webhookResponse.data
-              : "No response received"),
+          content: replyText || "",
           role: "ASSISTANT",
+          chatSessionId: chatSession?.id || null,
         },
       });
 
       return {
         editedMessageId: updatedMessage.id,
         assistantMessageId: assistantMessage.id,
+        assistantMessageContent: assistantMessage.content,
         conversationId: message.conversationId,
+        sessionId: chatSession?.sessionId || null,
       };
     });
 
@@ -845,9 +899,6 @@ async function editMessage(messageId, userId, newContent) {
     return result;
   } catch (error) {
     if (error instanceof ApiError) throw error;
-    if (error.message === "Webhook failed") {
-      throw new ApiError(502, "Failed to get response from persona");
-    }
     logger.error("Error editing message:", error);
     throw new ApiError(500, "Failed to edit message");
   }
@@ -1021,45 +1072,33 @@ async function toggleReaction(messageId, userId, type) {
  */
 async function toggleArchive(conversationId, userId, archived) {
   try {
-    // Validate conversation exists and user has access
+    console.log("=== ARCHIVE TOGGLE START ===");
+    console.log("Input:", { conversationId, userId, archived });
+
+    // Simple validation
+    if (!conversationId || !userId || typeof archived !== "boolean") {
+      throw new Error("Invalid input parameters");
+    }
+
+    // Find conversation with simple query
     const conversation = await prisma.conversation.findFirst({
-      where: {
-        id: conversationId,
-        OR: [
-          { userId },
-          {
-            user: {
-              workspaceId: {
-                equals: (
-                  await prisma.user.findUnique({ where: { id: userId } })
-                ).workspaceId,
-              },
-            },
-            visibility: "SHARED",
-          },
-        ],
-      },
-      include: {
-        user: true,
-      },
+      where: { id: conversationId },
+      include: { user: true },
     });
 
     if (!conversation) {
-      throw new ApiError(404, "Conversation not found or access denied");
+      throw new Error("Conversation not found");
     }
 
-    // Check if user is owner or admin
-    const user = await prisma.user.findUnique({ where: { id: userId } });
-    const isOwner = conversation.userId === userId;
-    const isAdmin =
-      user.role === "ADMIN" &&
-      user.workspaceId === conversation.user.workspaceId;
+    console.log("Found conversation:", {
+      id: conversation.id,
+      userId: conversation.userId,
+      archivedAt: conversation.archivedAt,
+    });
 
-    if (!isOwner && !isAdmin) {
-      throw new ApiError(
-        403,
-        "Only conversation owner or workspace admin can archive"
-      );
+    // Check if user owns the conversation
+    if (conversation.userId !== userId) {
+      throw new Error("User not authorized to modify this conversation");
     }
 
     // Update archive status
@@ -1067,25 +1106,37 @@ async function toggleArchive(conversationId, userId, archived) {
       where: { id: conversationId },
       data: {
         archivedAt: archived ? new Date() : null,
+        updatedAt: new Date(),
       },
     });
 
-    // Create audit event
-    await authService.createAuditEvent(userId, "CONVERSATION_ARCHIVED", {
-      conversationId,
-      archived,
-      action: archived ? "archived" : "unarchived",
+    console.log("Updated conversation:", {
+      id: updatedConversation.id,
+      archivedAt: updatedConversation.archivedAt,
     });
 
-    return {
+    const result = {
       id: updatedConversation.id,
       archived: !!updatedConversation.archivedAt,
       archivedAt: updatedConversation.archivedAt,
     };
+
+    console.log("=== ARCHIVE TOGGLE SUCCESS ===");
+    console.log("Result:", result);
+    return result;
   } catch (error) {
-    if (error instanceof ApiError) throw error;
-    logger.error("Error toggling archive:", error);
-    throw new ApiError(500, "Failed to toggle archive");
+    console.error("=== ARCHIVE TOGGLE ERROR ===");
+    console.error("Error:", error.message);
+    console.error("Stack:", error.stack);
+
+    // Re-throw as ApiError
+    if (error.message.includes("not found")) {
+      throw new ApiError(404, error.message);
+    } else if (error.message.includes("not authorized")) {
+      throw new ApiError(403, error.message);
+    } else {
+      throw new ApiError(500, `Archive operation failed: ${error.message}`);
+    }
   }
 }
 
@@ -1274,6 +1325,119 @@ async function getSharedConversation(token) {
   }
 }
 
+/**
+ * Get a specific conversation with all messages
+ * @param {string} conversationId - Conversation ID
+ * @param {string} userId - User ID
+ * @param {string} workspaceId - Workspace ID
+ * @returns {Promise<object>}
+ */
+async function getConversationById(conversationId, userId, workspaceId) {
+  try {
+    // Validate required parameters
+    if (!conversationId || typeof conversationId !== "string") {
+      throw new ApiError(400, "Valid conversationId is required");
+    }
+
+    if (!userId || typeof userId !== "string") {
+      throw new ApiError(400, "Valid userId is required");
+    }
+
+    if (!workspaceId || typeof workspaceId !== "string") {
+      throw new ApiError(400, "Valid workspaceId is required");
+    }
+
+    // Build where clause for visibility logic
+    const where = {
+      id: conversationId,
+      isActive: true,
+      OR: [
+        // User's private conversations
+        {
+          userId,
+          visibility: "PRIVATE",
+        },
+        // Shared conversations in user's workspace
+        {
+          user: {
+            workspaceId,
+          },
+          visibility: "SHARED",
+        },
+      ],
+    };
+
+    const conversation = await prisma.conversation.findFirst({
+      where,
+      include: {
+        persona: {
+          select: {
+            id: true,
+            name: true,
+            avatarUrl: true,
+          },
+        },
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+        messages: {
+          where: {
+            deleted: false,
+          },
+          orderBy: { createdAt: "asc" },
+          select: {
+            id: true,
+            content: true,
+            role: true,
+            userId: true,
+            edited: true,
+            createdAt: true,
+            reactions: {
+              select: {
+                id: true,
+                type: true,
+                userId: true,
+                createdAt: true,
+              },
+            },
+          },
+        },
+        _count: {
+          select: {
+            messages: true,
+          },
+        },
+      },
+    });
+
+    if (!conversation) {
+      throw new ApiError(404, "Conversation not found or access denied");
+    }
+
+    return {
+      id: conversation.id,
+      title: conversation.title,
+      personaId: conversation.personaId,
+      persona: conversation.persona,
+      user: conversation.user,
+      visibility: conversation.visibility,
+      archivedAt: conversation.archivedAt,
+      messages: conversation.messages,
+      messageCount: conversation._count.messages,
+      createdAt: conversation.createdAt,
+      updatedAt: conversation.updatedAt,
+    };
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    logger.error("Error fetching conversation by ID:", error);
+    throw new ApiError(500, "Failed to fetch conversation");
+  }
+}
+
 module.exports = {
   getPersonas,
   getPersonaById,
@@ -1287,4 +1451,5 @@ module.exports = {
   toggleArchive,
   createShareableLink,
   getSharedConversation,
+  getConversationById,
 };

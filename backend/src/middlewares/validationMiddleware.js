@@ -483,26 +483,55 @@ const validateWebhookTraits = [
     .withMessage("Persona name is required")
     .isString()
     .withMessage("Persona name must be a string"),
-  body("metadata").isObject().withMessage("Metadata must be an object"),
+  body("metadata")
+    .custom((value) => {
+      if (typeof value !== "object" || value === null || Array.isArray(value)) {
+        throw new Error("Metadata must be an object");
+      }
+      return true;
+    })
+    .withMessage("Metadata must be an object"),
   body("metadata.about")
     .notEmpty()
     .withMessage("About field is required")
     .isString()
     .withMessage("About field must be a string"),
   body("metadata.coreExpertise")
-    .isArray()
+    .custom((value) => {
+      if (!Array.isArray(value)) {
+        throw new Error("Core expertise must be an array");
+      }
+      return true;
+    })
     .withMessage("Core expertise must be an array"),
   body("metadata.communicationStyle")
     .notEmpty()
     .withMessage("Communication style is required")
     .isString()
     .withMessage("Communication style must be a string"),
-  body("metadata.traits").isArray().withMessage("Traits must be an array"),
+  body("metadata.traits")
+    .custom((value) => {
+      if (!Array.isArray(value)) {
+        throw new Error("Traits must be an array");
+      }
+      return true;
+    })
+    .withMessage("Traits must be an array"),
   body("metadata.painPoints")
-    .isArray()
+    .custom((value) => {
+      if (!Array.isArray(value)) {
+        throw new Error("Pain points must be an array");
+      }
+      return true;
+    })
     .withMessage("Pain points must be an array"),
   body("metadata.keyResponsibilities")
-    .isArray()
+    .custom((value) => {
+      if (!Array.isArray(value)) {
+        throw new Error("Key responsibilities must be an array");
+      }
+      return true;
+    })
     .withMessage("Key responsibilities must be an array"),
   handleValidationErrors,
 ];

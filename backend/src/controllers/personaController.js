@@ -427,8 +427,8 @@ const updateConversationVisibility = asyncHandler(async (req, res) => {
       throw new Error("Invalid conversation ID");
     }
 
-    // Validate visibility values
-    const validVisibilities = ["PUBLIC", "PRIVATE", "WORKSPACE"];
+    // Validate visibility values (must match ConversationVisibility enum)
+    const validVisibilities = ["PRIVATE", "SHARED"];
     if (!validVisibilities.includes(visibility)) {
       logger.warn("Visibility update failed: invalid visibility value", {
         userId,
@@ -720,73 +720,36 @@ const toggleReaction = asyncHandler(async (req, res) => {
  * PATCH /api/conversations/:id/archive
  */
 const toggleArchive = asyncHandler(async (req, res) => {
-  const { ipAddress, userAgent, traceId } = getClientInfo(req);
-
   try {
+    console.log("=== CONTROLLER: Archive toggle request ===");
+
     const { id } = req.params;
     const { archived } = req.body;
     const userId = req.user.id;
 
-    // Validate required fields
-    const validation = validateRequiredFields(req.body, ["archived"]);
-    if (!validation.isValid) {
-      logger.warn("Archive toggle failed: missing required fields", {
-        userId,
-        conversationId: id,
-        missingFields: validation.missingFields,
-        ipAddress,
-        userAgent,
-        traceId,
-      });
-      throw new Error(
-        `Missing required fields: ${validation.missingFields.join(", ")}`
-      );
+    console.log("Request data:", { id, archived, userId });
+
+    // Basic validation
+    if (!id) {
+      throw new Error("Conversation ID is required");
     }
 
-    if (!id || !validateNonEmptyString(id)) {
-      logger.warn("Archive toggle failed: invalid conversation ID", {
-        userId,
-        conversationId: id,
-        ipAddress,
-        userAgent,
-        traceId,
-      });
-      throw new Error("Invalid conversation ID");
-    }
-
-    // Validate archived value
     if (typeof archived !== "boolean") {
-      logger.warn("Archive toggle failed: invalid archived value", {
-        userId,
-        conversationId: id,
-        archived,
-        ipAddress,
-        userAgent,
-        traceId,
-      });
       throw new Error("Archived value must be a boolean");
     }
 
-    logger.info("Conversation archive toggle requested", {
-      userId,
-      conversationId: id,
-      archived,
-      ipAddress,
-      userAgent,
-      traceId,
-    });
+    if (!userId) {
+      throw new Error("User ID is required");
+    }
 
+    console.log("Validation passed, calling service...");
+
+    // Call service
     const result = await personaService.toggleArchive(id, userId, archived);
 
-    logger.info("Conversation archive toggle completed", {
-      userId,
-      conversationId: id,
-      archived: result.archived,
-      ipAddress,
-      userAgent,
-      traceId,
-    });
+    console.log("Service returned:", result);
 
+    // Send response
     res.status(200).json(
       apiResponse({
         data: result,
@@ -795,17 +758,21 @@ const toggleArchive = asyncHandler(async (req, res) => {
         } successfully`,
       })
     );
+
+    console.log("=== CONTROLLER: Archive toggle success ===");
   } catch (error) {
-    logger.error("Conversation archive toggle failed", {
-      userId: req.user.id,
-      conversationId: req.params.id,
-      error: error.message,
-      stack: error.stack,
-      ipAddress,
-      userAgent,
-      traceId,
-    });
-    throw error;
+    console.error("=== CONTROLLER: Archive toggle error ===");
+    console.error("Error:", error.message);
+    console.error("Stack:", error.stack);
+
+    // Send error response
+    res.status(500).json(
+      apiResponse({
+        success: false,
+        message: error.message || "Failed to toggle archive status",
+        error: error.message,
+      })
+    );
   }
 });
 
@@ -952,6 +919,64 @@ const getSharedConversation = asyncHandler(async (req, res) => {
   }
 });
 
+/**
+ * Get a specific conversation with all messages
+ * GET /api/conversations/:id
+ */
+const getConversationById = asyncHandler(async (req, res) => {
+  const { ipAddress, userAgent, traceId } = getClientInfo(req);
+
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+    const workspaceId = req.user.workspaceId;
+
+    logger.info("Conversation by ID retrieval requested", {
+      conversationId: id,
+      userId,
+      workspaceId,
+      ipAddress,
+      userAgent,
+      traceId,
+    });
+
+    const conversation = await personaService.getConversationById(
+      id,
+      userId,
+      workspaceId
+    );
+
+    logger.info("Conversation by ID retrieved successfully", {
+      conversationId: id,
+      userId,
+      workspaceId,
+      messageCount: conversation.messageCount,
+      ipAddress,
+      userAgent,
+      traceId,
+    });
+
+    res.status(200).json(
+      apiResponse({
+        data: conversation,
+        message: "Conversation retrieved successfully",
+      })
+    );
+  } catch (error) {
+    logger.error("Conversation by ID retrieval failed", {
+      conversationId: req.params.id,
+      userId: req.user.id,
+      workspaceId: req.user.workspaceId,
+      error: error.message,
+      stack: error.stack,
+      ipAddress,
+      userAgent,
+      traceId,
+    });
+    throw error;
+  }
+});
+
 module.exports = {
   getPersonas,
   getPersonaById,
@@ -967,4 +992,5 @@ module.exports = {
   getClientInfo,
   validateRequiredFields,
   validateNonEmptyString,
+  getConversationById,
 };

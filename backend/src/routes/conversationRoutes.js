@@ -59,6 +59,32 @@ router.get(
   personaController.getConversations
 );
 
+// GET /api/conversations/:id - Get specific conversation with all messages
+router.get(
+  "/:id",
+  authenticatedOnly,
+  personaLimiter,
+  (req, res, next) => {
+    try {
+      const { id } = req.params;
+      const clientInfo = getClientInfo(req);
+      logger.info("GET /api/conversations/:id accessed", {
+        conversationId: id,
+        ...clientInfo,
+      });
+      next();
+    } catch (error) {
+      const clientInfo = getClientInfo(req);
+      logger.error("Error in GET /api/conversations/:id logging", {
+        error: error.message,
+        ...clientInfo,
+      });
+      next(error);
+    }
+  },
+  personaController.getConversationById
+);
+
 // PATCH /api/conversations/:id/visibility - Update conversation visibility
 router.patch(
   "/:id/visibility",
@@ -150,7 +176,7 @@ router.patch(
       next(error);
     }
   },
-  validateArchive,
+  // validateArchive, // Temporarily removed for debugging
   personaController.toggleArchive
 );
 

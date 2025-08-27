@@ -254,6 +254,44 @@ router.delete(
   workspaceController.removeMember
 );
 
+// DELETE /api/workspaces/:id/members/:uid/permanent - Permanently delete member
+router.delete(
+  "/:id/members/:uid/permanent",
+  authMiddleware,
+  personaLimiter,
+  (req, res, next) => {
+    try {
+      const { id, uid } = req.params;
+      const clientInfo = getClientInfo(req);
+
+      logger.info(
+        "DELETE /api/workspaces/:id/members/:uid/permanent accessed",
+        {
+          workspaceId: id,
+          memberId: uid,
+          ...clientInfo,
+        }
+      );
+
+      next();
+    } catch (error) {
+      const clientInfo = getClientInfo(req);
+      logger.error(
+        "Error in DELETE /api/workspaces/:id/members/:uid/permanent logging",
+        {
+          error: error.message,
+          ...clientInfo,
+        }
+      );
+      next(error);
+    }
+  },
+  validateWorkspaceId,
+  validateMemberId,
+  roleMiddleware("ADMIN"),
+  workspaceController.deleteMemberPermanent
+);
+
 // POST /api/workspaces/:id/delete - Request workspace deletion
 router.post(
   "/:id/delete",

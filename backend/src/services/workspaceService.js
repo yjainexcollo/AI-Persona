@@ -406,6 +406,81 @@ async function removeMember(workspaceId, userId, memberId) {
   );
 }
 
+// Permanently delete member from workspace (hard delete)
+async function deleteMemberPermanent(workspaceId, userId, memberId) {
+  // Verify user is admin of this workspace
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { workspaceId: true, role: true },
+  });
+
+  if (!user || user.workspaceId !== workspaceId) {
+    throw new ApiError(403, "Access denied to this workspace");
+  }
+
+  if (user.role !== "ADMIN") {
+    throw new ApiError(
+      403,
+      "Only workspace admins can permanently delete members"
+    );
+  }
+
+  // Verify member exists and belongs to the same workspace
+  const member = await prisma.user.findUnique({
+    where: { id: memberId },
+    select: { workspaceId: true, role: true, status: true },
+  });
+
+  if (!member || member.workspaceId !== workspaceId) {
+    throw new ApiError(404, "Member not found in this workspace");
+  }
+
+  // Prevent permanently deleting the last admin in a workspace
+  if (member.role === "ADMIN") {
+    const adminCount = await prisma.user.count({
+      where: { workspaceId, role: "ADMIN" },
+    });
+    if (adminCount <= 1) {
+      throw new ApiError(
+        400,
+        "Cannot permanently delete the only admin from the workspace"
+      );
+    }
+  }
+
+  // Prevent self-removal if they'd become zero admins
+  if (memberId === userId) {
+    const adminCount = await prisma.user.count({
+      where: { workspaceId, role: "ADMIN" },
+    });
+    if (adminCount <= 1) {
+      throw new ApiError(
+        400,
+        "Cannot permanently delete the only admin from the workspace"
+      );
+    }
+  }
+
+  // Use transaction to ensure data consistency
+  await prisma.$transaction(async (tx) => {
+    // Perform hard delete; relations are set to Cascade in schema
+    await tx.user.delete({ where: { id: memberId } });
+
+    // Log audit event
+    await logAuditEvent(userId, "MEMBER_REMOVED", {
+      workspaceId,
+      memberId,
+      hardDelete: true,
+      memberRole: member.role,
+      memberStatus: member.status,
+    });
+  });
+
+  logger.info(
+    `Member ${memberId} permanently removed from workspace ${workspaceId} by user ${userId}`
+  );
+}
+
 // Request workspace deletion
 async function requestDeletion(workspaceId, userId, reason) {
   // Verify user is admin of this workspace
@@ -529,6 +604,7 @@ module.exports = {
   changeMemberRole,
   changeMemberStatus,
   removeMember,
+  deleteMemberPermanent,
   requestDeletion,
   isValidTimezone,
   isValidLocale,

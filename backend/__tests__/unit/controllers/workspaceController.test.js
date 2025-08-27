@@ -761,14 +761,14 @@ describe("WorkspaceController", () => {
         const mockUpdatedMember = {
           id: "member123",
           name: "John Doe",
-          status: "SUSPENDED",
+          status: "DEACTIVATED",
         };
 
         mockWorkspaceService.changeMemberStatus.mockResolvedValue(
           mockUpdatedMember
         );
         mockReq.params = { id: "workspace123", uid: "member123" };
-        mockReq.body = { status: "suspended" };
+        mockReq.body = { status: "deactivated" };
 
         await workspaceController.changeStatus(mockReq, mockRes);
 
@@ -776,7 +776,7 @@ describe("WorkspaceController", () => {
           "workspace123",
           "user123",
           "member123",
-          "SUSPENDED"
+          "DEACTIVATED"
         );
         expect(mockRes.status).toHaveBeenCalledWith(200);
         expect(mockRes.json).toHaveBeenCalledWith({
@@ -790,7 +790,7 @@ describe("WorkspaceController", () => {
     describe("Validation scenarios", () => {
       it("should handle missing workspace ID", async () => {
         mockReq.params = { id: "", uid: "member123" };
-        mockReq.body = { status: "suspended" };
+        mockReq.body = { status: "deactivated" };
 
         await expect(
           workspaceController.changeStatus(mockReq, mockRes)
@@ -799,7 +799,7 @@ describe("WorkspaceController", () => {
 
       it("should handle missing member ID", async () => {
         mockReq.params = { id: "workspace123", uid: "" };
-        mockReq.body = { status: "suspended" };
+        mockReq.body = { status: "deactivated" };
 
         await expect(
           workspaceController.changeStatus(mockReq, mockRes)
@@ -825,7 +825,7 @@ describe("WorkspaceController", () => {
       });
 
       it("should accept valid statuses", async () => {
-        const validStatuses = ["active", "inactive", "suspended", "pending"];
+        const validStatuses = ["active", "deactivated", "pending_verify"];
 
         for (const status of validStatuses) {
           mockReq.params = { id: "workspace123", uid: "member123" };
@@ -850,7 +850,7 @@ describe("WorkspaceController", () => {
     describe("Error scenarios", () => {
       it("should handle service errors", async () => {
         mockReq.params = { id: "workspace123", uid: "member123" };
-        mockReq.body = { status: "suspended" };
+        mockReq.body = { status: "deactivated" };
         const serviceError = new Error("Permission denied");
         mockWorkspaceService.changeMemberStatus.mockRejectedValue(serviceError);
 
@@ -1246,13 +1246,11 @@ describe("WorkspaceController", () => {
       it("should validate valid status values", async () => {
         const validStatuses = [
           "active",
-          "inactive",
-          "suspended",
-          "pending",
+          "deactivated",
+          "pending_verify",
           "ACTIVE",
-          "INACTIVE",
-          "SUSPENDED",
-          "PENDING",
+          "DEACTIVATED",
+          "PENDING_VERIFY",
         ];
 
         validStatuses.forEach((status) => {
