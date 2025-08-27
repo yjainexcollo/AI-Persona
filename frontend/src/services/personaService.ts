@@ -44,7 +44,9 @@ export interface MessageResponse {
   data: {
     reply: string;
     conversationId: string;
-    messageId: string;
+    messageId: string; // assistant message ID (backward compatibility)
+    assistantMessageId?: string;
+    userMessageId?: string;
   };
 }
 
@@ -71,6 +73,7 @@ export interface Conversation {
     id: string;
     content: string;
     role: "USER" | "ASSISTANT";
+    userId?: string; // Add userId for ownership checking
     createdAt: string;
     edited?: boolean;
     reactions?: Array<{
@@ -91,6 +94,11 @@ export interface ConversationsResponse {
   status: string;
   message: string;
   data: Conversation[];
+}
+export interface ConversationByIdResponse {
+  status: string;
+  message: string;
+  data: Conversation;
 }
 
 export interface VisibilityUpdateResponse {
@@ -118,6 +126,7 @@ export interface EditMessageResponse {
   data: {
     editedMessageId: string;
     assistantMessageId: string;
+    assistantMessageContent?: string;
     conversationId: string;
   };
 }
@@ -329,7 +338,25 @@ export const getConversations = async (
   return await res.json();
 };
 
-// Removed getConversationById in favor of fetching via getConversations or getChatSessionById
+/**
+ * Get a specific conversation with all messages
+ * @param conversationId - The conversation ID to fetch
+ * @returns Promise<ConversationsResponse>
+ */
+export const getConversationById = async (
+  conversationId: string
+): Promise<ConversationByIdResponse> => {
+  const res = await fetchWithAuth(
+    `${backendUrl}/api/conversations/${conversationId}`
+  );
+
+  if (!res.ok) {
+    const errorData = await res.json();
+    throw new Error(errorData.message || "Failed to fetch conversation");
+  }
+
+  return await res.json();
+};
 
 /**
  * Update conversation visibility
@@ -372,25 +399,59 @@ export const toggleConversationArchive = async (
   conversationId: string,
   archived: boolean
 ): Promise<ArchiveUpdateResponse> => {
-  const res = await fetchWithAuth(
-    `${backendUrl}/api/conversations/${conversationId}/archive`,
-    {
+  try {
+    console.log("=== FRONTEND: Archive toggle start ===");
+    console.log("Input:", { conversationId, archived });
+
+    const url = `${backendUrl}/api/conversations/${conversationId}/archive`;
+    const body = JSON.stringify({ archived });
+
+    console.log("Making request to:", url);
+    console.log("Request body:", body);
+
+    const res = await fetchWithAuth(url, {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ archived }),
+      body,
+    });
+
+    console.log("Response status:", res.status);
+    console.log("Response ok:", res.ok);
+
+    if (!res.ok) {
+      const errorText = await res.text();
+      console.error("Response error text:", errorText);
+
+      let errorData;
+      try {
+        errorData = JSON.parse(errorText);
+      } catch (parseError) {
+        errorData = { message: errorText };
+      }
+
+      console.error("Archive toggle failed:", errorData);
+      throw new Error(
+        errorData.message ||
+          errorData.error ||
+          "Failed to update conversation archive status"
+      );
     }
-  );
 
-  if (!res.ok) {
-    const errorData = await res.json();
-    throw new Error(
-      errorData.message || "Failed to update conversation archive status"
+    const responseData = await res.json();
+    console.log("Archive toggle response:", responseData);
+    console.log("=== FRONTEND: Archive toggle success ===");
+
+    return responseData;
+  } catch (error) {
+    console.error("=== FRONTEND: Archive toggle error ===");
+    console.error(
+      "Error:",
+      error instanceof Error ? error.message : String(error)
     );
+    throw error;
   }
-
-  return await res.json();
 };
 
 /**

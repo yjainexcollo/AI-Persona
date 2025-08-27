@@ -74,6 +74,32 @@ export function getCurrentUser(): any {
 }
 
 /**
+ * Refresh current user data from backend
+ *
+ * @returns Promise that resolves with updated user data
+ */
+export async function refreshCurrentUser(): Promise<any> {
+  try {
+    const response = await fetchWithAuth(`${env.backendUrl}/api/users/me`);
+
+    if (!response.ok) {
+      throw new Error("Failed to refresh user data");
+    }
+
+    const data = await response.json();
+    const userData = data.data.user;
+
+    // Update localStorage with fresh user data
+    storage.setUser(userData);
+
+    return userData;
+  } catch (error) {
+    console.error("Failed to refresh user data:", error);
+    throw error;
+  }
+}
+
+/**
  * Verify email with token
  *
  * @param token - The verification token from email

@@ -33,6 +33,7 @@ import {
   editMessage,
   type Conversation,
   type MessageResponse,
+  getConversationById,
 } from "../services/personaService";
 import { getWorkspaceDetails } from "../services/workspaceService";
 import { storage } from "../lib/storage/localStorage";
@@ -134,6 +135,7 @@ export default function ChatPage() {
       fileType?: string;
       isTyping?: boolean;
       id?: string;
+      userId?: string; // Add userId for ownership checking
       fileUrls?: string[];
       fileTypes?: string[];
       edited?: boolean;
@@ -262,30 +264,34 @@ export default function ChatPage() {
         }))
       );
 
-      // If we have a conversation ID from URL params, load that conversation
+      // If we have a conversation ID from URL params, load that conversation with all messages
       if (conversationIdFromUrl) {
         // Validate that conversationIdFromUrl is a valid cuid
         const cuidRegex = /^[a-z0-9]{25}$/;
         if (cuidRegex.test(conversationIdFromUrl)) {
-          // First try to find in persona conversations
-          let foundConversation = personaConversations.find(
-            (conv) => conv.id === conversationIdFromUrl
-          );
-
-          // If not found in persona conversations, try to find in all conversations
-          if (!foundConversation) {
-            foundConversation = response.data.find(
-              (conv) => conv.id === conversationIdFromUrl
+          try {
+            // Load the specific conversation with all messages
+            const conversationResponse = await getConversationById(
+              conversationIdFromUrl
             );
-            if (foundConversation) {
+            const fullConversation = conversationResponse.data;
+
+            // Verify this conversation belongs to the current persona
+            if (fullConversation.personaId === persona.id) {
+              setCurrentConversationId(conversationIdFromUrl);
+              setCurrentConversation(fullConversation);
+              // Load all messages from this conversation
+              loadConversationMessages(fullConversation);
+              return; // Exit early since we've loaded the specific conversation
+            } else {
               console.log(
                 "Found conversation in all conversations, but it belongs to persona:",
-                foundConversation.personaId
+                fullConversation.personaId
               );
               // Load the correct persona for this conversation
               try {
                 const correctPersona = await getPersonaById(
-                  foundConversation.personaId
+                  fullConversation.personaId
                 );
                 setPersona(correctPersona);
                 // The conversation will be loaded in the next useEffect when persona changes
@@ -294,52 +300,10 @@ export default function ChatPage() {
                 console.error("Error loading correct persona:", error);
               }
             }
+          } catch (error) {
+            console.error("Error loading specific conversation:", error);
+            // Fall back to finding in persona conversations
           }
-
-          if (foundConversation) {
-            setCurrentConversationId(conversationIdFromUrl);
-            setCurrentConversation(foundConversation);
-            // Try to load full messages using chat session if present in URL (sessionId param)
-            try {
-              // If URL also contains a sessionId, prefer loading via session for full message history
-              const sessionIdFromUrl = searchParams.get("sessionId");
-              if (sessionIdFromUrl) {
-                const session = await getChatSessionById(sessionIdFromUrl);
-                loadConversationMessages({
-                  ...foundConversation,
-                  messages: session.messages,
-                } as Conversation);
-              } else {
-                // Fallback: use whatever messages are on the conversation (might be last message only)
-                loadConversationMessages(foundConversation);
-              }
-            } catch {
-              // Fallback again to conversation object
-              loadConversationMessages(foundConversation);
-            }
-            console.log(
-              "Loaded existing conversation from URL:",
-              foundConversation.id
-            );
-          } else {
-            console.warn(
-              "Conversation not found in any conversations:",
-              conversationIdFromUrl
-            );
-            // Clear the invalid conversation ID from URL
-            const newUrl = new URL(window.location.href);
-            newUrl.searchParams.delete("conversationId");
-            window.history.replaceState({}, "", newUrl.toString());
-          }
-        } else {
-          console.warn(
-            "Invalid conversation ID in URL:",
-            conversationIdFromUrl
-          );
-          // Clear the invalid conversation ID from URL
-          const newUrl = new URL(window.location.href);
-          newUrl.searchParams.delete("conversationId");
-          window.history.replaceState({}, "", newUrl.toString());
         }
       } else if (currentConversationId) {
         // If we have a current conversation ID, try to find and update it
@@ -400,6 +364,7 @@ export default function ChatPage() {
       sender: msg.role === "USER" ? ("user" as const) : ("ai" as const),
       text: msg.content,
       id: msg.id,
+      userId: msg.userId, // Include userId for ownership checking
       edited: msg.edited || false,
       reactions: msg.reactions || [],
     }));
@@ -563,15 +528,6 @@ export default function ChatPage() {
       return;
     }
 
-    if (message.id) {
-      const messageTime = new Date(message.id).getTime(); // Using ID as timestamp for now
-      const tenMinutesAgo = Date.now() - 10 * 60 * 1000;
-      if (messageTime < tenMinutesAgo) {
-        console.log("Message is too old to edit (10 minute limit)");
-        return;
-      }
-    }
-
     setEditingMessageId(messageId);
     setEditingText(currentText);
   };
@@ -585,6 +541,35 @@ export default function ChatPage() {
       // Call backend edit API
       const response = await editMessage(messageId, editingText.trim());
 
+      // Optimistically update the edited message locally
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === messageId
+            ? {
+                ...msg,
+                text: editingText.trim(),
+                edited: true,
+              }
+            : msg
+        )
+      );
+
+      // If backend returned assistant reply content, append it immediately for responsiveness
+      if ((response.data as any).assistantMessageId) {
+        const assistantText =
+          (response.data as any).assistantMessageContent ?? "";
+        setMessages((prev) => [
+          ...prev,
+          {
+            sender: "ai" as const,
+            text: assistantText,
+            id: (response.data as any).assistantMessageId,
+            edited: false,
+            reactions: [],
+          },
+        ]);
+      }
+
       // Update conversation ID if it changed
       if (
         response.data.conversationId &&
@@ -597,15 +582,27 @@ export default function ChatPage() {
         window.history.replaceState({}, "", newUrl.toString());
       }
 
-      // Refresh conversations to get updated messages
-      await loadConversations();
+      // Fully refresh the conversation to reflect replaced thread
+      try {
+        const convId = response.data.conversationId;
+        if (convId) {
+          const convRes = await getConversationById(convId);
+          setCurrentConversation(convRes.data);
+          loadConversationMessages(convRes.data);
+        }
+      } catch (refreshErr) {
+        console.warn(
+          "Failed to refresh full conversation after edit",
+          refreshErr
+        );
+        await loadConversations();
+      }
 
       // Clear edit state
       setEditingMessageId(null);
       setEditingText("");
     } catch (error) {
       console.error("Error editing message:", error);
-      // Show error to user (you could add a toast notification here)
     } finally {
       setIsLoading(false);
     }
@@ -777,8 +774,8 @@ export default function ChatPage() {
 
     setIsLoading(true);
     try {
-      // Add user message to UI immediately
-      const tempMessageId = Date.now().toString();
+      // Add user message to UI immediately (temporary ID until backend responds)
+      const tempMessageId = `temp-${Date.now().toString(36)}`;
       setMessages((prev) => [
         ...prev,
         { sender: "user", text: trimmed, id: tempMessageId },
@@ -819,14 +816,20 @@ export default function ChatPage() {
         window.history.replaceState({}, "", newUrl.toString());
       }
 
-      // Replace typing indicator with actual AI response
+      // Replace typing indicator with actual AI response and reconcile temp user message ID
       setMessages((prev) => {
-        const newMessages = [...prev];
+        const newMessages = prev.map((m) =>
+          m.id === tempMessageId && (response.data as any).userMessageId
+            ? { ...m, id: (response.data as any).userMessageId }
+            : m
+        );
         // Remove typing indicator and add real response
         newMessages[newMessages.length - 1] = {
           sender: "ai",
           text: response.data.reply,
-          id: response.data.messageId,
+          id:
+            (response.data as any).assistantMessageId ||
+            response.data.messageId,
           isTyping: false,
         };
         return newMessages;

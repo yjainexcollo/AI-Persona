@@ -305,6 +305,48 @@ export const removeMember = async (
 };
 
 /**
+ * Permanently delete member from workspace (Admin only)
+ * @param workspaceId - The workspace ID
+ * @param memberId - The member ID
+ * @returns Promise<{ status: string; message: string }>
+ */
+export const deleteMemberPermanent = async (
+  workspaceId: string,
+  memberId: string
+): Promise<{ status: string; message: string }> => {
+  const res = await fetchWithAuth(
+    `${backendUrl}/api/workspaces/${workspaceId}/members/${memberId}/permanent`,
+    {
+      method: "DELETE",
+    }
+  );
+
+  if (!res.ok) {
+    let errorMessage = "Failed to permanently remove member";
+
+    try {
+      const errorData = await res.json();
+      errorMessage = errorData.message || errorMessage;
+    } catch (parseError) {
+      errorMessage = res.statusText || errorMessage;
+    }
+
+    if (
+      res.status === 400 &&
+      errorMessage.includes("Cannot remove the only admin")
+    ) {
+      throw new Error(
+        "Cannot remove the only admin from the workspace. At least one admin must remain."
+      );
+    }
+
+    throw new Error(errorMessage);
+  }
+
+  return await res.json();
+};
+
+/**
  * Request workspace deletion (Admin only)
  * @param workspaceId - The workspace ID
  * @param reason - Optional reason for deletion

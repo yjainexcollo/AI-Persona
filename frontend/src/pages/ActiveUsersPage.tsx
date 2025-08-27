@@ -49,7 +49,7 @@ import MoreVertIcon from "@mui/icons-material/MoreVert";
 import AdminSidebar from "../components/sidebar/AdminSidebar";
 import { colors, spacing, typography } from "../styles/tokens";
 import { fetchWithAuth } from "../utils/session";
-import { logout } from "../services/authService";
+import { logout, refreshCurrentUser } from "../services/authService";
 import { getAvatarUrl } from "../services/avatarService";
 import {
   getWorkspaceDetails,
@@ -57,6 +57,7 @@ import {
   changeMemberStatus,
   changeMemberRole,
   removeMember,
+  deleteMemberPermanent,
   type WorkspaceMember,
 } from "../services/workspaceService";
 
@@ -74,9 +75,11 @@ const ActiveUsersPage: React.FC = () => {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [workspaceId, setWorkspaceId] = useState<string>("");
   const [totalMembers, setTotalMembers] = useState(0);
-  const [statusFilter, setStatusFilter] = useState<string>("");
+  // Show only ACTIVE members by default so deactivated users disappear after removal
+  const [statusFilter, setStatusFilter] = useState<string>("ACTIVE");
   const [roleFilter, setRoleFilter] = useState<string>("");
   const [actionLoading, setActionLoading] = useState(false);
+  const [roleValidating, setRoleValidating] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [selectedMemberForStatus, setSelectedMemberForStatus] =
@@ -88,6 +91,20 @@ const ActiveUsersPage: React.FC = () => {
     try {
       setLoading(true);
       setError("");
+
+      // Refresh user data to ensure we have the latest role information
+      setRoleValidating(true);
+      try {
+        const refreshedUser = await refreshCurrentUser();
+
+        // Validate that the user has admin role
+        if (refreshedUser.role !== "ADMIN") {
+          setError("Access denied. Admin role required.");
+          return;
+        }
+      } finally {
+        setRoleValidating(false);
+      }
 
       // Get workspace details to get workspace ID
       const workspace = await getWorkspaceDetails();
@@ -125,6 +142,26 @@ const ActiveUsersPage: React.FC = () => {
 
   useEffect(() => {
     fetchWorkspaceData();
+
+    // Set up periodic role validation every 5 minutes
+    const roleValidationInterval = setInterval(async () => {
+      try {
+        setRoleValidating(true);
+        const refreshedUser = await refreshCurrentUser();
+        if (refreshedUser.role !== "ADMIN") {
+          setError(
+            "You no longer have admin privileges. Please refresh the page."
+          );
+        }
+      } catch (err) {
+        console.warn("Role validation failed:", err);
+      } finally {
+        setRoleValidating(false);
+      }
+    }, 5 * 60 * 1000); // 5 minutes
+
+    // Cleanup interval on unmount
+    return () => clearInterval(roleValidationInterval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -157,6 +194,23 @@ const ActiveUsersPage: React.FC = () => {
 
     try {
       setActionLoading(true);
+      setError(""); // Clear any previous errors
+
+      // Refresh user data to ensure we have the latest role information
+      setRoleValidating(true);
+      try {
+        const refreshedUser = await refreshCurrentUser();
+
+        // Validate that the user still has admin role
+        if (refreshedUser.role !== "ADMIN") {
+          throw new Error(
+            "You no longer have admin privileges. Please refresh the page."
+          );
+        }
+      } finally {
+        setRoleValidating(false);
+      }
+
       await changeMemberStatus(workspaceId, memberId, "ACTIVE");
       setSuccessMessage("Member activated successfully!");
 
@@ -181,6 +235,21 @@ const ActiveUsersPage: React.FC = () => {
     try {
       setActionLoading(true);
       setError(""); // Clear any previous errors
+
+      // Refresh user data to ensure we have the latest role information
+      setRoleValidating(true);
+      try {
+        const refreshedUser = await refreshCurrentUser();
+
+        // Validate that the user still has admin role
+        if (refreshedUser.role !== "ADMIN") {
+          throw new Error(
+            "You no longer have admin privileges. Please refresh the page."
+          );
+        }
+      } finally {
+        setRoleValidating(false);
+      }
 
       await changeMemberStatus(workspaceId, memberId, "DEACTIVATED");
       setSuccessMessage("Member deactivated successfully!");
@@ -210,6 +279,21 @@ const ActiveUsersPage: React.FC = () => {
       setActionLoading(true);
       setError(""); // Clear any previous errors
 
+      // Refresh user data to ensure we have the latest role information
+      setRoleValidating(true);
+      try {
+        const refreshedUser = await refreshCurrentUser();
+
+        // Validate that the user still has admin role
+        if (refreshedUser.role !== "ADMIN") {
+          throw new Error(
+            "You no longer have admin privileges. Please refresh the page."
+          );
+        }
+      } finally {
+        setRoleValidating(false);
+      }
+
       await changeMemberRole(workspaceId, memberId, newRole);
       setSuccessMessage("Member role updated successfully!");
 
@@ -236,7 +320,7 @@ const ActiveUsersPage: React.FC = () => {
 
     if (
       !window.confirm(
-        "Are you sure you want to remove this member from the workspace?"
+        "Are you sure you want to deactivate this member from the workspace?"
       )
     ) {
       return;
@@ -246,8 +330,23 @@ const ActiveUsersPage: React.FC = () => {
       setActionLoading(true);
       setError(""); // Clear any previous errors
 
+      // Refresh user data to ensure we have the latest role information
+      setRoleValidating(true);
+      try {
+        const refreshedUser = await refreshCurrentUser();
+
+        // Validate that the user still has admin role
+        if (refreshedUser.role !== "ADMIN") {
+          throw new Error(
+            "You no longer have admin privileges. Please refresh the page."
+          );
+        }
+      } finally {
+        setRoleValidating(false);
+      }
+
       await removeMember(workspaceId, memberId);
-      setSuccessMessage("Member removed successfully!");
+      setSuccessMessage("Member deactivated successfully!");
 
       // Refresh members list
       await fetchMembers(workspaceId, page);
@@ -257,10 +356,59 @@ const ActiveUsersPage: React.FC = () => {
       setTimeout(() => setSuccessMessage(""), 3000);
     } catch (err) {
       const errorMessage =
-        err instanceof Error ? err.message : "Failed to remove member";
+        err instanceof Error ? err.message : "Failed to deactivate member";
       setError(errorMessage);
 
       // Clear error after 5 seconds
+      setTimeout(() => setError(""), 5000);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleDeleteMemberPermanent = async (memberId: string) => {
+    if (!workspaceId) return;
+
+    if (
+      !window.confirm(
+        "This will permanently delete the member and all related data. This action cannot be undone. Continue?"
+      )
+    ) {
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      setError("");
+
+      // Ensure current user is still admin
+      setRoleValidating(true);
+      try {
+        const refreshedUser = await refreshCurrentUser();
+        if (refreshedUser.role !== "ADMIN") {
+          throw new Error(
+            "You no longer have admin privileges. Please refresh the page."
+          );
+        }
+      } finally {
+        setRoleValidating(false);
+      }
+
+      await deleteMemberPermanent(workspaceId, memberId);
+      setSuccessMessage("Member permanently removed successfully!");
+
+      // Refresh the members list to reflect the deletion
+      await fetchMembers(workspaceId, page);
+      setDetailsOpen(false);
+      setMemberDetails(null);
+
+      setTimeout(() => setSuccessMessage(""), 3000);
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error
+          ? err.message
+          : "Failed to permanently remove member";
+      setError(errorMessage);
       setTimeout(() => setError(""), 5000);
     } finally {
       setActionLoading(false);
@@ -278,6 +426,21 @@ const ActiveUsersPage: React.FC = () => {
     try {
       setActionLoading(true);
       setError(""); // Clear any previous errors
+
+      // Refresh user data to ensure we have the latest role information
+      setRoleValidating(true);
+      try {
+        const refreshedUser = await refreshCurrentUser();
+
+        // Validate that the user still has admin role
+        if (refreshedUser.role !== "ADMIN") {
+          throw new Error(
+            "You no longer have admin privileges. Please refresh the page."
+          );
+        }
+      } finally {
+        setRoleValidating(false);
+      }
 
       await changeMemberStatus(
         workspaceId,
@@ -337,7 +500,7 @@ const ActiveUsersPage: React.FC = () => {
     return role === "ADMIN" ? "primary" : "default";
   };
 
-  if (loading) {
+  if (loading || roleValidating) {
     return (
       <Box
         sx={{
@@ -345,9 +508,16 @@ const ActiveUsersPage: React.FC = () => {
           justifyContent: "center",
           alignItems: "center",
           minHeight: "60vh",
+          flexDirection: "column",
+          gap: 2,
         }}
       >
-        <Typography>Loading workspace members...</Typography>
+        <CircularProgress />
+        <Typography>
+          {loading
+            ? "Loading workspace members..."
+            : "Validating admin privileges..."}
+        </Typography>
       </Box>
     );
   }
@@ -471,10 +641,13 @@ const ActiveUsersPage: React.FC = () => {
           <TextField
             placeholder="Search members..."
             size="small"
+            disabled={roleValidating}
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
-                  <SearchIcon sx={{ color: "#bdbdbd" }} />
+                  <SearchIcon
+                    sx={{ color: roleValidating ? "#ccc" : "#bdbdbd" }}
+                  />
                 </InputAdornment>
               ),
               sx: {
@@ -495,6 +668,26 @@ const ActiveUsersPage: React.FC = () => {
           </Alert>
         )}
 
+        {error && (
+          <Alert
+            severity="error"
+            sx={{ mb: 2 }}
+            action={
+              error.includes("admin privileges") ? (
+                <Button
+                  color="inherit"
+                  size="small"
+                  onClick={() => window.location.reload()}
+                >
+                  Refresh Page
+                </Button>
+              ) : undefined
+            }
+          >
+            {error}
+          </Alert>
+        )}
+
         <Paper elevation={0} sx={{ borderRadius: 3, p: { xs: 2, md: 3 } }}>
           <Box
             sx={{
@@ -510,6 +703,7 @@ const ActiveUsersPage: React.FC = () => {
               <Select
                 value={statusFilter}
                 label="Status"
+                disabled={roleValidating}
                 onChange={(e) =>
                   setStatusFilter(
                     (e.target.value || "").toString().toUpperCase()
@@ -528,6 +722,7 @@ const ActiveUsersPage: React.FC = () => {
               <Select
                 value={roleFilter}
                 label="Role"
+                disabled={roleValidating}
                 onChange={(e) =>
                   setRoleFilter((e.target.value || "").toString().toUpperCase())
                 }
@@ -584,6 +779,7 @@ const ActiveUsersPage: React.FC = () => {
                       <Checkbox
                         checked={checked.includes(idx)}
                         onChange={() => handleCheck(idx)}
+                        disabled={roleValidating}
                         icon={<CheckBoxOutlineBlankIcon />}
                         checkedIcon={<CheckBoxIcon sx={{ color: "#2950DA" }} />}
                       />
@@ -621,11 +817,12 @@ const ActiveUsersPage: React.FC = () => {
                         color={getStatusColor(member.status)}
                         size="small"
                         onClick={() => handleStatusClick(member)}
+                        disabled={roleValidating}
                         sx={{
-                          cursor: "pointer",
+                          cursor: roleValidating ? "not-allowed" : "pointer",
                           "&:hover": {
-                            opacity: 0.8,
-                            transform: "scale(1.05)",
+                            opacity: roleValidating ? 1 : 0.8,
+                            transform: roleValidating ? "none" : "scale(1.05)",
                           },
                         }}
                       />
@@ -637,7 +834,10 @@ const ActiveUsersPage: React.FC = () => {
                     </TableCell>
                     <TableCell align="right">
                       <Tooltip title="View details">
-                        <IconButton onClick={() => handleViewDetails(member)}>
+                        <IconButton
+                          onClick={() => handleViewDetails(member)}
+                          disabled={roleValidating}
+                        >
                           <MoreVertIcon />
                         </IconButton>
                       </Tooltip>
@@ -664,6 +864,7 @@ const ActiveUsersPage: React.FC = () => {
                 color="primary"
                 shape="rounded"
                 size="large"
+                disabled={roleValidating}
               />
             </Box>
           )}
@@ -713,7 +914,7 @@ const ActiveUsersPage: React.FC = () => {
                     color="success"
                     variant="contained"
                     onClick={() => handleActivateMember(memberDetails.id)}
-                    disabled={actionLoading}
+                    disabled={actionLoading || roleValidating}
                   >
                     Activate Member
                   </Button>
@@ -724,7 +925,11 @@ const ActiveUsersPage: React.FC = () => {
                     color="error"
                     variant="outlined"
                     onClick={() => handleDeactivateMember(memberDetails.id)}
-                    disabled={actionLoading || memberDetails.role === "ADMIN"}
+                    disabled={
+                      actionLoading ||
+                      roleValidating ||
+                      memberDetails.role === "ADMIN"
+                    }
                     title={
                       memberDetails.role === "ADMIN"
                         ? "Cannot deactivate an admin. Please change their role to Member first."
@@ -740,7 +945,7 @@ const ActiveUsersPage: React.FC = () => {
                     color="primary"
                     variant="outlined"
                     onClick={() => handleChangeRole(memberDetails.id, "ADMIN")}
-                    disabled={actionLoading}
+                    disabled={actionLoading || roleValidating}
                   >
                     Make Admin
                   </Button>
@@ -753,6 +958,7 @@ const ActiveUsersPage: React.FC = () => {
                     onClick={() => handleChangeRole(memberDetails.id, "MEMBER")}
                     disabled={
                       actionLoading ||
+                      roleValidating ||
                       members.filter(
                         (m) => m.role === "ADMIN" && m.status === "ACTIVE"
                       ).length === 1
@@ -775,21 +981,56 @@ const ActiveUsersPage: React.FC = () => {
                   onClick={() => handleRemoveMember(memberDetails.id)}
                   disabled={
                     actionLoading ||
+                    roleValidating ||
                     (memberDetails.role === "ADMIN" &&
                       members.filter(
                         (m) => m.role === "ADMIN" && m.status === "ACTIVE"
-                      ).length === 1)
+                      ).length === 1) ||
+                    memberDetails.id ===
+                      JSON.parse(localStorage.getItem("user") || "{}").id
                   }
                   title={
                     memberDetails.role === "ADMIN" &&
                     members.filter(
                       (m) => m.role === "ADMIN" && m.status === "ACTIVE"
                     ).length === 1
-                      ? "Cannot remove the only admin from the workspace"
-                      : "Remove this member from the workspace"
+                      ? "Cannot deactivate the only admin from the workspace"
+                      : memberDetails.id ===
+                        JSON.parse(localStorage.getItem("user") || "{}").id
+                      ? "Cannot deactivate yourself"
+                      : "Deactivate this member from the workspace (soft delete)"
                   }
                 >
-                  Remove Member
+                  Deactivate
+                </Button>
+
+                <Button
+                  color="error"
+                  variant="contained"
+                  onClick={() => handleDeleteMemberPermanent(memberDetails.id)}
+                  disabled={
+                    actionLoading ||
+                    roleValidating ||
+                    (memberDetails.role === "ADMIN" &&
+                      members.filter(
+                        (m) => m.role === "ADMIN" && m.status === "ACTIVE"
+                      ).length === 1) ||
+                    memberDetails.id ===
+                      JSON.parse(localStorage.getItem("user") || "{}").id
+                  }
+                  title={
+                    memberDetails.role === "ADMIN" &&
+                    members.filter(
+                      (m) => m.role === "ADMIN" && m.status === "ACTIVE"
+                    ).length === 1
+                      ? "Cannot permanently delete the only admin from the workspace"
+                      : memberDetails.id ===
+                        JSON.parse(localStorage.getItem("user") || "{}").id
+                      ? "Cannot permanently delete yourself"
+                      : "Permanently delete this member and all their data (hard delete)"
+                  }
+                >
+                  Remove Permanently
                 </Button>
               </Box>
 
@@ -813,7 +1054,7 @@ const ActiveUsersPage: React.FC = () => {
                   </Alert>
                 )}
 
-              {/* Show warning if this is the only admin for removal */}
+              {/* Show warning if this is the only admin for deactivation */}
               {memberDetails.role === "ADMIN" &&
                 members.filter(
                   (m) => m.role === "ADMIN" && m.status === "ACTIVE"
@@ -823,6 +1064,25 @@ const ActiveUsersPage: React.FC = () => {
                     must remain to manage the workspace.
                   </Alert>
                 )}
+
+              {/* Show info about permanent deletion */}
+              <Alert severity="info" sx={{ mt: 2 }}>
+                <strong>Deactivate:</strong> Temporarily removes the member
+                (soft delete). They can be reactivated later. <br />
+                <strong>Remove Permanently:</strong> Completely deletes the
+                member and all their data (hard delete). This action cannot be
+                undone.
+              </Alert>
+
+              {/* Show warning if trying to modify self */}
+              {memberDetails.id ===
+                JSON.parse(localStorage.getItem("user") || "{}").id && (
+                <Alert severity="warning" sx={{ mt: 2 }}>
+                  <strong>Note:</strong> You cannot deactivate or permanently
+                  delete yourself. Ask another admin to perform these actions if
+                  needed.
+                </Alert>
+              )}
             </Box>
           ) : (
             <Typography>No details available.</Typography>
@@ -869,7 +1129,7 @@ const ActiveUsersPage: React.FC = () => {
                     color="success"
                     variant="outlined"
                     onClick={() => handleStatusChange("ACTIVE")}
-                    disabled={actionLoading}
+                    disabled={actionLoading || roleValidating}
                   >
                     Activate
                   </Button>
@@ -881,7 +1141,9 @@ const ActiveUsersPage: React.FC = () => {
                     variant="outlined"
                     onClick={() => handleStatusChange("DEACTIVATED")}
                     disabled={
-                      actionLoading || selectedMemberForStatus.role === "ADMIN"
+                      actionLoading ||
+                      roleValidating ||
+                      selectedMemberForStatus.role === "ADMIN"
                     }
                     title={
                       selectedMemberForStatus.role === "ADMIN"
@@ -898,7 +1160,7 @@ const ActiveUsersPage: React.FC = () => {
                     color="warning"
                     variant="outlined"
                     onClick={() => handleStatusChange("PENDING_VERIFY")}
-                    disabled={actionLoading}
+                    disabled={actionLoading || roleValidating}
                   >
                     Set Pending Verify
                   </Button>

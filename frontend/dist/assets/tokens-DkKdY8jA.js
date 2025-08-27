@@ -1,0 +1,1 @@
+const t={title:{xs:18,md:24,weight:700},caption:{size:12}},s={primary:"#2950DA",textPrimary:"#222",textSecondary:"#666",surfaceMuted:"#F5F7FA"},a={pagePx:{xs:2,md:6},pagePy:{xs:2,md:4}};export{s as c,a as s,t};

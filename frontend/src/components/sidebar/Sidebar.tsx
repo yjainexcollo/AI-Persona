@@ -13,6 +13,11 @@ import {
   ListSubheader,
   Menu,
   MenuItem,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
 } from "@mui/material";
 import {
   Add as AddIcon,
@@ -30,6 +35,7 @@ import {
   getConversations,
   getUserChatSessions,
   createShareableLink,
+  updateConversationVisibility,
   type Conversation,
 } from "../../services/personaService";
 import ConversationSettingsDialog from "../ConversationSettingsDialog";
@@ -73,6 +79,8 @@ const Sidebar: React.FC<{
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
   const [selectedConversation, setSelectedConversation] =
     useState<Conversation | null>(null);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [shareUrl, setShareUrl] = useState("");
 
   // Fetch all personas from backend API
   useEffect(() => {
@@ -214,21 +222,40 @@ const Sidebar: React.FC<{
   // Handler for sharing a conversation
   const handleShareConversation = async (
     conversationId: string,
-    event: React.MouseEvent
+    event?: React.MouseEvent
   ) => {
-    event.stopPropagation();
+    // Safely stop propagation if an event was provided
+    try {
+      event?.stopPropagation?.();
+    } catch {}
     console.log("Share button clicked for conversation:", conversationId);
     try {
+      // Ensure conversation is SHARED before creating link
+      try {
+        await updateConversationVisibility(conversationId, "SHARED");
+      } catch (visibilityErr) {
+        console.warn(
+          "Failed to set visibility to SHARED before sharing:",
+          visibilityErr
+        );
+      }
+
       const response = await createShareableLink(conversationId);
-      const shareUrl = response.data.url;
+      const link = response.data.url;
 
-      // Copy to clipboard
-      await navigator.clipboard.writeText(shareUrl);
+      // Open dialog first to avoid being blocked by clipboard permissions
+      setShareUrl(link);
+      setShareDialogOpen(true);
 
-      // Show success message (you can implement a toast notification here)
-      console.log("Share link copied to clipboard:", shareUrl);
+      // Try to copy (non-blocking)
+      try {
+        await navigator.clipboard.writeText(link);
+        console.log("Share link copied to clipboard:", link);
+      } catch {}
     } catch (error) {
       console.error("Error creating share link:", error);
+      setShareUrl("Failed to generate link. Try again.");
+      setShareDialogOpen(true);
     }
   };
 
@@ -939,6 +966,41 @@ const Sidebar: React.FC<{
           <SettingsIcon sx={{ mr: 1 }} /> Conversation Settings
         </MenuItem>
       </Menu>
+
+      {/* Share Link Dialog */}
+      <Dialog
+        open={shareDialogOpen}
+        onClose={() => setShareDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Share Conversation</DialogTitle>
+        <DialogContent>
+          <Typography sx={{ mb: 1 }}>
+            Shareable link (copied to clipboard):
+          </Typography>
+          <TextField
+            fullWidth
+            value={shareUrl}
+            InputProps={{ readOnly: true }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(shareUrl);
+              } catch {}
+            }}
+            variant="outlined"
+          >
+            Copy
+          </Button>
+          <Button onClick={() => setShareDialogOpen(false)} variant="contained">
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Conversation Settings Dialog */}
       <ConversationSettingsDialog

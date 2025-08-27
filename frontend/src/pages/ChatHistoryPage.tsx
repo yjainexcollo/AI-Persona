@@ -1,5 +1,17 @@
 import React, { useState, useEffect } from "react";
-import { Container, Box, Typography, Modal, Paper } from "@mui/material";
+import {
+  Container,
+  Box,
+  Typography,
+  Modal,
+  Paper,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  Button,
+} from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import Header from "../components/discover/Header";
 import SearchBar from "../components/discover/SearchBar";
@@ -13,6 +25,7 @@ import {
   getUserChatSessions,
   toggleConversationArchive,
   createShareableLink,
+  updateConversationVisibility,
   getConversations,
   type Persona as BackendPersona,
   type Conversation,
@@ -51,6 +64,8 @@ const ChatHistoryPage: React.FC = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [personas, setPersonas] = useState<BackendPersona[]>([]);
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [shareUrl, setShareUrl] = useState("");
   const [selectedConversation, setSelectedConversation] =
     useState<Conversation | null>(null);
 
@@ -89,39 +104,57 @@ const ChatHistoryPage: React.FC = () => {
 
   // Helper function to refresh sessions list
   const refreshConversations = async () => {
-    const sessionsApi = await getUserChatSessions();
-    if (sessionsApi && sessionsApi.length > 0) {
-      const sessionChats: SessionChat[] = sessionsApi.map((s) => {
-        const messages = s.messages || [];
-        const lastMessage = messages[messages.length - 1];
-        return {
-          conversation_id: s.conversation.id,
-          persona: s.persona.name,
-          personaId: s.persona.id,
-          sessionId: s.sessionId,
-          last_message: lastMessage?.content || "No messages",
-          date: new Date(s.conversation.updatedAt).toLocaleDateString(),
-          chats: messages.map((msg) => ({
-            persona: s.persona.name,
-            user_message: msg.role === "USER" ? msg.content : "",
-            ai_response: msg.role === "ASSISTANT" ? msg.content : "",
-            timestamp: msg.createdAt,
+    try {
+      console.log("Refreshing conversations...");
+      const sessionsApi = await getUserChatSessions();
+      console.log("Sessions API response:", sessionsApi);
+
+      if (sessionsApi && sessionsApi.length > 0) {
+        const sessionChats: SessionChat[] = sessionsApi.map((s) => {
+          const messages = s.messages || [];
+          const lastMessage = messages[messages.length - 1];
+          const sessionChat = {
             conversation_id: s.conversation.id,
+            persona: s.persona.name,
+            personaId: s.persona.id,
+            sessionId: s.sessionId,
+            last_message: lastMessage?.content || "No messages",
+            date: new Date(s.conversation.updatedAt).toLocaleDateString(),
+            chats: messages.map((msg) => ({
+              persona: s.persona.name,
+              user_message: msg.role === "USER" ? msg.content : "",
+              ai_response: msg.role === "ASSISTANT" ? msg.content : "",
+              timestamp: msg.createdAt,
+              conversation_id: s.conversation.id,
+              archived: !!s.conversation.archivedAt,
+            })),
             archived: !!s.conversation.archivedAt,
-          })),
-          archived: !!s.conversation.archivedAt,
-          lastTimestamp: s.conversation.updatedAt,
-        };
-      });
-      // Sort sessions by last update
-      sessionChats.sort(
-        (a, b) =>
-          new Date(b.lastTimestamp).getTime() -
-          new Date(a.lastTimestamp).getTime()
-      );
-      setSessions(sessionChats);
-    } else {
-      setSessions([]);
+            lastTimestamp: s.conversation.updatedAt,
+          };
+          console.log("Created session chat:", {
+            id: sessionChat.conversation_id,
+            archived: sessionChat.archived,
+            archivedAt: s.conversation.archivedAt,
+          });
+          return sessionChat;
+        });
+
+        // Sort sessions by last update
+        sessionChats.sort(
+          (a, b) =>
+            new Date(b.lastTimestamp).getTime() -
+            new Date(a.lastTimestamp).getTime()
+        );
+
+        console.log("Setting sessions:", sessionChats.length, "sessions");
+        setSessions(sessionChats);
+      } else {
+        console.log("No sessions found, setting empty array");
+        setSessions([]);
+      }
+    } catch (error) {
+      console.error("Error refreshing conversations:", error);
+      // Don't clear sessions on error, keep existing state
     }
   };
 
@@ -230,6 +263,16 @@ const ChatHistoryPage: React.FC = () => {
 
     const matchesTab = tab === "all" ? !session.archived : session.archived;
 
+    console.log("Filtering session:", {
+      id: session.conversation_id,
+      persona: session.persona,
+      archived: session.archived,
+      tab,
+      matchesSearch,
+      matchesTab,
+      finalResult: matchesSearch && matchesTab,
+    });
+
     return matchesSearch && matchesTab;
   });
 
@@ -237,14 +280,28 @@ const ChatHistoryPage: React.FC = () => {
   const handleShareConversation = async (conversationId: string) => {
     console.log("Share button clicked for conversation:", conversationId);
     try {
+      // Ensure conversation is SHARED before creating link
+      try {
+        await updateConversationVisibility(conversationId, "SHARED");
+      } catch (visibilityErr) {
+        console.warn(
+          "Failed to set visibility to SHARED before sharing:",
+          visibilityErr
+        );
+      }
+
       const response = await createShareableLink(conversationId);
-      const shareUrl = response.data.url;
+      const link = response.data.url;
 
-      // Copy to clipboard
-      await navigator.clipboard.writeText(shareUrl);
+      // Open dialog first to avoid being blocked by clipboard permissions
+      setShareUrl(link);
+      setShareDialogOpen(true);
 
-      // Show success message (you can implement a toast notification here)
-      console.log("Share link copied to clipboard:", shareUrl);
+      // Try to copy (non-blocking)
+      try {
+        await navigator.clipboard.writeText(link);
+        console.log("Share link copied to clipboard:", link);
+      } catch {}
     } catch (error) {
       console.error("Error creating share link:", error);
     }
@@ -284,19 +341,77 @@ const ChatHistoryPage: React.FC = () => {
   // Archive/unarchive handlers wired to backend API
   const handleArchiveConversation = async (session: SessionChat) => {
     try {
-      await toggleConversationArchive(session.conversation_id, true);
-      await refreshConversations();
+      console.log("=== ARCHIVE HANDLER: Starting archive ===");
+      console.log("Session:", session.conversation_id);
+
+      const response = await toggleConversationArchive(
+        session.conversation_id,
+        true
+      );
+
+      console.log("Archive successful:", response);
+
+      // Update local state immediately
+      setSessions((prevSessions) =>
+        prevSessions.map((s) =>
+          s.conversation_id === session.conversation_id
+            ? { ...s, archived: true }
+            : s
+        )
+      );
+
+      console.log("=== ARCHIVE HANDLER: Archive completed ===");
     } catch (error) {
-      console.error("Failed to archive conversation", error);
+      console.error("=== ARCHIVE HANDLER: Archive failed ===");
+      console.error(
+        "Error:",
+        error instanceof Error ? error.message : String(error)
+      );
+
+      // Show error to user (you can add a toast notification here)
+      alert(
+        `Failed to archive conversation: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
     }
   };
 
   const handleUnarchiveConversation = async (session: SessionChat) => {
     try {
-      await toggleConversationArchive(session.conversation_id, false);
-      await refreshConversations();
+      console.log("=== UNARCHIVE HANDLER: Starting unarchive ===");
+      console.log("Session:", session.conversation_id);
+
+      const response = await toggleConversationArchive(
+        session.conversation_id,
+        false
+      );
+
+      console.log("Unarchive successful:", response);
+
+      // Update local state immediately
+      setSessions((prevSessions) =>
+        prevSessions.map((s) =>
+          s.conversation_id === session.conversation_id
+            ? { ...s, archived: false }
+            : s
+        )
+      );
+
+      console.log("=== UNARCHIVE HANDLER: Unarchive completed ===");
     } catch (error) {
-      console.error("Failed to unarchive conversation", error);
+      console.error("=== UNARCHIVE HANDLER: Unarchive failed ===");
+      console.error(
+        "Error:",
+        error instanceof Error ? error.message : String(error)
+      );
+
+      // Show error to user (you can add a toast notification here)
+      alert(
+        `Failed to unarchive conversation: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
     }
   };
 
@@ -430,6 +545,44 @@ const ChatHistoryPage: React.FC = () => {
           conversation={selectedConversation}
           onConversationUpdate={handleConversationUpdate}
         />
+
+        {/* Share Link Dialog */}
+        <Dialog
+          open={shareDialogOpen}
+          onClose={() => setShareDialogOpen(false)}
+          maxWidth="sm"
+          fullWidth
+        >
+          <DialogTitle>Share Conversation</DialogTitle>
+          <DialogContent>
+            <Typography sx={{ mb: 1 }}>
+              Shareable link (copied to clipboard):
+            </Typography>
+            <TextField
+              fullWidth
+              value={shareUrl}
+              InputProps={{ readOnly: true }}
+            />
+          </DialogContent>
+          <DialogActions>
+            <Button
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(shareUrl);
+                } catch {}
+              }}
+              variant="outlined"
+            >
+              Copy
+            </Button>
+            <Button
+              onClick={() => setShareDialogOpen(false)}
+              variant="contained"
+            >
+              Close
+            </Button>
+          </DialogActions>
+        </Dialog>
       </Container>
     </Box>
   );

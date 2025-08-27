@@ -80,8 +80,23 @@ const ChatHistoryItem: React.FC<ChatHistoryItemProps> = ({
         px: 0,
         borderRadius: 2,
         cursor: "pointer",
-        "&:hover": { background: "#F5F7FA" },
-        opacity: archived ? 0.7 : 1,
+        "&:hover": { background: archived ? "#F0F2F5" : "#F5F7FA" },
+        opacity: archived ? 0.8 : 1,
+        backgroundColor: archived ? "#F8F9FA" : "transparent",
+        border: archived ? "1px solid #E1E5E9" : "none",
+        position: "relative",
+        "&::before": archived
+          ? {
+              content: '""',
+              position: "absolute",
+              left: 0,
+              top: 0,
+              bottom: 0,
+              width: "4px",
+              backgroundColor: "#9CA3AF",
+              borderRadius: "2px 0 0 2px",
+            }
+          : {},
       }}
       onClick={onClick}
       onContextMenu={(e) => {
@@ -139,10 +154,18 @@ const ChatHistoryItem: React.FC<ChatHistoryItemProps> = ({
                 }
               }}
               sx={{
-                color: archived ? "#526794" : "#666",
+                color: archived ? "#2950DA" : "#666",
+                backgroundColor: archived
+                  ? "rgba(41, 80, 218, 0.1)"
+                  : "transparent",
                 "&:hover": {
-                  color: archived ? "#2950DA" : "#333",
+                  color: archived ? "#1E40AF" : "#333",
+                  backgroundColor: archived
+                    ? "rgba(41, 80, 218, 0.2)"
+                    : "rgba(0, 0, 0, 0.04)",
                 },
+                border: archived ? "1px solid rgba(41, 80, 218, 0.3)" : "none",
+                transition: "all 0.2s ease-in-out",
               }}
             >
               {archived ? <UnarchiveIcon /> : <ArchiveIcon />}
