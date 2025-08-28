@@ -32,11 +32,11 @@ import { useNavigate } from "react-router-dom";
 import type { Persona } from "../../types";
 import {
   getPersonas,
-  getConversations,
   getUserChatSessions,
   createShareableLink,
   updateConversationVisibility,
   type Conversation,
+  clearAllConversations,
 } from "../../services/personaService";
 import ConversationSettingsDialog from "../ConversationSettingsDialog";
 
@@ -158,7 +158,25 @@ const Sidebar: React.FC<{
           })
           .filter((c) => c !== null);
 
-        let list = normalized;
+        // Deduplicate by conversation id, keep the most recent by updatedAt
+        const latestById = new Map<
+          string,
+          Conversation & { sessionId?: string }
+        >();
+        for (const c of normalized as (Conversation & {
+          sessionId?: string;
+        })[]) {
+          const existing = latestById.get(c.id);
+          if (
+            !existing ||
+            new Date(c.updatedAt).getTime() >
+              new Date(existing.updatedAt).getTime()
+          ) {
+            latestById.set(c.id, c);
+          }
+        }
+
+        let list = Array.from(latestById.values());
         if (currentPersonaId) {
           list = list.filter((c) => c.personaId === currentPersonaId);
         }
@@ -547,6 +565,42 @@ const Sidebar: React.FC<{
             }
           />
         </ListItem>
+        <ListItem
+          button
+          sx={{ px: 0, mt: 0.5, minWidth: 0 }}
+          onClick={async () => {
+            try {
+              await clearAllConversations();
+              // Refresh recent chats after clearing
+              setRecentChats([]);
+            } catch (e) {
+              console.error("Failed to clear conversations", e);
+            }
+            if (onClose) onClose();
+          }}
+        >
+          <ListItemAvatar sx={{ minWidth: { xs: 40, sm: 32 } }}>
+            <PersonIcon
+              sx={{ color: "#B91C1C", fontSize: { xs: 24, sm: 22 }, mt: 0.5 }}
+            />
+          </ListItemAvatar>
+          <ListItemText
+            primary={
+              <Typography
+                sx={{
+                  fontWeight: 500,
+                  color: "#B91C1C",
+                  fontSize: { xs: 15, sm: 16 },
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
+                Clear all chats
+              </Typography>
+            }
+          />
+        </ListItem>
       </List>
 
       {/* Favorite Personas */}
@@ -751,21 +805,10 @@ const Sidebar: React.FC<{
                     mr: 0,
                   }}
                 >
-                  {activeConversation.persona?.name || "Unknown Persona"}
+                  {(activeConversation.title || "Untitled").slice(0, 60)}
                 </Typography>
               </Box>
-              <Typography
-                sx={{
-                  color: "#1E3A8A",
-                  fontSize: 12,
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  minWidth: 0,
-                }}
-              >
-                {activeConversation.lastMessage || "No messages"}
-              </Typography>
+              {/* No subtitle: title-only display */}
             </Box>
           </ListItem>
         </List>
@@ -873,7 +916,7 @@ const Sidebar: React.FC<{
                       mr: 0,
                     }}
                   >
-                    {conversation.persona?.name || "Unknown Persona"}
+                    {(conversation.title || "Untitled").slice(0, 60)}
                   </Typography>
                   <IconButton
                     size="small"
@@ -892,18 +935,7 @@ const Sidebar: React.FC<{
                     <MoreVertIcon sx={{ fontSize: 16 }} />
                   </IconButton>
                 </Box>
-                <Typography
-                  sx={{
-                    color: "#666",
-                    fontSize: 12,
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    minWidth: 0,
-                  }}
-                >
-                  {conversation.lastMessage || "No messages"}
-                </Typography>
+                {/* No subtitle: title-only display */}
               </Box>
             </ListItem>
           ))

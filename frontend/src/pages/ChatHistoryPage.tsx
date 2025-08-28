@@ -177,13 +177,13 @@ const ChatHistoryPage: React.FC = () => {
             const lastMessage = messages[messages.length - 1];
             return {
               conversation_id: s.conversation.id, // Use conversation_id instead of session_id
-              persona: s.persona.name,
+              persona: s.conversation?.title || "Untitled",
               personaId: s.persona.id,
               sessionId: s.sessionId,
-              last_message: lastMessage?.content || "No messages",
+              last_message: lastMessage?.content || "",
               date: new Date(s.conversation.updatedAt).toLocaleDateString(),
               chats: messages.map((msg) => ({
-                persona: s.persona.name,
+                persona: s.conversation?.title || "Untitled",
                 user_message: msg.role === "USER" ? msg.content : "",
                 ai_response: msg.role === "ASSISTANT" ? msg.content : "",
                 timestamp: msg.createdAt,
@@ -195,25 +195,29 @@ const ChatHistoryPage: React.FC = () => {
             };
           });
 
+          // Deduplicate by conversation_id, keeping the latest by lastTimestamp
+          const latestByConversation = new Map<string, SessionChat>();
+          for (const sc of sessionChats) {
+            const existing = latestByConversation.get(sc.conversation_id);
+            if (
+              !existing ||
+              new Date(sc.lastTimestamp).getTime() >
+                new Date(existing.lastTimestamp).getTime()
+            ) {
+              latestByConversation.set(sc.conversation_id, sc);
+            }
+          }
+          const uniqueSessions = Array.from(latestByConversation.values());
+
           // Sort sessions by their last message timestamp (latest first)
-          sessionChats.sort(
+          uniqueSessions.sort(
             (a, b) =>
               new Date(b.lastTimestamp).getTime() -
               new Date(a.lastTimestamp).getTime()
           );
 
-          console.log("Sessions created:", sessionChats.length);
-          console.log(
-            "All sessions:",
-            sessionChats.map((s) => ({
-              conversation_id: s.conversation_id,
-              persona: s.persona,
-              count: s.chats.length,
-              archived: s.archived,
-            }))
-          );
-
-          setSessions(sessionChats);
+          console.log("Sessions created:", uniqueSessions.length);
+          setSessions(uniqueSessions);
         } else {
           console.log(
             "No chat sessions found, falling back to conversations list"
@@ -222,10 +226,10 @@ const ChatHistoryPage: React.FC = () => {
             const convRes = await getConversations(tab === "archived");
             const conversations = convRes?.data || [];
             const sessionChats: SessionChat[] = conversations.map((c: any) => {
-              const lastMessage = c.lastMessage || "No messages";
+              const lastMessage = c.lastMessage || "";
               return {
                 conversation_id: c.id,
-                persona: c.persona?.name || "Unknown Persona",
+                persona: c.title || "Untitled",
                 personaId: c.persona?.id,
                 sessionId: "",
                 last_message: lastMessage,
@@ -235,6 +239,7 @@ const ChatHistoryPage: React.FC = () => {
                 lastTimestamp: c.updatedAt,
               } as SessionChat;
             });
+            // Deduplicate (conversations already unique by id) and sort
             sessionChats.sort(
               (a, b) =>
                 new Date(b.lastTimestamp).getTime() -
@@ -449,8 +454,8 @@ const ChatHistoryPage: React.FC = () => {
     const avatarSrc = getAvatarUrl(persona?.avatarUrl || persona?.avatar || "");
     const chat = {
       avatar: avatarSrc || "",
-      name: persona?.name || `Persona: ${session.persona}`,
-      message: session.last_message,
+      name: (session.persona || "Untitled").slice(0, 60),
+      message: "",
       date: session.date,
       archived: session.archived,
       onClick: () => {

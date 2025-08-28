@@ -47,6 +47,7 @@ export interface MessageResponse {
     messageId: string; // assistant message ID (backward compatibility)
     assistantMessageId?: string;
     userMessageId?: string;
+    suggestedTitle?: string; // AI suggested title for the conversation
   };
 }
 
@@ -617,4 +618,55 @@ export const getUserChatSessions = async (): Promise<ChatSession[]> => {
   }
   const data = await res.json();
   return data.data as ChatSession[];
+};
+
+/**
+ * Clear all conversations for the current user
+ */
+export const clearAllConversations = async (): Promise<{
+  status: string;
+  message: string;
+  data: { deletedConversations: number; deletedMessages: number };
+}> => {
+  const res = await fetchWithAuth(`${backendUrl}/api/conversations/clear`, {
+    method: "DELETE",
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || "Failed to clear conversations");
+  }
+  return await res.json();
+};
+
+/**
+ * Update conversation title
+ * @param conversationId - Conversation ID to update
+ * @param title - New title for the conversation
+ * @returns Promise with updated conversation data
+ */
+export const updateConversationTitle = async (
+  conversationId: string,
+  title: string
+): Promise<{ status: string; data: Conversation; message: string }> => {
+  try {
+    const response = await fetchWithAuth(
+      `/api/conversations/${conversationId}/title`,
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ title }),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Failed to update title: ${response.statusText}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error("Error updating conversation title:", error);
+    throw error;
+  }
 };

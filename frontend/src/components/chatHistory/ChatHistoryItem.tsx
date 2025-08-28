@@ -17,7 +17,7 @@ import SettingsIcon from "@mui/icons-material/Settings";
 interface ChatHistoryItemProps {
   avatar: string;
   name: string;
-  message: string;
+  message?: string;
   date: string;
   archived?: boolean;
   onClick?: () => void;
@@ -113,19 +113,21 @@ const ChatHistoryItem: React.FC<ChatHistoryItemProps> = ({
         >
           {name}
         </Typography>
-        <Typography
-          sx={{
-            color: "#2950DA",
-            fontWeight: 400,
-            fontSize: 15,
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            maxWidth: 400,
-          }}
-        >
-          {message}
-        </Typography>
+        {message ? (
+          <Typography
+            sx={{
+              color: "#2950DA",
+              fontWeight: 400,
+              fontSize: 15,
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              maxWidth: 400,
+            }}
+          >
+            {message}
+          </Typography>
+        ) : null}
       </Box>
       <Typography
         sx={{

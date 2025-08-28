@@ -34,6 +34,7 @@ import {
   type Conversation,
   type MessageResponse,
   getConversationById,
+  updateConversationTitle,
 } from "../services/personaService";
 import { getWorkspaceDetails } from "../services/workspaceService";
 import { storage } from "../lib/storage/localStorage";
@@ -582,27 +583,21 @@ export default function ChatPage() {
         window.history.replaceState({}, "", newUrl.toString());
       }
 
-      // Fully refresh the conversation to reflect replaced thread
-      try {
-        const convId = response.data.conversationId;
-        if (convId) {
-          const convRes = await getConversationById(convId);
-          setCurrentConversation(convRes.data);
-          loadConversationMessages(convRes.data);
-        }
-      } catch (refreshErr) {
-        console.warn(
-          "Failed to refresh full conversation after edit",
-          refreshErr
-        );
-        await loadConversations();
-      }
-
-      // Clear edit state
-      setEditingMessageId(null);
-      setEditingText("");
+      // Refresh conversations list to show updated conversation
+      await loadConversations();
     } catch (error) {
-      console.error("Error editing message:", error);
+      console.error("Error sending message:", error);
+
+      // Replace typing indicator with error message
+      setMessages((prev) => {
+        const newMessages = [...prev];
+        newMessages[newMessages.length - 1] = {
+          sender: "ai",
+          text: "Sorry, there was an error sending your message. Please try again.",
+          isTyping: false,
+        };
+        return newMessages;
+      });
     } finally {
       setIsLoading(false);
     }
@@ -814,6 +809,29 @@ export default function ChatPage() {
         const newUrl = new URL(window.location.href);
         newUrl.searchParams.set("conversationId", response.data.conversationId);
         window.history.replaceState({}, "", newUrl.toString());
+      }
+
+      // Check if we received a new title from the AI response
+      if (response.data.suggestedTitle && currentConversation) {
+        // Update the conversation title in local state
+        setCurrentConversation((prev) =>
+          prev
+            ? {
+                ...prev,
+                title: response.data.suggestedTitle || prev.title,
+              }
+            : null
+        );
+
+        // Also update the conversation in the backend
+        try {
+          await updateConversationTitle(
+            response.data.conversationId,
+            response.data.suggestedTitle
+          );
+        } catch (titleError) {
+          console.warn("Failed to update conversation title:", titleError);
+        }
       }
 
       // Replace typing indicator with actual AI response and reconcile temp user message ID
