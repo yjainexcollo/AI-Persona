@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Box, Typography, TextField, Button, Link } from "@mui/material";
 import { useNavigate } from "react-router-dom";
+import { env } from "../../lib/config/env";
 
 const ForgotPasswordForm: React.FC = () => {
   const [email, setEmail] = useState("");
@@ -9,13 +10,13 @@ const ForgotPasswordForm: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
+  const BACKEND_URL = env.BACKEND_URL;
+
   const handleSendEmail = async () => {
     setError("");
     setLoading(true);
     try {
-      const backendUrl =
-        import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
-      await fetch(`${backendUrl}/api/auth/request-password-reset`, {
+      await fetch(`${BACKEND_URL}/api/auth/request-password-reset`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),

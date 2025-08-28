@@ -14,6 +14,7 @@ import Visibility from "@mui/icons-material/Visibility";
 import AppleIcon from "@mui/icons-material/Apple";
 import { useNavigate, useLocation } from "react-router-dom";
 import { startProactiveTokenRefresh } from "../../utils/session";
+import { env } from "../../lib/config/env";
 
 const LoginForm: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -49,9 +50,8 @@ const LoginForm: React.FC = () => {
     setLoading(true);
 
     try {
-      const backendUrl =
-        import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
-      const response = await fetch(`${backendUrl}/api/auth/login`, {
+      const BACKEND_URL = env.BACKEND_URL;
+      const response = await fetch(`${BACKEND_URL}/api/auth/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -119,9 +119,8 @@ const LoginForm: React.FC = () => {
 
   // Redirect to Google OAuth
   const handleGoogleLogin = () => {
-    const backendUrl =
-      import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
-    window.location.href = `${backendUrl}/api/auth/google`;
+    const BACKEND_URL = env.BACKEND_URL;
+    window.location.href = `${BACKEND_URL}/api/auth/google`;
   };
 
   return (

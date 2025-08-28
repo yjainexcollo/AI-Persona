@@ -13,14 +13,7 @@
  * - Persona traits update webhook integration
  */
 
-// Webhook service for integrating with n8n persona workflows
-const WEBHOOK_URL =
-  "https://n8n-excollo.azurewebsites.net/webhook/e17df12a-2bfc-4270-8756-0c20442a4b9f";
-
-// New webhook endpoint for traits updates
-const TRAITS_WEBHOOK_URL =
-  "https://n8n-excollo.azurewebsites.net/webhook-test/traits";
-
+import { env } from "../lib/config/env";
 import { getSessionId, fetchWithAuth } from "../utils/session";
 
 /**
@@ -290,8 +283,7 @@ export const updatePersonaTraitsViaBackend = async (
   traitsUpdate: PersonaTraitsUpdate,
   authToken: string
 ): Promise<any> => {
-  const backendUrl =
-    import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
+  const backendUrl = env.BACKEND_URL;
 
   console.log("🌐 Backend URL:", backendUrl);
   console.log(
@@ -341,8 +333,7 @@ export const forwardPersonaTraitsViaBackend = async (
   traitsUpdate: PersonaTraitsUpdate,
   authToken: string
 ): Promise<any> => {
-  const backendUrl =
-    import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
+  const backendUrl = env.BACKEND_URL;
 
   const res = await fetchWithAuth(`${backendUrl}/api/webhooks/traits/forward`, {
     method: "POST",
@@ -405,8 +396,7 @@ export const testTraitsWebhookConnection = async (
 ): Promise<boolean> => {
   try {
     // Get backend URL from environment or use default
-    const backendUrl =
-      import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
+    const backendUrl = env.BACKEND_URL;
 
     const response = await fetch(`${backendUrl}/api/webhooks/health`, {
       method: "GET",

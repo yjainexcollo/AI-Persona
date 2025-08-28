@@ -33,6 +33,7 @@ import AdminSidebar from "../components/sidebar/AdminSidebar";
 import { logout } from "../services/authService";
 import { colors, spacing, typography } from "../styles/tokens";
 import { getAvatarUrl } from "../services/avatarService";
+import { env } from "../lib/config/env";
 
 const ProfilePage: React.FC = () => {
   interface UserProfile {
@@ -63,9 +64,8 @@ const ProfilePage: React.FC = () => {
       setLoading(true);
       setError("");
       try {
-        const backendUrl =
-          import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
-        const res = await fetchWithAuth(`${backendUrl}/api/users/me`);
+        const BACKEND_URL = env.BACKEND_URL;
+        const res = await fetchWithAuth(`${BACKEND_URL}/api/users/me`);
         if (!res.ok) throw new Error("Failed to fetch profile");
         const data = await res.json();
         setProfile(data.data.user);
@@ -93,9 +93,8 @@ const ProfilePage: React.FC = () => {
     if (!newName.trim()) return;
     setSaving(true);
     try {
-      const backendUrl =
-        import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
-      const res = await fetchWithAuth(`${backendUrl}/api/users/me`, {
+      const BACKEND_URL = env.BACKEND_URL;
+      const res = await fetchWithAuth(`${BACKEND_URL}/api/users/me`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: newName.trim() }),
@@ -127,9 +126,8 @@ const ProfilePage: React.FC = () => {
     )
       return;
     try {
-      const backendUrl =
-        import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
-      const res = await fetchWithAuth(`${backendUrl}/api/auth/deactivate`, {
+      const BACKEND_URL = env.BACKEND_URL;
+      const res = await fetchWithAuth(`${BACKEND_URL}/api/auth/deactivate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
@@ -150,12 +148,14 @@ const ProfilePage: React.FC = () => {
     )
       return;
     try {
-      const backendUrl =
-        import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
-      const res = await fetchWithAuth(`${backendUrl}/api/auth/delete-account`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      });
+      const BACKEND_URL = env.BACKEND_URL;
+      const res = await fetchWithAuth(
+        `${BACKEND_URL}/api/auth/delete-account`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        }
+      );
       if (!res.ok) throw new Error("Failed to delete account");
 
       // Show success message and redirect
@@ -197,12 +197,11 @@ const ProfilePage: React.FC = () => {
 
     setAvatarUploading(true);
     try {
-      const backendUrl =
-        import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
+      const BACKEND_URL = env.BACKEND_URL;
       const formData = new FormData();
       formData.append("avatar", selectedFile);
 
-      const res = await fetchWithAuth(`${backendUrl}/api/users/me/avatar`, {
+      const res = await fetchWithAuth(`${BACKEND_URL}/api/users/me/avatar`, {
         method: "POST",
         body: formData,
       });

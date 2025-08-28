@@ -33,6 +33,7 @@ import {
   updateWorkspace,
   type WorkspaceData,
 } from "../services/workspaceService";
+import { env } from "../lib/config/env";
 
 const settingsSidebar = [
   {
@@ -141,9 +142,8 @@ const SettingsPage: React.FC = () => {
     if (activeSection !== "account") return;
     setLoadingProfile(true);
     setProfileError("");
-    const backendUrl =
-      import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
-    fetchWithAuth(`${backendUrl}/api/users/me`)
+    const BACKEND_URL = env.BACKEND_URL;
+    fetchWithAuth(`${BACKEND_URL}/api/users/me`)
       .then(async (res) => {
         if (!res.ok) throw new Error("Failed to fetch profile");
         const data = await res.json();
@@ -177,9 +177,8 @@ const SettingsPage: React.FC = () => {
     if (!editField) return;
     setSaving(true);
     try {
-      const backendUrl =
-        import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
-      const res = await fetchWithAuth(`${backendUrl}/api/users/me`, {
+      const BACKEND_URL = env.BACKEND_URL;
+      const res = await fetchWithAuth(`${BACKEND_URL}/api/users/me`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ [editField]: editValue }),
@@ -190,7 +189,7 @@ const SettingsPage: React.FC = () => {
       // Refresh profile
       setLoadingProfile(true);
       setProfileError("");
-      const profileRes = await fetchWithAuth(`${backendUrl}/api/users/me`);
+      const profileRes = await fetchWithAuth(`${BACKEND_URL}/api/users/me`);
       const data = await profileRes.json();
       setProfile(data.data.user);
     } catch {
@@ -237,9 +236,8 @@ const SettingsPage: React.FC = () => {
     setChangePasswordSuccess("");
 
     try {
-      const backendUrl =
-        import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
-      const res = await fetchWithAuth(`${backendUrl}/api/users/me/password`, {
+      const BACKEND_URL = env.BACKEND_URL;
+      const res = await fetchWithAuth(`${BACKEND_URL}/api/users/me/password`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

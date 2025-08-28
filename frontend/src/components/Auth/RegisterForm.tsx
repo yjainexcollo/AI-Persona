@@ -19,6 +19,7 @@ import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import RadioButtonUncheckedIcon from "@mui/icons-material/RadioButtonUnchecked";
 import TermsAndConditionsDialog from "./TermsAndConditionsDialog";
 import { useNavigate } from "react-router-dom";
+import { env } from "../../lib/config/env";
 
 interface RegisterFormProps {
   inviteToken?: string;
@@ -100,13 +101,15 @@ const RegisterForm: React.FC<RegisterFormProps> = () => {
   };
 
   const resendVerification = async (email: string) => {
-    const backendUrl =
-      import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
-    const response = await fetch(`${backendUrl}/api/auth/resend-verification`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email }),
-    });
+    const BACKEND_URL = env.BACKEND_URL;
+    const response = await fetch(
+      `${BACKEND_URL}/api/auth/resend-verification`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      }
+    );
     const data = await response.json();
     if (!response.ok) {
       throw new Error(data.error || "Failed to resend verification email");
@@ -127,9 +130,8 @@ const RegisterForm: React.FC<RegisterFormProps> = () => {
     setError("");
     setLoading(true);
     try {
-      const backendUrl =
-        import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
-      const response = await fetch(`${backendUrl}/api/auth/register`, {
+      const BACKEND_URL = env.BACKEND_URL;
+      const response = await fetch(`${BACKEND_URL}/api/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),

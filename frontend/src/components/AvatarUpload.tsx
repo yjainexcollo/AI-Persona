@@ -9,6 +9,7 @@ import {
 import PhotoCameraIcon from "@mui/icons-material/PhotoCamera";
 import { fetchWithAuth } from "../utils/session";
 import { getAvatarUrl } from "../services/avatarService";
+import { env } from "../lib/config/env";
 
 interface AvatarUploadProps {
   currentAvatarUrl?: string;
@@ -55,12 +56,11 @@ const AvatarUpload: React.FC<AvatarUploadProps> = ({
 
     setAvatarUploading(true);
     try {
-      const backendUrl =
-        import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
+      const BACKEND_URL = env.BACKEND_URL;
       const formData = new FormData();
       formData.append("avatar", selectedFile);
 
-      const res = await fetchWithAuth(`${backendUrl}/api/users/me/avatar`, {
+      const res = await fetchWithAuth(`${BACKEND_URL}/api/users/me/avatar`, {
         method: "POST",
         body: formData,
       });

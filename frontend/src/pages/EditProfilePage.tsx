@@ -17,6 +17,7 @@ import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import SearchIcon from "@mui/icons-material/Search";
 import { fetchWithAuth } from "../utils/session";
 import { getAvatarUrl } from "../services/avatarService";
+import { env } from "../lib/config/env";
 
 const sidebarItems = [
   {
@@ -53,9 +54,8 @@ const EditProfilePage: React.FC = () => {
   React.useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const backendUrl =
-          import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
-        const res = await fetchWithAuth(`${backendUrl}/api/users/me`);
+        const BACKEND_URL = env.BACKEND_URL;
+        const res = await fetchWithAuth(`${BACKEND_URL}/api/users/me`);
         if (!res.ok) throw new Error("Failed to fetch profile");
         const data = await res.json();
         setProfile(data.data.user);
@@ -94,12 +94,11 @@ const EditProfilePage: React.FC = () => {
 
     setAvatarUploading(true);
     try {
-      const backendUrl =
-        import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
+      const BACKEND_URL = env.BACKEND_URL;
       const formData = new FormData();
       formData.append("avatar", selectedFile);
 
-      const res = await fetchWithAuth(`${backendUrl}/api/users/me/avatar`, {
+      const res = await fetchWithAuth(`${BACKEND_URL}/api/users/me/avatar`, {
         method: "POST",
         body: formData,
       });

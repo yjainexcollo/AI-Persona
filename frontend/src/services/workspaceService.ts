@@ -1,6 +1,7 @@
 import { fetchWithAuth } from "../utils/session";
+import { env } from "../lib/config/env";
 
-const backendUrl = import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
+const backendUrl = env.BACKEND_URL;
 
 export interface WorkspaceData {
   id: string;

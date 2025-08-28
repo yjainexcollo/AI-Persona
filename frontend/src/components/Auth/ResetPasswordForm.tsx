@@ -14,6 +14,7 @@ import {
 import VisibilityOff from "@mui/icons-material/VisibilityOff";
 import Visibility from "@mui/icons-material/Visibility";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { env } from "../../lib/config/env";
 
 const passwordRules = [
   {
@@ -55,9 +56,8 @@ const ResetPasswordForm: React.FC = () => {
     setError("");
     setLoading(true);
     try {
-      const backendUrl =
-        import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
-      const res = await fetch(`${backendUrl}/api/auth/reset-password`, {
+      const BACKEND_URL = env.BACKEND_URL;
+      const res = await fetch(`${BACKEND_URL}/api/auth/reset-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token, password, newPassword: confirmPassword }),

@@ -7,6 +7,7 @@ import {
   getWorkspaceMembers,
 } from "../services/workspaceService";
 import { getAvatarUrl } from "../services/avatarService";
+import { env } from "../lib/config/env";
 
 interface WorkspaceDashboardProps {
   workspaceId: string;
@@ -113,9 +114,8 @@ const WorkspaceDashboard: React.FC<WorkspaceDashboardProps> = ({
 
     const fetchUserData = async () => {
       try {
-        const backendUrl =
-          import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
-        const res = await fetchWithAuth(`${backendUrl}/api/users/me`);
+        const BACKEND_URL = env.BACKEND_URL;
+        const res = await fetchWithAuth(`${BACKEND_URL}/api/users/me`);
 
         if (res.ok) {
           const data = await res.json();
