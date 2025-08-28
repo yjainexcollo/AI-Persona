@@ -1,14 +1,17 @@
 # Use official Node.js LTS image
 FROM node:18-alpine
 
+# For sharp and native deps
+RUN apk add --no-cache libc6-compat
+
 # Set working directory
 WORKDIR /usr/src/app
 
-# Install dependencies
+# Install only production dependencies
 COPY package*.json ./
-RUN npm install
+RUN npm ci --omit=dev
 
-# Copy the rest of the application code
+# Copy application source
 COPY . .
 
 # Expose the port the app runs on

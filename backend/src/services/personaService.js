@@ -1252,10 +1252,16 @@ async function createShareableLink(conversationId, userId, expiresInDays = 30) {
       expiresAt: sharedLink.expiresAt,
     });
 
+    const baseUrl = process.env.APP_BASE_URL;
+    if (!baseUrl) {
+      throw new ApiError(
+        500,
+        "APP_BASE_URL env is required to build share link URLs"
+      );
+    }
+
     return {
-      url: `${process.env.APP_BASE_URL || "http://localhost:3000"}/p/${
-        sharedLink.token
-      }`,
+      url: `${baseUrl}/p/${sharedLink.token}`,
       expiresAt: sharedLink.expiresAt,
     };
   } catch (error) {
