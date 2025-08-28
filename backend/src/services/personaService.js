@@ -12,6 +12,7 @@ const { encrypt, decrypt } = require("../utils/encrypt");
 const { getCircuitBreaker } = require("../utils/circuitBreaker");
 const authService = require("./authService");
 const chatSessionService = require("./chatSessionService");
+const { generateConversationTitle } = require("./titleService");
 
 const prisma = new PrismaClient();
 
@@ -312,7 +313,8 @@ async function sendMessage(
         data: {
           userId,
           personaId,
-          title: `Chat with ${persona.name}`,
+          // Do not set a default title; let AI generate one
+          title: null,
         },
       });
     }
@@ -399,13 +401,6 @@ async function sendMessage(
     }
 
     if (!success) {
-      // Update session status to failed - REMOVED: updateChatSessionStatus function
-      // await chatSessionService.updateChatSessionStatus(
-      //   chatSession.sessionId,
-      //   "FAILED",
-      //   "Webhook request failed after all retry attempts"
-      // );
-
       // Record failure in circuit breaker
       circuitBreaker.onFailure();
 
@@ -445,6 +440,39 @@ async function sendMessage(
       },
     });
 
+    // Extract suggested title from webhook response (if available), otherwise try LLM
+    let suggestedTitle =
+      webhookResponse.data?.suggestedTitle ||
+      webhookResponse.data?.title ||
+      null;
+    if (!suggestedTitle) {
+      try {
+        suggestedTitle = await generateConversationTitle(message, reply);
+      } catch {}
+    }
+
+    // Update conversation title if AI suggested one and there is no custom title yet
+    if (
+      suggestedTitle &&
+      (!conversation.title ||
+        conversation.title === `Chat with ${persona.name}` ||
+        /^Chat with\s/i.test(conversation.title))
+    ) {
+      try {
+        await updateConversationTitle(conversation.id, suggestedTitle, userId);
+
+        // Update the conversation object for the response
+        conversation.title = suggestedTitle;
+
+        logger.info(
+          `AI suggested title for conversation ${conversation.id}: "${suggestedTitle}"`
+        );
+      } catch (titleError) {
+        // Log error but don't fail the message - title update is optional
+        logger.warn("Failed to update conversation title:", titleError.message);
+      }
+    }
+
     // Update session status to completed - REMOVED: updateChatSessionStatus function
     // await chatSessionService.updateChatSessionStatus(
     //   chatSession.sessionId,
@@ -466,6 +494,7 @@ async function sendMessage(
       assistantMessageId: assistantMessage.id,
       userMessageId: userMessage.id,
       sessionId: chatSession.sessionId,
+      suggestedTitle: suggestedTitle || null, // Include suggested title if available
     };
   } catch (error) {
     // Update session status to failed if session was created - REMOVED: updateChatSessionStatus function
@@ -722,13 +751,6 @@ async function editMessage(messageId, userId, newContent) {
         );
       }
     }
-
-    // Check if message is already edited
-    // Previously: block re-editing
-    // if (message.edited) {
-    //   throw new ApiError(422, "Message has already been edited");
-    // }
-    // Allow re-editing: keep audit trail via MessageEdit records
 
     // Check if message is deleted
     if (message.deleted) {
@@ -1438,6 +1460,139 @@ async function getConversationById(conversationId, userId, workspaceId) {
   }
 }
 
+/**
+ * Update conversation title with AI suggestion
+ * @param {string} conversationId - Conversation ID
+ * @param {string} suggestedTitle - AI suggested title
+ * @param {string} userId - User ID for audit
+ * @returns {Promise<object>}
+ */
+async function updateConversationTitle(conversationId, suggestedTitle, userId) {
+  try {
+    // Validate parameters
+    if (!conversationId || typeof conversationId !== "string") {
+      throw new ApiError(400, "Valid conversationId is required");
+    }
+
+    if (!suggestedTitle || typeof suggestedTitle !== "string") {
+      throw new ApiError(400, "Valid suggestedTitle is required");
+    }
+
+    if (!userId || typeof userId !== "string") {
+      throw new ApiError(400, "Valid userId is required");
+    }
+
+    // Sanitize title (trim, limit length)
+    const cleanTitle = suggestedTitle.trim().substring(0, 200);
+
+    // Update conversation title
+    const updatedConversation = await prisma.conversation.update({
+      where: { id: conversationId },
+      data: {
+        title: cleanTitle,
+        updatedAt: new Date(),
+      },
+      include: {
+        persona: {
+          select: { id: true, name: true, avatarUrl: true },
+        },
+      },
+    });
+
+    // Create audit event for title update
+    await authService.createAuditEvent(userId, "CONVERSATION_TITLE_UPDATED", {
+      conversationId,
+      oldTitle: "Chat with " + updatedConversation.persona.name,
+      newTitle: cleanTitle,
+      personaId: updatedConversation.personaId,
+    });
+
+    logger.info(
+      `Updated conversation title: ${conversationId} -> "${cleanTitle}"`
+    );
+
+    return updatedConversation;
+  } catch (error) {
+    logger.error("Error updating conversation title:", error.message);
+    throw error;
+  }
+}
+
+async function clearUserConversations(userId) {
+  try {
+    if (!userId || typeof userId !== "string") {
+      throw new ApiError(400, "Valid userId is required");
+    }
+
+    // Find all conversation IDs owned by the user
+    const conversations = await prisma.conversation.findMany({
+      where: { userId },
+      select: { id: true },
+    });
+
+    if (conversations.length === 0) {
+      return { deletedConversations: 0, deletedMessages: 0 };
+    }
+
+    const conversationIds = conversations.map((c) => c.id);
+
+    const result = await prisma.$transaction(async (tx) => {
+      // Delete reactions linked to messages in these conversations
+      await tx.reaction.deleteMany({
+        where: { message: { conversationId: { in: conversationIds } } },
+      });
+
+      // Delete message edits for messages in these conversations
+      await tx.messageEdit.deleteMany({
+        where: { message: { conversationId: { in: conversationIds } } },
+      });
+
+      // Delete files linked to these conversations
+      await tx.file.deleteMany({
+        where: { conversationId: { in: conversationIds } },
+      });
+
+      // Delete messages
+      const deleteMessages = await tx.message.deleteMany({
+        where: { conversationId: { in: conversationIds } },
+      });
+
+      // Delete chat sessions
+      await tx.chatSession.deleteMany({
+        where: { conversationId: { in: conversationIds } },
+      });
+
+      // Delete shared links
+      await tx.sharedLink.deleteMany({
+        where: { conversationId: { in: conversationIds } },
+      });
+
+      // Finally delete conversations owned by user
+      const deleteConversations = await tx.conversation.deleteMany({
+        where: { id: { in: conversationIds }, userId },
+      });
+
+      return {
+        deletedConversations: deleteConversations.count,
+        deletedMessages: deleteMessages.count,
+      };
+    });
+
+    // Audit event
+    await authService.createAuditEvent(userId, "CONVERSATION_ARCHIVED", {
+      action: "clear_all_user_conversations",
+      conversationCount: result.deletedConversations,
+      messageCount: result.deletedMessages,
+    });
+
+    return result;
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    logger.error("Error clearing user conversations:", error);
+    throw new ApiError(500, "Failed to clear conversations");
+  }
+}
+
 module.exports = {
   getPersonas,
   getPersonaById,
@@ -1452,4 +1607,6 @@ module.exports = {
   createShareableLink,
   getSharedConversation,
   getConversationById,
+  updateConversationTitle,
+  clearUserConversations,
 };

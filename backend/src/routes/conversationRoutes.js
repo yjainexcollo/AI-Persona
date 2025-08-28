@@ -211,4 +211,89 @@ router.post(
   personaController.createShareableLink
 );
 
+// PATCH /api/conversations/:id/title - Update conversation title
+router.patch(
+  "/:id/title",
+  authenticatedOnly,
+  personaLimiter,
+  async (req, res, next) => {
+    try {
+      const { id } = req.params;
+      const { title } = req.body;
+      const clientInfo = getClientInfo(req);
+
+      logger.info("PATCH /api/conversations/:id/title accessed", {
+        conversationId: id,
+        title,
+        ...clientInfo,
+      });
+
+      next();
+    } catch (error) {
+      const clientInfo = getClientInfo(req);
+      logger.error("Error in PATCH /api/conversations/:id/title logging", {
+        error: error.message,
+        ...clientInfo,
+      });
+      next(error);
+    }
+  },
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { title } = req.body;
+      const userId = req.user.id;
+
+      // Validate title
+      if (!title || typeof title !== "string" || title.trim().length === 0) {
+        return res.status(400).json({
+          status: "error",
+          message: "Valid title is required",
+        });
+      }
+
+      // Import personaService dynamically to avoid circular dependency
+      const personaService = require("../services/personaService");
+
+      // Update conversation title
+      const updatedConversation = await personaService.updateConversationTitle(
+        id,
+        title.trim(),
+        userId
+      );
+
+      res.json({
+        status: "success",
+        message: "Conversation title updated successfully",
+        data: updatedConversation,
+      });
+    } catch (error) {
+      logger.error("Error updating conversation title:", error);
+      res.status(500).json({
+        status: "error",
+        message: "Failed to update conversation title",
+      });
+    }
+  }
+);
+
+// DELETE /api/conversations/clear - Delete all conversations for current user
+router.delete("/clear", authenticatedOnly, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const personaService = require("../services/personaService");
+    const result = await personaService.clearUserConversations(userId);
+    res.json({
+      status: "success",
+      message: "Conversations cleared",
+      data: result,
+    });
+  } catch (error) {
+    logger.error("Error clearing conversations:", error);
+    res
+      .status(500)
+      .json({ status: "error", message: "Failed to clear conversations" });
+  }
+});
+
 module.exports = router;
